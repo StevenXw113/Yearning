@@ -8,7 +8,7 @@ import (
 )
 
 func UserReqSwitch(c yee.Context) (err error) {
-	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"reg": model.GloOther.Register}))
+	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"reg": model.GloOther.Load().Register}))
 }
 
 func SystemLang(context yee.Context) (err error) {

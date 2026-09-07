@@ -18,6 +18,8 @@ import (
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,48 +28,105 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
+	"time"
 )
 
-func OidcState(c yee.Context) (err error) {
+const (
+	oidcStateTTL    = 5 * time.Minute
+	oidcHTTPTimeout = 10 * time.Second
+)
 
-	oidcAuthUrl := fmt.Sprintf(
-		"%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=367126378168",
+// OIDC 的 state 用于防止登录 CSRF：必须是随机值、一次性、短时效。
+// 原先使用硬编码常量且回调从不校验，攻击者可诱导受害者完成登录。
+var (
+	stateMu    sync.Mutex
+	oidcStates = make(map[string]time.Time)
+)
+
+func newOidcState() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	s := hex.EncodeToString(b)
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	for k, v := range oidcStates {
+		if time.Since(v) > oidcStateTTL {
+			delete(oidcStates, k)
+		}
+	}
+	oidcStates[s] = time.Now()
+	return s, nil
+}
+
+func verifyOidcState(s string) bool {
+	if s == "" {
+		return false
+	}
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	created, ok := oidcStates[s]
+	if !ok {
+		return false
+	}
+	delete(oidcStates, s)
+	return time.Since(created) <= oidcStateTTL
+}
+
+func oidcAuthURL(state string) string {
+	return fmt.Sprintf(
+		"%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		model.C.Oidc.AuthUrl,
 		model.C.Oidc.ClientId,
-		model.C.Oidc.RedirectUrL,
-		model.C.Oidc.Scope)
-	oidcEnable := model.C.Oidc.Enable
-	if oidcEnable {
-		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{
-			"authUrl": oidcAuthUrl,
-			"enabled": oidcEnable,
-		}))
-	} else {
+		url.QueryEscape(model.C.Oidc.RedirectUrL),
+		url.QueryEscape(model.C.Oidc.Scope),
+		url.QueryEscape(state))
+}
+
+func OidcState(c yee.Context) (err error) {
+	if !model.C.Oidc.Enable {
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{
 			"enabled": false,
 		}))
 	}
+	state, err := newOidcState()
+	if err != nil {
+		c.Logger().Error(err.Error())
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{
+		"authUrl": oidcAuthURL(state),
+		"enabled": true,
+	}))
 }
 
 func OidcLogin(c yee.Context) (err error) {
-
 	if !model.C.Oidc.Enable {
 		return c.HTML(400, i18n.DefaultLang.Load(i18n.INFO_OIDC_LOGIN_DISABLED))
 	}
 
 	code := c.FormValue("code")
-	sessionState := model.C.Oidc.SessionKey
-
-	if code == "" || sessionState == "" {
-		authUri := fmt.Sprintf(
-			"%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s",
-			model.C.Oidc.AuthUrl,
-			model.C.Oidc.ClientId,
-			model.C.Oidc.RedirectUrL,
-			model.C.Oidc.Scope)
-		return c.Redirect(302, authUri)
+	if code == "" {
+		state, serr := newOidcState()
+		if serr != nil {
+			return c.HTML(500, serr.Error())
+		}
+		return c.Redirect(302, oidcAuthURL(state))
 	}
-	account, err := getAccount(code, sessionState)
+
+	// state 不匹配时拒绝：否则任意 code 都能被兑换成一次登录
+	if !verifyOidcState(c.FormValue("state")) {
+		return c.HTML(403, i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
+	}
+
+	account, err := getAccount(code)
+	if err != nil || account == nil {
+		c.Logger().Error(err)
+		return c.HTML(401, i18n.DefaultLang.Load(i18n.ER_LOGIN))
+	}
 
 	token, tokenErr := factory.JwtAuth(factory.Token{
 		Username: account.Username,
@@ -78,14 +137,16 @@ func OidcLogin(c yee.Context) (err error) {
 		c.Logger().Error(tokenErr.Error())
 		return
 	}
+	// 令牌置于 URL 片段（# 之后）中，浏览器不会将其发送到服务端，
+	// 因此不会出现在 Referer 与反向代理访问日志里。
 	return c.Redirect(302, fmt.Sprintf(
 		"/#/login?oidcLogin=1&token=%s&user=%s&real_name=%s&is_record=%d",
-		token, account.Username, account.RealName, account.IsRecorder),
+		token, url.QueryEscape(account.Username), url.QueryEscape(account.RealName), account.IsRecorder),
 	)
 }
 
-func getAccount(code string, session_state string) (ac *model.CoreAccount, err error) {
-	oidcToken, err := getOidcToken(code, session_state)
+func getAccount(code string) (ac *model.CoreAccount, err error) {
+	oidcToken, err := getOidcToken(code)
 	if err != nil {
 		return nil, err
 	}
@@ -93,11 +154,15 @@ func getAccount(code string, session_state string) (ac *model.CoreAccount, err e
 	if err != nil {
 		return nil, err
 	}
-	username := userMap[model.C.Oidc.UserNameKey].(string)
-	realname := userMap[model.C.Oidc.RealNameKey].(string)
-	email := userMap[model.C.Oidc.EmailKey].(string)
+	// IdP 返回的字段可能缺失或不是字符串，不能做裸类型断言
+	username, ok := userMap[model.C.Oidc.UserNameKey].(string)
+	if !ok || username == "" {
+		return nil, errors.New("oidc userinfo missing username")
+	}
+	realname, _ := userMap[model.C.Oidc.RealNameKey].(string)
+	email, _ := userMap[model.C.Oidc.EmailKey].(string)
 
-	var account = new(model.CoreAccount)
+	account := new(model.CoreAccount)
 	if err := model.DB().Where("username = ?", username).First(&account).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		coreAccount := model.CoreAccount{
 			Username:   username,
@@ -117,12 +182,14 @@ func getAccount(code string, session_state string) (ac *model.CoreAccount, err e
 }
 
 func getOidcUser(token *OidcToken) (userMap map[string]interface{}, err error) {
-
 	bearer := "Bearer " + token.AccessToken
-	request, err := http.NewRequest("GET", model.C.Oidc.UserUrl, nil)
+	request, err := http.NewRequest(http.MethodGet, model.C.Oidc.UserUrl, nil)
+	if err != nil {
+		return nil, err
+	}
 	request.Header.Add("Authorization", bearer)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: oidcHTTPTimeout}
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, err
@@ -132,31 +199,37 @@ func getOidcUser(token *OidcToken) (userMap map[string]interface{}, err error) {
 	}(response.Body)
 
 	userMap = make(map[string]interface{})
-	err = json.NewDecoder(response.Body).Decode(&userMap)
-	if err != nil {
+	if err := json.NewDecoder(response.Body).Decode(&userMap); err != nil {
 		return nil, err
 	}
 	return userMap, nil
 }
 
-func getOidcToken(code string, session_state string) (oidc_token *OidcToken, err error) {
-	resp, err := http.PostForm(model.C.Oidc.TokenUrl, url.Values{
-		model.C.Oidc.SessionKey: {session_state},
-		"code":                  {code},
-		"client_id":             {model.C.Oidc.ClientId},
-		"client_secret":         {model.C.Oidc.ClientSecret},
-		"grant_type":            {"authorization_code"},
-		"redirect_uri":          {model.C.Oidc.RedirectUrL},
-	})
+func getOidcToken(code string) (oidc_token *OidcToken, err error) {
+	form := url.Values{
+		"code":          {code},
+		"client_id":     {model.C.Oidc.ClientId},
+		"client_secret": {model.C.Oidc.ClientSecret},
+		"grant_type":    {"authorization_code"},
+		"redirect_uri":  {model.C.Oidc.RedirectUrL},
+	}
+	req, err := http.NewRequest(http.MethodPost, model.C.Oidc.TokenUrl, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: oidcHTTPTimeout}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
 	}(resp.Body)
+
 	token := new(OidcToken)
-	err = json.NewDecoder(resp.Body).Decode(token)
-	if err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(token); err != nil {
 		return nil, err
 	}
 	return token, nil

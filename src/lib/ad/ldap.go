@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/cookieY/yee/logger"
 	"github.com/go-ldap/ldap/v3"
+	"net"
 )
 
 type ALdap struct {
@@ -24,7 +25,12 @@ type ldapMap struct {
 func (l *ALdap) LdapConnect(user string, pass string, isTest bool) (isOk bool, err error) {
 	var ld *ldap.Conn
 	if l.Ldaps {
-		ld, err = ldap.DialTLS("tcp", l.Url, &tls.Config{InsecureSkipVerify: true})
+		// 校验服务器证书与主机名：跳过校验会让域账号明文口令暴露给中间人
+		host := l.Url
+		if h, _, serr := net.SplitHostPort(l.Url); serr == nil {
+			host = h
+		}
+		ld, err = ldap.DialTLS("tcp", l.Url, &tls.Config{ServerName: host})
 	} else {
 		ld, err = ldap.Dial("tcp", l.Url)
 	}

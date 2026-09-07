@@ -68,7 +68,7 @@ func (m *Msg) Order() *Msg {
 	model.DB().Select("work_id,username,text,assigned,source").Where("work_id =?", m.orderId).First(&order)
 	model.DB().Select("email").Where("username = ?", order.Username).First(&user)
 	m.ll.ToUser = []model.CoreAccount{user}
-	m.ll.Message = model.GloMessage
+	m.ll.Message = *model.GloMessage.Load()
 	m.orderInfo = order
 	return m
 }
@@ -79,7 +79,7 @@ func (m *Msg) Query() *Msg {
 	model.DB().Select("work_id,username,text,assigned").Where("work_id =?", m.orderId).First(&order)
 	model.DB().Select("email").Where("username = ?", order.Username).First(&user)
 	m.ll.ToUser = []model.CoreAccount{user}
-	m.ll.Message = model.GloMessage
+	m.ll.Message = *model.GloMessage.Load()
 	m.queryInfo = order
 	return m
 }
@@ -90,14 +90,14 @@ func (m *Msg) QueryBuild(status StatusType) *OrderTPL {
 	switch status {
 	case RejectStatus:
 		tpl.pushTpl = dingMsgTplHandler("已驳回", m.queryInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.queryInfo.WorkId, m.queryInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "已驳回")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.queryInfo.WorkId, m.queryInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已驳回")
 	case AgreeStatus:
 		tpl.pushTpl = dingMsgTplHandler("已同意", m.queryInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.queryInfo.WorkId, m.queryInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "已同意")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.queryInfo.WorkId, m.queryInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已同意")
 	case SummitStatus:
 		model.DB().Select("email").Where("username IN (?)", strings.Split(m.queryInfo.Assigned, ",")).Find(&m.ll.ToUser)
 		tpl.pushTpl = dingMsgTplHandler("已提交", m.queryInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.queryInfo.WorkId, m.queryInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "已提交")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.queryInfo.WorkId, m.queryInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已提交")
 	default:
 		model.DefaultLogger.Error("unknown status")
 	}
@@ -110,24 +110,24 @@ func (m *Msg) OrderBuild(status StatusType) *OrderTPL {
 	switch status {
 	case ExecuteStatus:
 		tpl.pushTpl = dingMsgTplHandler("已执行", m.orderInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "执行", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "执行成功")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "执行", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "执行成功")
 	case RejectStatus:
 		tpl.pushTpl = dingMsgTplHandler("已驳回", m.orderInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "已驳回")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "查询申请", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已驳回")
 	case SummitStatus:
 		model.DB().Select("email").Where("username IN (?)", strings.Split(m.orderInfo.Assigned, ",")).Find(&m.ll.ToUser)
 		tpl.pushTpl = dingMsgTplHandler("已提交", m.orderInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "提交", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "已提交")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "提交", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已提交")
 	case FailedStatus:
 		tpl.pushTpl = dingMsgTplHandler("执行失败", m.orderInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "执行", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "执行失败")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "执行", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "执行失败")
 	case NextStepStatus:
 		model.DB().Select("email").Where("username IN (?)", strings.Split(m.orderInfo.Assigned, ",")).Find(&m.ll.ToUser)
 		tpl.pushTpl = dingMsgTplHandler("已转交至下一操作人", m.orderInfo)
-		tpl.mailTpl = fmt.Sprintf(Tmpl2Mail, "转交", m.orderInfo.WorkId, m.orderInfo.Username, m.orderInfo.Assigned, model.GloOther.Domain, model.GloOther.Domain, "已转交至下一操作人")
+		tpl.mailTpl = fmt.Sprintf(Tmpl2Mail, "转交", m.orderInfo.WorkId, m.orderInfo.Username, m.orderInfo.Assigned, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已转交至下一操作人")
 	case UndoStatus:
 		tpl.pushTpl = dingMsgTplHandler("已撤销", m.orderInfo)
-		tpl.mailTpl = fmt.Sprintf(TmplMail, "提交", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Domain, model.GloOther.Domain, "已撤销")
+		tpl.mailTpl = fmt.Sprintf(TmplMail, "提交", m.orderInfo.WorkId, m.orderInfo.Username, model.GloOther.Load().Domain, model.GloOther.Load().Domain, "已撤销")
 	default:
 		model.DefaultLogger.Error("unknown status")
 	}
@@ -135,15 +135,16 @@ func (m *Msg) OrderBuild(status StatusType) *OrderTPL {
 }
 
 func (tpl *OrderTPL) Push() {
-	if model.GloMessage.Mail {
+	message := model.GloMessage.Load()
+	if message.Mail {
 		for _, i := range tpl.ll.ToUser {
 			if i.Email != "" {
 				go SendMail(i.Email, tpl.ll.Message, tpl.mailTpl)
 			}
 		}
 	}
-	if model.GloMessage.Ding {
-		if model.GloMessage.WebHook != "" {
+	if message.Ding {
+		if message.WebHook != "" {
 			go PusherMessages(tpl.ll.Message, tpl.pushTpl)
 		}
 	}
@@ -157,7 +158,8 @@ func SendMail(addr string, mail model.Message, tmpl string) {
 	m.SetBody("text/html", tmpl)
 	d := dialer(mail)
 	if mail.Ssl {
-		d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+		// 校验服务器证书与主机名：跳过校验会让 SMTP 账号密码与邮件正文暴露给中间人
+		d.TLSConfig = &tls.Config{ServerName: mail.Host}
 	}
 	// Send the email to Bob, Cora and Dan.
 	if err := d.DialAndSend(m); err != nil {

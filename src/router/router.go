@@ -32,10 +32,10 @@ import (
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"net/http"
-	"strings"
 
 	"github.com/cookieY/yee"
 	"github.com/cookieY/yee/middleware"
+	"github.com/golang-jwt/jwt"
 )
 
 func SuperManageGroup() yee.HandlerFunc {
@@ -49,12 +49,16 @@ func SuperManageGroup() yee.HandlerFunc {
 }
 
 func focalPoint(c yee.Context) bool {
+	// 必须按路径精确比对：使用 strings.Contains 会被查询串注入绕过
+	// （例如 /api/v2/manage/setting?x=/api/v2/manage/group）
+	path := c.Request().URL.Path
+	method := c.Request().Method
 
-	if strings.Contains(c.RequestURI(), "/api/v2/manage/flow") && c.Request().Method == http.MethodPut {
+	if path == "/api/v2/manage/flow" && method == http.MethodPut {
 		return true
 	}
 
-	if strings.Contains(c.RequestURI(), "/api/v2/manage/group") && c.Request().Method == http.MethodGet {
+	if path == "/api/v2/manage/group" && method == http.MethodGet {
 		return true
 	}
 	return false
@@ -62,8 +66,20 @@ func focalPoint(c yee.Context) bool {
 
 func SuperRecorderGroup() yee.HandlerFunc {
 	return func(c yee.Context) (err error) {
+		// websocket 请求无法走 JWT 中间件注入的 claims，需自行解析 Sec-WebSocket-Protocol 上的令牌
 		if c.IsWebsocket() {
-			return nil
+			token, terr := factory.WsTokenParse(c.Request().Header.Get(yee.HeaderSecWebSocketProtocol))
+			if terr != nil || token == nil || !token.Valid {
+				return c.ServerError(http.StatusForbidden, "Non-authorized operation！")
+			}
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				return c.ServerError(http.StatusForbidden, "Non-authorized operation！")
+			}
+			if isRecord, ok := claims["is_record"].(bool); ok && isRecord {
+				return nil
+			}
+			return c.ServerError(http.StatusForbidden, "Non-authorized operation！")
 		}
 		role := new(factory.Token).JwtParse(c)
 		if role.IsRecord {

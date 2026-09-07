@@ -28,8 +28,11 @@ func AuditOrderState(c yee.Context) (err error) {
 
 	switch u.Tp {
 	case "undo":
+		if !hasOrderPermission(u.WorkId, user.Username) {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+		}
 		pusher.NewMessagePusher(u.WorkId).Order().OrderBuild(pusher.UndoStatus).Push()
-		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", u.WorkId).Updates(&model.CoreSqlOrder{Status: 6})
+		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =? AND `status` =?", u.WorkId, 2).Updates(&model.CoreSqlOrder{Status: 6})
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_UNDO)))
 	case "agree":
 		return c.JSON(http.StatusOK, MultiAuditOrder(u, user.Username))
@@ -47,10 +50,14 @@ func ScheduledChange(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
 	var isCall string
-	if client := calls.NewRpc(); client != nil {
-		if err := client.Call("Engine.StopDelay", u, &isCall); err != nil {
-			return err
-		}
+	client, err := calls.NewRpc()
+	if err != nil {
+		c.Logger().Error(err.Error())
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	defer client.Close()
+	if err := client.Call("Engine.StopDelay", u, &isCall); err != nil {
+		return err
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_DELAY_SUCCESS)))
 }
@@ -63,6 +70,9 @@ func DelayKill(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
 	user := new(factory.Token).JwtParse(c)
+	if !hasOrderPermission(u.WorkId, user.Username) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+	}
 	model.DB().Create(&model.CoreWorkflowDetail{
 		WorkId:   u.WorkId,
 		Username: user.Username,
@@ -92,11 +102,18 @@ func FetchAuditOrder(c yee.Context) (err error) {
 				break
 			}
 			token, err := factory.WsTokenParse(ws.Request().Header.Get("Sec-WebSocket-Protocol"))
-			if err != nil {
+			if err != nil || token == nil || !token.Valid {
 				c.Logger().Error(err)
 				break
 			}
-			user := token.Claims.(jwt.MapClaims)["name"].(string)
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				break
+			}
+			user, ok := claims["name"].(string)
+			if !ok {
+				break
+			}
 			u.Paging().OrderBy("(status = 2) DESC, date DESC").Select(QueryField).Query(common.AccordingToAllOrderState(u.Expr.Status),
 				common.AccordingToAllOrderType(u.Expr.Type),
 				common.AccordingToRelevant(user),
@@ -115,9 +132,12 @@ func FetchAuditOrder(c yee.Context) (err error) {
 }
 
 func FetchOSCAPI(c yee.Context) (err error) {
+	workId := c.QueryParam("work_id")
+	if !common.IsOrderRelated(workId, new(factory.Token).JwtParse(c).Username) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+	}
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
-		workId := c.QueryParam("work_id")
 		var msg string
 		for {
 			if workId != "" {

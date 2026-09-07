@@ -69,12 +69,13 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
 	workID := factory.GenWorkId()
-	if !model.GloOther.Query {
+	other := model.GloOther.Load()
+	if !other.Query {
 		model.DB().Create(&model.CoreQueryOrder{
 			WorkId:       workID,
 			Username:     user.Username,
 			Date:         time.Now().Format("2006-01-02 15:04"),
-			Export:       reflect(model.GloOther.Export),
+			Export:       reflect(other.Export),
 			Status:       2,
 			RealName:     user.RealName,
 			Text:         i18n.DefaultLang.Load(i18n.INFO_QUERY_AUDIT_DISABLED),
@@ -147,14 +148,21 @@ func SocketQueryResults(c yee.Context) (err error) {
 		defer ws.Close()
 		var b []byte
 		token, err := factory.WsTokenParse(ws.Request().Header.Get("Sec-WebSocket-Protocol"))
-		if err != nil {
+		if err != nil || token == nil || !token.Valid {
 			c.Logger().Error(err)
 			return
 		}
-		user := token.Claims.(jwt.MapClaims)["name"].(string)
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return
+		}
+		user, ok := claims["name"].(string)
+		if !ok {
+			return
+		}
 
 		// 开启查询审核模式后需判断当前连接的 sourceID用户是否有权限
-		if model.GloOther.Query {
+		if model.GloOther.Load().Query {
 			var queryPerm model.CoreQueryOrder
 			model.DB().Model(model.CoreQueryOrder{}).Where("username =? AND status =?", user, 2).Last(&queryPerm)
 			if queryPerm.SourceId != args.SourceId {
@@ -204,7 +212,7 @@ func SocketQueryResults(c yee.Context) (err error) {
 					break
 				}
 				if string(b) == "ping" {
-					_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{HeartBeat: common.Pong, IsOnly: model.GloOther.Query}))
+					_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{HeartBeat: common.Pong, IsOnly: model.GloOther.Load().Query}))
 					continue
 				}
 				if err := msgpack.Unmarshal(b, &msg.Ref); err != nil {
@@ -251,9 +259,11 @@ func SocketQueryResults(c yee.Context) (err error) {
 				}
 
 				queryTime := int(time.Since(clock).Seconds() * 1000)
-				go func(w string, s string, ex int) {
-					model.DB().Create(&model.CoreQueryRecord{SQL: s, WorkId: w, ExTime: ex, Time: time.Now().Format("2006-01-02 15:04"), Source: core.source, Schema: msg.Ref.Schema})
-				}(d.WorkId, msg.Ref.Sql, queryTime)
+				// msg.Ref 会被下一轮循环覆写、core 会随连接关闭失效，
+				// 因此协程所需的值必须全部按参数传入，不能在闭包内延迟读取
+				go func(w string, s string, ex int, source string, schema string) {
+					model.DB().Create(&model.CoreQueryRecord{SQL: s, WorkId: w, ExTime: ex, Time: time.Now().Format("2006-01-02 15:04"), Source: source, Schema: schema})
+				}(d.WorkId, msg.Ref.Sql, queryTime, core.source, msg.Ref.Schema)
 				if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Export: d.Export == 1, Results: queryData, QueryTime: queryTime})); err != nil {
 					c.Logger().Error(err)
 				}

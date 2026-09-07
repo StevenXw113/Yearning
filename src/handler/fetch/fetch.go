@@ -38,14 +38,14 @@ import (
 )
 
 func FetchIDC(c yee.Context) (err error) {
-	return c.JSON(http.StatusOK, common.SuccessPayload(model.GloOther.IDC))
+	return c.JSON(http.StatusOK, common.SuccessPayload(model.GloOther.Load().IDC))
 
 }
 
 func FetchIsQueryAudit(c yee.Context) (err error) {
 	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{
-		"status": model.GloOther.Query,
-		"export": model.GloOther.Export,
+		"status": model.GloOther.Load().Query,
+		"export": model.GloOther.Load().Export,
 	}))
 }
 
@@ -56,7 +56,7 @@ func FetchQueryStatus(c yee.Context) (err error) {
 	if check.Status == 2 {
 		isExpire := factory.TimeDifference(check.ApprovalTime)
 		if isExpire {
-			model.DB().Model(model.CoreQueryOrder{}).Where("work_id =?", check.WorkId).Updates(&model.CoreSqlOrder{Status: 3})
+			model.DB().Model(model.CoreQueryOrder{}).Where("work_id =?", check.WorkId).Updates(&model.CoreQueryOrder{Status: 3})
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(isExpire))
 	}
@@ -95,7 +95,7 @@ func FetchSource(c yee.Context) (err error) {
 	case "query":
 		var ord model.CoreQueryOrder
 		// 如果打开查询审核,判断该用户是否存在查询中的工单.如果存在则直接返回该查询工单允许的数据源
-		if model.GloOther.Query && !errors.Is(model.DB().Model(model.CoreQueryOrder{}).Where("username =? and `status` =2", user).Last(&ord).Error, gorm.ErrRecordNotFound) {
+		if model.GloOther.Load().Query && !errors.Is(model.DB().Model(model.CoreQueryOrder{}).Where("username =? and `status` =2", user).Last(&ord).Error, gorm.ErrRecordNotFound) {
 			model.DB().Select("source,id_c,source_id").Where("source_id =?", ord.SourceId).Find(&source)
 		} else {
 			model.DB().Select("source,id_c,source_id").Where("source_id IN (?)", permission.QuerySource).Find(&source)
@@ -116,6 +116,9 @@ type StepInfo struct {
 func FetchAuditSteps(c yee.Context) (err error) {
 	u := c.QueryParam("source_id")
 	workId := c.QueryParam("work_id")
+	if workId != "" && !checkOrderPerm(c, workId) {
+		return deny(c)
+	}
 	var order model.CoreSqlOrder
 	var s []model.CoreWorkflowDetail
 	var steps []StepInfo
@@ -131,8 +134,13 @@ func FetchAuditSteps(c yee.Context) (err error) {
 		for _, v := range whoIsAuditor {
 			steps = append(steps, StepInfo{Tpl: v})
 		}
+		// 流程模板可能在工单创建后被改短，明细条数可能多于模板步数，直接索引会越界
 		for i, v := range s {
-			steps[i].CoreWorkflowDetail = v
+			if i < len(steps) {
+				steps[i].CoreWorkflowDetail = v
+			} else {
+				steps = append(steps, StepInfo{CoreWorkflowDetail: v})
+			}
 		}
 
 	} else {
@@ -145,8 +153,12 @@ func FetchAuditSteps(c yee.Context) (err error) {
 }
 
 func FetchHighLight(c yee.Context) (err error) {
+	sourceId := c.QueryParam("source_id")
+	if !checkSourcePerm(c, sourceId) {
+		return deny(c)
+	}
 	var s model.CoreDataSource
-	model.DB().Where("source_id =?", c.QueryParam("source_id")).First(&s)
+	model.DB().Where("source_id =?", sourceId).First(&s)
 	return c.JSON(http.StatusOK, common.SuccessPayload(common.Highlight(&s, c.QueryParam("is_field"), c.QueryParam("schema"))))
 }
 
@@ -159,9 +171,12 @@ func FetchBase(c yee.Context) (err error) {
 	if reflect.DeepEqual(u, _FetchBind{}) {
 		return
 	}
-	var s model.CoreDataSource
-
 	unescape, _ := url.QueryUnescape(u.SourceId)
+	if !checkSourcePerm(c, unescape) {
+		return deny(c)
+	}
+
+	var s model.CoreDataSource
 
 	model.DB().Where("source_id =?", unescape).First(&s)
 
@@ -190,8 +205,11 @@ func FetchTable(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
-	var s model.CoreDataSource
 	unescape, _ := url.QueryUnescape(u.SourceId)
+	if !checkSourcePerm(c, unescape) {
+		return deny(c)
+	}
+	var s model.CoreDataSource
 	model.DB().Where("source_id =?", unescape).First(&s)
 
 	result, err := common.ScanDataRows(s, u.DataBase, "SHOW TABLES;", "Table", false, false)
@@ -210,6 +228,9 @@ func FetchTableInfo(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
 
+	if !checkSourcePerm(c, u.SourceId) {
+		return deny(c)
+	}
 	if u.DataBase != "" && u.Table != "" {
 		if err := u.FetchTableFieldsOrIndexes(); err != nil {
 			c.Logger().Critical(err.Error())
@@ -225,39 +246,52 @@ func FetchSQLTest(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
+	user := new(factory.Token).JwtParse(c).Username
+	if !common.HasAnySourcePermission(user, u.SourceId) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+	}
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", u.SourceId).First(&s)
 	rule, err := factory.CheckDataSourceRule(s.RuleId)
+	if err != nil || rule == nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	p := enc.Decrypt(model.C.General.SecretKey, s.Password)
+	if p == "" {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED)))
+	}
+	var rs []engine.Record
+	client, err := calls.NewRpc()
 	if err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	var rs []engine.Record
-	if client := calls.NewRpc(); client != nil {
-		if err := client.Call("Engine.Check", engine.CheckArgs{
-			SQL:      u.SQL,
-			Schema:   u.Database,
-			IP:       s.IP,
-			Username: s.Username,
-			Port:     s.Port,
-			Password: enc.Decrypt(model.C.General.SecretKey, s.Password),
-			CA:       s.CAFile,
-			Cert:     s.Cert,
-			Key:      s.KeyFile,
-			Kind:     u.Kind,
-			Lang:     model.C.General.Lang,
-			Rule:     *rule,
-		}, &rs); err != nil {
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
-		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(rs))
+	defer client.Close()
+	if err := client.Call("Engine.Check", engine.CheckArgs{
+		SQL:      u.SQL,
+		Schema:   u.Database,
+		IP:       s.IP,
+		Username: s.Username,
+		Port:     s.Port,
+		Password: p,
+		CA:       s.CAFile,
+		Cert:     s.Cert,
+		Key:      s.KeyFile,
+		Kind:     u.Kind,
+		Lang:     model.C.General.Lang,
+		Rule:     *rule,
+	}, &rs); err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("client is nil")))
+	return c.JSON(http.StatusOK, common.SuccessPayload(rs))
 }
 
 func FetchOrderDetailList(c yee.Context) (err error) {
 	expr := new(PageSizeRef)
 	if err := c.Bind(expr); err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	if !checkOrderPerm(c, expr.WorkId) {
+		return deny(c)
 	}
 	var record []model.CoreSqlRecord
 	var count int64
@@ -268,6 +302,9 @@ func FetchOrderDetailList(c yee.Context) (err error) {
 
 func FetchOrderDetailRollSQL(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
+	if !checkOrderPerm(c, workId) {
+		return deny(c)
+	}
 	var roll []model.CoreRollback
 	var count int64
 	model.DB().Select("`sql`").Model(model.CoreRollback{}).Where("work_id =?", workId).Count(&count).Order("id desc").Find(&roll)
@@ -293,12 +330,15 @@ func FetchMergeDDL(c yee.Context) error {
 	}
 	var optimizeSQL string
 	if req.SQLs != "" {
-		if client := calls.NewRpc(); client != nil {
-			if err := client.Call("Engine.MergeAlterTables", req.SQLs, &optimizeSQL); err != nil {
-				return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
-			}
-			return c.JSON(http.StatusOK, common.SuccessPayload(optimizeSQL))
+		client, err := calls.NewRpc()
+		if err != nil {
+			return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 		}
+		defer client.Close()
+		if err := client.Call("Engine.MergeAlterTables", req.SQLs, &optimizeSQL); err != nil {
+			return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(optimizeSQL))
 	}
 	return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 
@@ -306,6 +346,9 @@ func FetchMergeDDL(c yee.Context) error {
 
 func FetchSQLInfo(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
+	if !checkOrderPerm(c, workId) {
+		return deny(c)
+	}
 	var sql model.CoreSqlOrder
 	model.DB().Select("`sql`").Where("work_id =?", workId).First(&sql)
 	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"sqls": sql.SQL}))
@@ -313,6 +356,9 @@ func FetchSQLInfo(c yee.Context) (err error) {
 
 func FetchStepsProfile(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
+	if !checkOrderPerm(c, workId) {
+		return deny(c)
+	}
 	var s []model.CoreWorkflowDetail
 	model.DB().Where("work_id = ?", workId).Find(&s)
 	return c.JSON(http.StatusOK, common.SuccessPayload(s))
@@ -325,9 +371,12 @@ func FetchBoard(c yee.Context) (err error) {
 }
 
 func FetchOrderComment(c yee.Context) (err error) {
+	workId := c.QueryParam("work_id")
+	if !checkOrderPerm(c, workId) {
+		return deny(c)
+	}
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
-		workId := c.QueryParam("work_id")
 		var msg string
 		for {
 			if workId != "" {
@@ -382,9 +431,12 @@ func FetchUserGroups(c yee.Context) (err error) {
 }
 
 func FetchOrderState(c yee.Context) (err error) {
+	workId := c.QueryParam("work_id")
+	if !checkOrderPerm(c, workId) {
+		return deny(c)
+	}
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
-		workId := c.QueryParam("work_id")
 		var msg string
 		for {
 			if workId != "" {
@@ -410,7 +462,7 @@ func FetchUserInfo(c yee.Context) (err error) {
 	var sources []model.CoreDataSource
 	var grained model.CoreGrained
 	var groupIDs []string
-	model.DB().Select("department,username,real_name,email,query_password,secret_key").Model(model.CoreAccount{}).Where("username =?", t.Username).First(&userInfo)
+	model.DB().Select("department,username,real_name,email").Model(model.CoreAccount{}).Where("username =?", t.Username).First(&userInfo)
 	model.DB().Select("`group`").Where("username =?", t.Username).First(&grained)
 	_ = grained.Group.UnmarshalToJSON(&groupIDs)
 	model.DB().Model(model.CoreDataSource{}).Select("source_id,source").Where("source_id IN ?", permission.NewPermissionService(model.DB()).CreatePermissionListFromGroups(groupIDs).QuerySource).Find(&sources)

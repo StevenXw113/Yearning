@@ -71,8 +71,9 @@ func ManageUserCreateOrEdit(c yee.Context) (err error) {
 	}
 	switch c.QueryParam("tp") {
 	case "principal":
+		// 只返回负责人下拉需要的字段，不得带出口令哈希
 		var account []model.CoreAccount
-		model.DB().Model(&model.CoreAccount{}).Find(&account)
+		model.DB().Model(&model.CoreAccount{}).Select("username,real_name").Find(&account)
 		return c.JSON(http.StatusOK, common.SuccessPayload(account))
 	case "edit":
 		return c.JSON(http.StatusOK, SuperUserEdit(u))

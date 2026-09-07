@@ -38,12 +38,19 @@ func FetchQueryOrder(c yee.Context) (err error) {
 				break
 			}
 			token, err := factory.WsTokenParse(ws.Request().Header.Get("Sec-WebSocket-Protocol"))
-			if err != nil {
+			if err != nil || token == nil || !token.Valid {
 				c.Logger().Error(err)
 				break
 			}
-			is_record := token.Claims.(jwt.MapClaims)["is_record"].(bool)
-			name := token.Claims.(jwt.MapClaims)["name"].(string)
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				break
+			}
+			is_record, _ := claims["is_record"].(bool)
+			name, ok := claims["name"].(string)
+			if !ok {
+				break
+			}
 
 			u.Paging().OrderBy("(status = 2) DESC, date DESC").Query(
 				common.AccordingQueryToAssigned(c.QueryParam("tp") != "record" && is_record, name),
@@ -66,6 +73,15 @@ func FetchQueryRecordProfile(c yee.Context) (err error) {
 	u := new(audit.Confirm)
 	if err = c.Bind(u); err != nil {
 		return
+	}
+	// 查询明细含用户执行过的全部 SQL，仅工单归属人、审批人或审计员可查看
+	token := new(factory.Token).JwtParse(c)
+	var order model.CoreQueryOrder
+	if err := model.DB().Model(model.CoreQueryOrder{}).Select("username,assigned").Where("work_id =?", u.WorkId).First(&order).Error; err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
+	}
+	if order.Username != token.Username && order.Assigned != token.Username && !token.IsRecord {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
 	}
 	start, end := factory.Paging(u.Page, 15)
 	l := new(common.GeneralList[[]model.CoreQueryRecord])
@@ -117,10 +133,14 @@ func QueryHandlerSets(c yee.Context) (err error) {
 		model.DB().Model(model.CoreQueryOrder{}).Where("work_id =?", order.WorkId).Updates(&model.CoreSqlOrder{Status: 3})
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_END)))
 	case "stop":
-		model.DB().Model(model.CoreQueryOrder{}).Where("work_id =?", u.WorkId).Updates(&model.CoreSqlOrder{Status: 3})
+		// 仅能终止自己提交或指派给自己的查询工单，且不得影响他人
+		model.DB().Model(model.CoreQueryOrder{}).
+			Where("work_id =? AND (username =? OR assigned =?)", u.WorkId, token.Username, token.Username).
+			Updates(&model.CoreQueryOrder{Status: 3})
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_END)))
 	case "cancel":
-		model.DB().Model(model.CoreQueryOrder{}).Updates(&model.CoreQueryOrder{Status: 3})
+		// 必须限定到当前用户，否则会把全表查询工单置为结束
+		model.DB().Model(model.CoreQueryOrder{}).Where("username =?", token.Username).Updates(&model.CoreQueryOrder{Status: 3})
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_ALL_END)))
 	default:
 		return

@@ -62,7 +62,9 @@ func TimeDifference(t string) bool {
 	}
 	dt, _ := time.ParseInLocation("2006-01-02 15:04 ", t, time.Local)
 	source := time.Now()
-	if math.Abs(source.Sub(dt).Minutes()) > float64(model.GloOther.ExQueryTime) && float64(model.GloOther.ExQueryTime) > 0 {
+	// 单次读取快照，避免两次读取之间配置被热更新导致判断不一致
+	exQueryTime := model.GloOther.Load().ExQueryTime
+	if math.Abs(source.Sub(dt).Minutes()) > float64(exQueryTime) && float64(exQueryTime) > 0 {
 		return true
 	}
 	return false
@@ -109,5 +111,5 @@ func CheckDataSourceRule(ruleId int) (*engine.AuditRole, error) {
 		}
 		return &rule, nil
 	}
-	return &model.GloRole, nil
+	return model.GloRole.Load(), nil
 }

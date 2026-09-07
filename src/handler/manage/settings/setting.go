@@ -36,13 +36,29 @@ type delOrder struct {
 	Tp   bool     `json:"tp"`
 }
 
+// maskSensitive 清空设置里的凭据字段，避免明文口令出现在响应体中
+func maskSensitive(u *set) {
+	u.Ldap.Password = ""
+	u.Ldap.TestPassword = ""
+	u.Message.Password = ""
+	u.Message.Key = ""
+	u.AI.APIKey = ""
+}
+
 func SuperFetchSetting(c yee.Context) (err error) {
 
 	var k model.CoreGlobalConfiguration
 
 	model.DB().Select("ldap,message,other,ai").First(&k)
 
-	return c.JSON(http.StatusOK, common.SuccessPayload(k))
+	s := set{Ldap: model.Ldap{}, Message: model.Message{}, Other: model.Other{}, AI: model.AI{}}
+	_ = k.Ldap.UnmarshalToJSON(&s.Ldap)
+	_ = k.Message.UnmarshalToJSON(&s.Message)
+	_ = k.Other.UnmarshalToJSON(&s.Other)
+	_ = k.AI.UnmarshalToJSON(&s.AI)
+	maskSensitive(&s)
+
+	return c.JSON(http.StatusOK, common.SuccessPayload(s))
 }
 
 func SuperSaveSetting(c yee.Context) (err error) {
@@ -62,10 +78,10 @@ func SuperSaveSetting(c yee.Context) (err error) {
 	}
 
 	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{Other: other, Message: message, Ldap: ldap, AI: ai})
-	model.GloOther = u.Other
-	model.GloLdap = u.Ldap
-	model.GloMessage = u.Message
-	model.GloAI = u.AI
+	model.GloOther.Store(&u.Other)
+	model.GloLdap.Store(&u.Ldap)
+	model.GloMessage.Store(&u.Message)
+	model.GloAI.Store(&u.AI)
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_DATA_IS_EDIT)))
 }
 
@@ -106,31 +122,53 @@ func SuperDelOrder(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
 
+	if len(u.Date) != 2 {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
+	}
+	// 删除必须整体处于同一事务中：任一环节失败都要回滚，避免留下孤儿记录
 	if u.Tp {
 		go func() {
-			if len(u.Date) == 2 {
-				var order []model.CoreQueryOrder
-				tx := model.DB().Begin()
-				model.DB().Select("work_id").Where("`date` >= ? and `date` <= ? ", u.Date[0], u.Date[1]).Find(&order).Delete(&model.CoreQueryOrder{})
-				for _, i := range order {
-					tx.Where("work_id =?", i.WorkId).Delete(&model.CoreQueryRecord{})
-				}
-				tx.Commit()
+			var order []model.CoreQueryOrder
+			tx := model.DB().Begin()
+			if err := tx.Select("work_id").Where("`date` >= ? and `date` <= ?", u.Date[0], u.Date[1]).Find(&order).Error; err != nil {
+				tx.Rollback()
+				return
 			}
+			if err := tx.Where("`date` >= ? and `date` <= ?", u.Date[0], u.Date[1]).Delete(&model.CoreQueryOrder{}).Error; err != nil {
+				tx.Rollback()
+				return
+			}
+			for _, i := range order {
+				if err := tx.Where("work_id =?", i.WorkId).Delete(&model.CoreQueryRecord{}).Error; err != nil {
+					tx.Rollback()
+					return
+				}
+			}
+			tx.Commit()
 		}()
 	} else {
 		go func() {
-			if len(u.Date) == 2 {
-				var order []model.CoreSqlOrder
-				model.DB().Select("work_id").Where("`date` >= ? and `date` <= ? ", u.Date[0], u.Date[1]).Find(&order).Delete(&model.CoreSqlOrder{})
-				tx := model.DB().Begin()
-				for _, i := range order {
-					tx.Where("work_id =?", i.WorkId).Delete(&model.CoreSqlOrder{})
-					tx.Where("work_id =?", i.WorkId).Delete(&model.CoreRollback{})
-					tx.Where("work_id =?", i.WorkId).Delete(&model.CoreSqlRecord{})
-				}
-				tx.Commit()
+			var order []model.CoreSqlOrder
+			tx := model.DB().Begin()
+			if err := tx.Select("work_id").Where("`date` >= ? and `date` <= ?", u.Date[0], u.Date[1]).Find(&order).Error; err != nil {
+				tx.Rollback()
+				return
 			}
+			for _, i := range order {
+				if err := tx.Where("work_id =?", i.WorkId).Delete(&model.CoreSqlOrder{}).Error; err != nil {
+					tx.Rollback()
+					return
+				}
+				if err := tx.Where("work_id =?", i.WorkId).Delete(&model.CoreRollback{}).Error; err != nil {
+					tx.Rollback()
+					return
+				}
+				if err := tx.Where("work_id =?", i.WorkId).Delete(&model.CoreSqlRecord{}).Error; err != nil {
+					tx.Rollback()
+					return
+				}
+			}
+			tx.Commit()
 		}()
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_DELETE)))

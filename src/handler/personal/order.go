@@ -33,11 +33,18 @@ func PersonalFetchMyOrder(c yee.Context) (err error) {
 				break
 			}
 			token, err := factory.WsTokenParse(ws.Request().Header.Get("Sec-WebSocket-Protocol"))
-			if err != nil {
+			if err != nil || token == nil || !token.Valid {
 				c.Logger().Error(err)
 				break
 			}
-			user := token.Claims.(jwt.MapClaims)["name"].(string)
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				break
+			}
+			user, ok := claims["name"].(string)
+			if !ok {
+				break
+			}
 			u.Paging().OrderBy("(status = 2) DESC, date DESC").Select(common.QueryField).Query(
 				common.AccordingToAllOrderType(u.Expr.Type),
 				common.AccordingToAllOrderState(u.Expr.Status),

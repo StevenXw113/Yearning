@@ -51,7 +51,7 @@ func DashBanner(c yee.Context) (err error) {
 	model.DB().Model(model.CoreSqlOrder{}).Where("username =? and `type` =?", user.Username, 1).Count(&b.SelfDML)
 	model.DB().Model(model.CoreQueryOrder{}).Where("username =?", user.Username).Count(&b.SelfQuery)
 	model.DB().Model(model.CoreSqlOrder{}).Where("status = ? and assigned like ?", 2, "%"+user.Username+"%").Count(&b.SelfAudit)
-	model.DB().Debug().Model(model.CoreTotalTickets{}).Order("date desc ").Limit(7).Find(&b.TotalOrder)
+	model.DB().Model(model.CoreTotalTickets{}).Order("date desc ").Limit(7).Find(&b.TotalOrder)
 	return c.JSON(http.StatusOK, common.SuccessPayload(b))
 }
 
@@ -73,6 +73,6 @@ func DashStmt(c yee.Context) (err error) {
 
 func DashTop(c yee.Context) (err error) {
 	var source []groupBy
-	model.DB().Debug().Model(model.CoreSqlOrder{}).Select("source, count(*) as c").Group("source").Order("c desc").Limit(10).Scan(&source)
+	model.DB().Model(model.CoreSqlOrder{}).Select("source, count(*) as c").Group("source").Order("c desc").Limit(10).Scan(&source)
 	return c.JSON(http.StatusOK, common.SuccessPayload(source))
 }

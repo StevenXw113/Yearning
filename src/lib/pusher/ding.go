@@ -5,11 +5,11 @@ import (
 	"Yearning-go/src/model"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 )
@@ -43,40 +43,34 @@ func PusherMessages(msg model.Message, sv string) {
 	if msg.Key != "" {
 		hook = Sign(msg.Key, msg.WebHook)
 	}
-	model.DefaultLogger.Debugf("hook:%v", hook)
-	model.DefaultLogger.Debugf("sv:%v", sv)
 	req, err := http.NewRequest("POST", hook, strings.NewReader(sv))
 	if err != nil {
-		model.DefaultLogger.Errorf("request:", err)
+		model.DefaultLogger.Errorf("ding request error: %v", err)
 		return
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	client := &http.Client{Transport: tr}
+	// 不关闭证书校验：WebHook 签名与工单内容都会经过该连接
+	client := &http.Client{Timeout: 10 * time.Second}
 	//设置请求头
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	//发送请求
 	resp, err := client.Do(req)
 
 	if err != nil {
-		model.DefaultLogger.Errorf("resp:", err)
+		model.DefaultLogger.Errorf("ding push error: %v", err)
 		return
 	}
-	body, _ := io.ReadAll(resp.Body)
-	model.DefaultLogger.Debugf("resp:%v", string(body))
-	//关闭请求
 	defer resp.Body.Close()
+	// 响应体不再写入日志：含工单号、提交人与 SQL 说明
+	_, _ = io.Copy(io.Discard, resp.Body)
 }
 
 func Sign(secret, hook string) string {
 	timestamp := time.Now().UnixNano() / 1e6
 	stringToSign := fmt.Sprintf("%d\n%s", timestamp, secret)
 	sign := hmacSha256(stringToSign, secret)
-	url := fmt.Sprintf("%s&timestamp=%d&sign=%s", hook, timestamp, sign)
-	return url
+	// sign 是标准 base64，可能包含 + / =，必须转义后再拼进查询串
+	return fmt.Sprintf("%s&timestamp=%d&sign=%s", hook, timestamp, neturl.QueryEscape(sign))
 }
 
 func dingMsgTplHandler(state string, generic interface{}) string {
@@ -107,12 +101,10 @@ func dingMsgTplHandler(state string, generic interface{}) string {
 	text = strings.Replace(text, "$STATE", state, -1)
 	text = strings.Replace(text, "$WORKID", order.WorkId, -1)
 	text = strings.Replace(text, "$SOURCE", order.Source, -1)
-	model.DefaultLogger.Debugf("$HOST:%v", model.GloOther.Domain)
-	text = strings.Replace(text, "$HOST", model.GloOther.Domain, -1)
+	text = strings.Replace(text, "$HOST", model.GloOther.Load().Domain, -1)
 	text = strings.Replace(text, "$USER", order.Username, -1)
 	text = strings.Replace(text, "$AUDITOR", order.Assigned, -1)
 	text = strings.Replace(text, "$TEXT", order.Text, -1)
-	model.DefaultLogger.Debugf("format:%v", text)
 	return text
 }
 

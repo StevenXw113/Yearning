@@ -42,10 +42,14 @@ type Confirm struct {
 }
 
 func (e *Confirm) GetTPL() []flow.Tpl {
+	var order model.CoreSqlOrder
 	var s model.CoreDataSource
 	var tpl []flow.Tpl
 	var flow model.CoreWorkflowTpl
-	model.DB().Model(model.CoreDataSource{}).Select("flow_id").Where("source_id =?", e.SourceId).First(&s)
+	// 必须从工单自身查出 source_id：请求体里的 source_id 由客户端提供，
+	// 用它来决定审批链会让攻击者为任意工单挑选审批人
+	model.DB().Model(model.CoreSqlOrder{}).Select("source_id").Where("work_id =?", e.WorkId).First(&order)
+	model.DB().Model(model.CoreDataSource{}).Select("flow_id").Where("source_id =?", order.SourceId).First(&s)
 	model.DB().Model(model.CoreWorkflowTpl{}).Where("id =?", s.FlowID).First(&flow)
 	_ = json.Unmarshal(flow.Steps, &tpl)
 	return tpl
@@ -63,36 +67,44 @@ func ExecuteOrder(u *Confirm, user string) common.Resp {
 
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
-	if err != nil {
+	if err != nil || rule == nil {
 		logger.DefaultLogger.Error(err)
+		return common.ERR_COMMON_MESSAGE(err)
+	}
+
+	p := enc.Decrypt(model.C.General.SecretKey, source.Password)
+	if p == "" {
+		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
 	}
 
 	var isCall bool
-	if client := calls.NewRpc(); client != nil {
-		if err := client.Call("Engine.Exec", &ExecArgs{
-			Order:    &order,
-			Rules:    *rule,
-			IP:       source.IP,
-			Port:     source.Port,
-			Username: source.Username,
-			Password: enc.Decrypt(model.C.General.SecretKey, source.Password),
-			CA:       source.CAFile,
-			Cert:     source.Cert,
-			Key:      source.KeyFile,
-			Message:  model.GloMessage,
-		}, &isCall); err != nil {
-			return common.ERR_COMMON_MESSAGE(err)
-		}
-		model.DB().Create(&model.CoreWorkflowDetail{
-			WorkId:   u.WorkId,
-			Username: user,
-			Time:     time.Now().Format("2006-01-02 15:04"),
-			Action:   i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE),
-		})
-		return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE))
+	client, err := calls.NewRpc()
+	if err != nil {
+		logger.DefaultLogger.Error(err)
+		return common.ERR_COMMON_MESSAGE(err)
 	}
-	return common.ERR_COMMON_MESSAGE(fmt.Errorf("rpc client is nil"))
-
+	defer client.Close()
+	if err := client.Call("Engine.Exec", &ExecArgs{
+		Order:    &order,
+		Rules:    *rule,
+		IP:       source.IP,
+		Port:     source.Port,
+		Username: source.Username,
+		Password: p,
+		CA:       source.CAFile,
+		Cert:     source.Cert,
+		Key:      source.KeyFile,
+		Message:  *model.GloMessage.Load(),
+	}, &isCall); err != nil {
+		return common.ERR_COMMON_MESSAGE(err)
+	}
+	model.DB().Create(&model.CoreWorkflowDetail{
+		WorkId:   u.WorkId,
+		Username: user,
+		Time:     time.Now().Format("2006-01-02 15:04"),
+		Action:   i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE),
+	})
+	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE))
 }
 
 func MultiAuditOrder(req *Confirm, user string) common.Resp {
@@ -114,7 +126,11 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 }
 
 func RejectOrder(req *Confirm, user string) common.Resp {
-	model.DB().Model(&model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 0})
+	// 驳回与同意同样需要校验：当前用户必须是该工单当前层级的审批人
+	if _, _, ok := isNotIdempotent(req, user); !ok {
+		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION))
+	}
+	model.DB().Model(&model.CoreSqlOrder{}).Where("work_id =? AND `status` =?", req.WorkId, 2).Updates(map[string]interface{}{"status": 0})
 	model.DB().Create(&model.CoreWorkflowDetail{
 		WorkId:   req.WorkId,
 		Username: user,
@@ -132,11 +148,19 @@ func RejectOrder(req *Confirm, user string) common.Resp {
 }
 
 func delayKill(workId string) string {
-	model.DB().Model(&model.CoreSqlOrder{}).Where("work_id =?", workId).Updates(map[string]interface{}{"status": 4, "execute_time": time.Now().Format("2006-01-02 15:04"), "is_kill": 1})
+	model.DB().Model(&model.CoreSqlOrder{}).Where("work_id =? AND `status` =?", workId, 2).Updates(map[string]interface{}{"status": 4, "execute_time": time.Now().Format("2006-01-02 15:04")})
 	return i18n.DefaultLang.Load(i18n.ORDER_DELAY_KILL_DETAIL)
 }
 
+// hasOrderPermission 判断用户是否有权操作该工单
+func hasOrderPermission(workId, user string) bool {
+	return common.IsOrderRelated(workId, user)
+}
+
 func isNotIdempotent(r *Confirm, user string) ([]string, bool, bool) {
+	if r.Flag < 0 {
+		return nil, false, false
+	}
 	tpl := r.GetTPL()
 	if len(tpl) > r.Flag {
 		pList := strings.Join(tpl[r.Flag].Auditor, ",")

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/cookieY/sqlx"
 	"github.com/cookieY/yee/logger"
+	"regexp"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -49,25 +50,40 @@ type QueryArgs struct {
 	InsulateWordList string
 }
 
+// identifierRegexp 限定 MySQL 标识符允许的字符，用于阻断标识符注入
+var identifierRegexp = regexp.MustCompile(`^[\w$\-]+$`)
+
+// isValidIdentifier 校验库名/表名是否合法，长度遵循 MySQL 64 字符上限
+func isValidIdentifier(s string) bool {
+	return s != "" && len(s) <= 64 && identifierRegexp.MatchString(s)
+}
+
+// escapeIdentifier 在标识符进入反引号前把反引号双写，防止闭合反引号逃逸
+func escapeIdentifier(s string) string {
+	return strings.ReplaceAll(s, "`", "``")
+}
+
 func (q *QueryDeal) PreCheck(insulateWordList string) error {
 	var rs []engine.Record
-	if client := calls.NewRpc(); client != nil {
-		if err := client.Call("Engine.Query", &QueryArgs{
-			SQL:              q.Ref.Sql,
-			Limit:            model.GloOther.Limit,
-			InsulateWordList: insulateWordList,
-		}, &rs); err != nil {
-			return err
-		}
-		for _, i := range rs {
-			if i.Error != "" {
-				return errors.New(i.Error)
-			}
-			q.MultiSQLRunner = append(q.MultiSQLRunner, MultiSQLRunner{SQL: i.SQL, InsulateWordList: factory.MapOn(i.InsulateWordList)})
-		}
-		return nil
+	client, err := calls.NewRpc()
+	if err != nil {
+		return err
 	}
-	return errors.New("client is nil")
+	defer client.Close()
+	if err := client.Call("Engine.Query", &QueryArgs{
+		SQL:              q.Ref.Sql,
+		Limit:            model.GloOther.Load().Limit,
+		InsulateWordList: insulateWordList,
+	}, &rs); err != nil {
+		return err
+	}
+	for _, i := range rs {
+		if i.Error != "" {
+			return errors.New(i.Error)
+		}
+		q.MultiSQLRunner = append(q.MultiSQLRunner, MultiSQLRunner{SQL: i.SQL, InsulateWordList: factory.MapOn(i.InsulateWordList)})
+	}
+	return nil
 }
 
 func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
@@ -75,7 +91,11 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 	if db == nil {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_DATABASE_CONNECTION_FAILED))
 	}
-	_, err := db.Exec(fmt.Sprintf("use `%s`", schema))
+	// schema 来自 websocket 客户端，必须先校验再拼进 SQL
+	if !isValidIdentifier(schema) {
+		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
+	}
+	_, err := db.Exec(fmt.Sprintf("use `%s`", escapeIdentifier(schema)))
 	if err != nil {
 		logger.LogCreator().Error(err)
 	}
@@ -91,7 +111,15 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 		return nil, err
 	}
 	defer rows.Close()
+	// 结果集必须有本地上限，远端 LIMIT 缺失时不能把整表打进内存
+	limit := model.GloOther.Load().Limit
+	if limit == 0 {
+		limit = 1000
+	}
 	for rows.Next() {
+		if uint64(len(query.Data)) >= limit {
+			break
+		}
 		results := make(map[string]interface{})
 		_ = rows.MapScan(results)
 		for key := range results {
@@ -134,7 +162,10 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 	for cv := range ele {
 		query.Field = append(query.Field, map[string]interface{}{"title": ele[cv], "dataIndex": ele[cv], "width": 200, "resizable": true, "ellipsis": true})
 	}
-	query.Field[0]["fixed"] = "left"
+	// 无结果集时 cols 为空，直接索引会 panic
+	if len(query.Field) > 0 {
+		query.Field[0]["fixed"] = "left"
+	}
 	return query, nil
 }
 

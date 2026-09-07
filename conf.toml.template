@@ -6,9 +6,12 @@ Password = "xxxxxxx"
 User = "root"
 
 [General]
-SecretKey = "dbcjqheupqjsuwsm" #SecretKey is the salt for token/ database password encryption/decryption. Please keep it safe. must contain 16 characters
+# SecretKey 是 JWT 签名与数据源口令加密的主密钥，一旦泄露等同于交出全部数据库凭据。
+# 必须替换为随机字符串（建议 32 字符以上），不要使用模板中的示例值，也不要提交到仓库。
+# 生成方式：openssl rand -base64 32 （或用环境变量 SECRET_KEY 注入）
+SecretKey = "CHANGE_ME_PLEASE_USE_RANDOM_32_CHARS"
 RpcAddr = "127.0.0.1:50001" # SQL checker rpc server address
-LogLevel = "debug"  # debug,info,warn,error
+LogLevel = "info"  # debug,info,warn,error
 Lang = "en_US"  # en_US,zh_CN
 
 [Oidc]

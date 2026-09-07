@@ -42,13 +42,22 @@ func ConnTest(u *model.CoreDataSource) error {
 	if err != nil {
 		return err
 	}
-	d, _ := db.DB()
+	d, err := db.DB()
+	if err != nil {
+		return err
+	}
 	return d.Close()
 }
 
 func SuperEditSource(source *model.CoreDataSource) common.Resp {
+	// 只有当提交值无法解密（说明是明文新口令）时才重新加密写回，
+	// 避免把已经是密文的值二次加密。加密失败必须中止，否则口令会被清空。
 	if source.Password != "" && enc.Decrypt(model.C.General.SecretKey, source.Password) == "" {
-		model.DB().Model(&model.CoreDataSource{}).Where("source_id =?", source.SourceId).Updates(&model.CoreDataSource{Password: enc.Encrypt(model.C.General.SecretKey, source.Password)})
+		pwd := enc.Encrypt(model.C.General.SecretKey, source.Password)
+		if pwd == "" {
+			return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+		}
+		model.DB().Model(&model.CoreDataSource{}).Where("source_id =?", source.SourceId).Updates(&model.CoreDataSource{Password: pwd})
 	}
 	model.DB().Model(&model.CoreDataSource{}).Where("source_id =?", source.SourceId).Updates(map[string]interface{}{
 		"id_c":               source.IDC,
@@ -88,13 +97,14 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 }
 
 func SuperCreateSource(source *model.CoreDataSource) common.Resp {
-	source.Password = enc.Encrypt(model.C.General.SecretKey, source.Password)
-	if source.Password != "" {
-		source.SourceId = uuid.New().String()
-		model.DB().Create(source)
-		return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.DB_SAVE_SUCCESS))
+	pwd := enc.Encrypt(model.C.General.SecretKey, source.Password)
+	if pwd == "" {
+		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
 	}
-	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ERR_DB_SAVE))
+	source.Password = pwd
+	source.SourceId = uuid.New().String()
+	model.DB().Create(source)
+	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.DB_SAVE_SUCCESS))
 }
 
 func SuperTestDBConnect(source *model.CoreDataSource) common.Resp {

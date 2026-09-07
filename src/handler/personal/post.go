@@ -23,6 +23,7 @@ import (
 	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/cookieY/yee"
 	"github.com/cookieY/yee/logger"
@@ -80,9 +81,14 @@ func wrapperPostOrderInfo(order *model.CoreSqlOrder, y yee.Context) (length int,
 	model.DB().Model(model.CoreDataSource{}).Where("source_id = ?", order.SourceId).First(&flowId)
 	model.DB().Model(model.CoreWorkflowTpl{}).Where("id =?", flowId.FlowID).Find(&from)
 	err = json.Unmarshal(from.Steps, &step)
-	if err != nil || len(step) < 2 {
+	if err != nil {
 		y.Logger().Error(err)
 		return 0, err
+	}
+	// 流程至少要有提交级与一个审批级，否则工单会没有审批人
+	if len(step) < 2 {
+		y.Logger().Error("approval flow is incomplete")
+		return 0, errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
 	}
 	user := new(factory.Token).JwtParse(y)
 	if order.Source == "" {

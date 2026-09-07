@@ -37,7 +37,7 @@ func UserLdapLogin(c yee.Context) (err error) {
 	if err = c.Bind(u); err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
-	ldap := ad.ALdap{Ldap: model.GloLdap}
+	ldap := ad.ALdap{Ldap: *model.GloLdap.Load()}
 	isOk, err := ldap.LdapConnect(u.Username, u.Password, false)
 	if err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
@@ -55,6 +55,8 @@ func UserLdapLogin(c yee.Context) (err error) {
 			})
 			ix, _ := json.Marshal([]string{})
 			model.DB().Create(&model.CoreGrained{Username: u.Username, Group: ix})
+			// 重新查询，否则为新建用户签发的令牌中会带上空的用户名/部门信息
+			model.DB().Where("username = ?", u.Username).First(&account)
 		}
 
 		token, tokenErr := factory.JwtAuth(factory.Token{
@@ -83,12 +85,18 @@ func UserGeneralLogin(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
+	key := clientKey(c, u.Username)
+	if isLocked(key) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_LOGIN_TOO_MANY_ATTEMPTS)))
+	}
 	var account model.CoreAccount
 	if err := model.DB().Where("username = ?", u.Username).First(&account).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 		if account.Username != u.Username {
+			recordFailure(key)
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(errors.New(i18n.DefaultLang.Load(i18n.ER_LOGIN))))
 		}
 		if factory.DjangoCheckPassword(&account, u.Password) {
+			resetAttempts(key)
 			token, tokenErr := factory.JwtAuth(factory.Token{
 				Username: u.Username,
 				RealName: account.RealName,
@@ -109,13 +117,14 @@ func UserGeneralLogin(c yee.Context) (err error) {
 		}
 
 	}
+	recordFailure(key)
 	return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(errors.New(i18n.DefaultLang.Load(i18n.ER_LOGIN))))
 
 }
 
 func UserRegister(c yee.Context) (err error) {
 
-	if model.GloOther.Register {
+	if model.GloOther.Load().Register {
 		u := new(model.CoreAccount)
 		if err = c.Bind(u); err != nil {
 			c.Logger().Error(err.Error())

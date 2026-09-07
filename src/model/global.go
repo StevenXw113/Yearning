@@ -15,7 +15,9 @@ package model
 
 import (
 	"Yearning-go/src/engine"
+	"Yearning-go/src/lib/enc"
 	"github.com/cookieY/yee/logger"
+	"sync/atomic"
 	"time"
 )
 
@@ -82,15 +84,29 @@ var SecretKey = ""
 
 var GloPer CoreGlobalConfiguration
 
-var GloLdap Ldap
+// 全局配置会在运行时被管理端接口修改，同时被请求路径并发读取。
+// 使用原子指针整体替换，避免结构体（内含 slice）赋值时读到撕裂值。
+var (
+	GloLdap    atomic.Pointer[Ldap]
+	GloAI      atomic.Pointer[AI]
+	GloOther   atomic.Pointer[Other]
+	GloMessage atomic.Pointer[Message]
+	GloRole    atomic.Pointer[engine.AuditRole]
+)
 
-var GloAI AI
+func init() {
+	GloLdap.Store(&Ldap{})
+	GloAI.Store(&AI{})
+	GloOther.Store(&Other{})
+	GloMessage.Store(&Message{})
+	GloRole.Store(&engine.AuditRole{})
+}
 
-var GloOther Other
-
-var GloMessage Message
-
-var GloRole engine.AuditRole
+// JwtSigningKey 派生专用于 JWT 签名的密钥。
+// 与数据源口令加密密钥分离，避免一处泄露同时危及令牌与数据库凭据。
+func JwtSigningKey() []byte {
+	return enc.DeriveKey(C.General.SecretKey, "yearning-jwt-hs256-v1", 32)
+}
 
 func TransferLogLevel() uint8 {
 	v, ok := mappingLevel[C.General.LogLevel]

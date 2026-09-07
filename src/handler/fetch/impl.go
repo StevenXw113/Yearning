@@ -2,13 +2,34 @@ package fetch
 
 import (
 	"Yearning-go/src/handler/common"
+	"Yearning-go/src/i18n"
+	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"fmt"
+	"net/http"
+
+	"github.com/cookieY/yee"
 )
 
 const (
 	UNDO_EXPR = "username =? AND work_id =? AND `status` =? "
 )
+
+// checkSourcePerm 校验当前登录用户是否拥有该数据源的任意权限
+func checkSourcePerm(c yee.Context, sourceId string) bool {
+	user := new(factory.Token).JwtParse(c).Username
+	return common.HasAnySourcePermission(user, sourceId)
+}
+
+// checkOrderPerm 校验当前登录用户是否与工单相关（提交人、审批人或历史审批人）
+func checkOrderPerm(c yee.Context, workId string) bool {
+	user := new(factory.Token).JwtParse(c).Username
+	return common.IsOrderRelated(workId, user)
+}
+
+func deny(c yee.Context) error {
+	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+}
 
 type userProfile struct {
 	Department string `gorm:"type:varchar(50);" json:"department"`

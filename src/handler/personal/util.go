@@ -26,22 +26,32 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	var isCall bool
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
+	if err != nil || rule == nil {
+		logger.DefaultLogger.Error(err)
+		return
+	}
+	p := enc.Decrypt(model.C.General.SecretKey, source.Password)
+	if p == "" {
+		logger.DefaultLogger.Error(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+		return
+	}
+	client, err := calls.NewRpc()
 	if err != nil {
 		logger.DefaultLogger.Error(err)
+		return
 	}
-	if client := calls.NewRpc(); client != nil {
-		if err := client.Call("Engine.Exec", &audit.ExecArgs{
-			Order:         order,
-			Rules:         *rule,
-			IP:            source.IP,
-			Port:          source.Port,
-			Username:      source.Username,
-			Password:      enc.Decrypt(model.C.General.SecretKey, source.Password),
-			Message:       model.GloMessage,
-			MaxAffectRows: autoTask.Affectrow,
-		}, &isCall); err != nil {
-			log.Println(err)
-		}
+	defer client.Close()
+	if err := client.Call("Engine.Exec", &audit.ExecArgs{
+		Order:         order,
+		Rules:         *rule,
+		IP:            source.IP,
+		Port:          source.Port,
+		Username:      source.Username,
+		Password:      p,
+		Message:       *model.GloMessage.Load(),
+		MaxAffectRows: autoTask.Affectrow,
+	}, &isCall); err != nil {
+		log.Println(err)
 	}
 	if isCall {
 		model.DB().Create(&model.CoreWorkflowDetail{

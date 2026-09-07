@@ -33,6 +33,8 @@ func ScanDataRows(s model.CoreDataSource, database, sql, meta string, isQuery bo
 	if err != nil {
 		return nil, err
 	}
+	// 不关闭 rows 会一直占用连接池中的连接
+	defer rows.Close()
 	col, _ := rows.Columns()
 	_tmp := unifiedLabel(col)
 	if len(_tmp) == 0 {
@@ -94,28 +96,34 @@ func Highlight(s *model.CoreDataSource, isField string, dbName string) []map[str
 	if isField == "true" {
 		tbl, err := db.Table("information_schema.tables").Select("table_name").Scopes(AccordingToSchemaIn(dbName)).Group("table_name").Rows()
 		if err != nil {
-			model.DefaultLogger.Debugf("fetch table error: %v", err)
-		}
-		for tbl.Next() {
-			tbl.Scan(&highlight)
-			list = append(list, map[string]string{"vl": highlight, "meta": "Table"})
+			model.DefaultLogger.Errorf("fetch table error: %v", err)
+		} else {
+			defer tbl.Close()
+			for tbl.Next() {
+				_ = tbl.Scan(&highlight)
+				list = append(list, map[string]string{"vl": highlight, "meta": "Table"})
+			}
 		}
 		fields, err := db.Table("information_schema.Columns").Select("COLUMN_NAME").Scopes(AccordingToSchemaIn(dbName)).Group("COLUMN_NAME").Rows()
 		if err != nil {
-			model.DefaultLogger.Debugf("fetch fields error: %v", err)
-		}
-		for fields.Next() {
-			fields.Scan(&highlight)
-			list = append(list, map[string]string{"vl": highlight, "meta": "Fields"})
+			model.DefaultLogger.Errorf("fetch fields error: %v", err)
+		} else {
+			defer fields.Close()
+			for fields.Next() {
+				_ = fields.Scan(&highlight)
+				list = append(list, map[string]string{"vl": highlight, "meta": "Fields"})
+			}
 		}
 	} else {
 		schema, err := db.Table("information_schema.SCHEMATA").Select("SCHEMA_NAME").Scopes(AccordingToSchemaNotIn(true, excludeDbList)).Group("SCHEMA_NAME").Rows()
 		if err != nil {
-			model.DefaultLogger.Debugf("fetch schema error: %v", err)
-		}
-		for schema.Next() {
-			schema.Scan(&highlight)
-			list = append(list, map[string]string{"vl": highlight, "meta": "Schema"})
+			model.DefaultLogger.Errorf("fetch schema error: %v", err)
+		} else {
+			defer schema.Close()
+			for schema.Next() {
+				_ = schema.Scan(&highlight)
+				list = append(list, map[string]string{"vl": highlight, "meta": "Schema"})
+			}
 		}
 	}
 

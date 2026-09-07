@@ -14,6 +14,7 @@
 package service
 
 import (
+	"Yearning-go/src/engine"
 	"Yearning-go/src/model"
 	_ "Yearning-go/src/model"
 	"Yearning-go/src/router"
@@ -21,8 +22,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cookieY/yee"
+	"github.com/cookieY/yee/logger"
 	"github.com/cookieY/yee/middleware"
 	"net/http"
+	"os"
 )
 
 //go:embed chat/*
@@ -37,19 +40,58 @@ var f embed.FS
 //go:embed dist/index.html
 var html string
 
-func loadDBInit() {
-	model.DB().First(&model.GloPer)
-	_ = json.Unmarshal(model.GloPer.Message, &model.GloMessage)
-	_ = json.Unmarshal(model.GloPer.Ldap, &model.GloLdap)
-	_ = json.Unmarshal(model.GloPer.Other, &model.GloOther)
-	_ = json.Unmarshal(model.GloPer.AuditRole, &model.GloRole)
-	_ = json.Unmarshal(model.GloPer.AI, &model.GloAI)
+// loadDBInit 加载全局配置到进程内缓存。
+// 解析失败必须中断启动：否则查询行数上限、审核规则等会静默变成零值。
+func loadDBInit() error {
+	if err := model.DB().First(&model.GloPer).Error; err != nil {
+		return err
+	}
+	var message model.Message
+	var ldap model.Ldap
+	var other model.Other
+	var role engine.AuditRole
+	var ai model.AI
+	if model.GloPer.Message != nil {
+		if err := json.Unmarshal(model.GloPer.Message, &message); err != nil {
+			return err
+		}
+	}
+	if model.GloPer.Ldap != nil {
+		if err := json.Unmarshal(model.GloPer.Ldap, &ldap); err != nil {
+			return err
+		}
+	}
+	if model.GloPer.Other != nil {
+		if err := json.Unmarshal(model.GloPer.Other, &other); err != nil {
+			return err
+		}
+	}
+	if model.GloPer.AuditRole != nil {
+		if err := json.Unmarshal(model.GloPer.AuditRole, &role); err != nil {
+			return err
+		}
+	}
+	if model.GloPer.AI != nil {
+		if err := json.Unmarshal(model.GloPer.AI, &ai); err != nil {
+			return err
+		}
+	}
+	model.GloMessage.Store(&message)
+	model.GloLdap.Store(&ldap)
+	model.GloOther.Store(&other)
+	model.GloRole.Store(&role)
+	model.GloAI.Store(&ai)
+	return nil
 }
 
 func StartYearning(port string) {
+	if err := loadDBInit(); err != nil {
+		logger.DefaultLogger.Errorf("全局配置加载失败: %v", err)
+		os.Exit(1)
+		return
+	}
 	go cronTabMaskQuery()
 	go cronTabTotalTickets()
-	loadDBInit()
 	e := yee.New()
 	e.Pack("/front", f, "dist")
 	e.Pack("/_next", chatf, "chat")

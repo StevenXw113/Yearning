@@ -20,7 +20,7 @@ func SuperSaveRoles(c yee.Context) (err error) {
 	}
 	audit, _ := json.Marshal(u)
 	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{AuditRole: audit})
-	model.GloRole = *u
+	model.GloRole.Store(u)
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_DATA_IS_EDIT)))
 }
 

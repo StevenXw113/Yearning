@@ -29,7 +29,8 @@ func SuperFetchSource(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return
 	}
-	req.Paging().Query(
+	// 显式限定返回字段：不得把数据源口令与 TLS 私钥下发到前端
+	req.Paging().Select("id,id_c,ip,port,username,source,is_query,flow_id,source_id,exclude_db_list,insulate_word_list,principal,db_type,rule_id").Query(
 		common.AccordingToOrderIDC(req.Expr.IDC),
 		common.AccordingToOrderIP(req.Expr.IP),
 		common.AccordingToOrderType(req.Expr.IsQuery),

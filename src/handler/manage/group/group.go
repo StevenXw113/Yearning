@@ -80,7 +80,8 @@ func SuperClearUserRule(c yee.Context) (err error) {
 		if err != nil {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 		}
-		go model.DB().Model(model.CoreGrained{}).Scopes(common.AccordingToUsernameEqual(i.Username)).Updates(&model.CoreGrained{Group: b})
+		// 循环内为每个用户起协程会让并发随用户数无上限增长，改为串行更新
+		model.DB().Model(model.CoreGrained{}).Scopes(common.AccordingToUsernameEqual(i.Username)).Updates(&model.CoreGrained{Group: b})
 	}
 	model.DB().Model(model.CoreRoleGroup{}).Where("group_id = ?", scape).Delete(&model.CoreRoleGroup{})
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(fmt.Sprintf(i18n.DefaultLang.Load(i18n.GROUP_DELETE_SUCCESS), scape)))

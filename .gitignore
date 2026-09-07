@@ -105,9 +105,15 @@ src/service/chat/*
 .mypy_cache/
 .idea/*.xml
 .vscode/
-go.sum
 .idea/Yearning.iml
 .idea/inspectionProfiles/Project_Default.xml
 .idea
 
 juno
+
+# 前端构建产物与临时目录
+src/service/dist/
+.tmpgotest/
+
+# go.sum 必须纳入版本控制：它用于校验依赖完整性，
+# 忽略它会使项目在拉取依赖时失去对篡改与供应链攻击的防护
