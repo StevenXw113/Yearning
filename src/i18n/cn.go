@@ -67,8 +67,6 @@ var zh_CN = map[int]string{
 	GROUP_EDIT_SUCCESS:                                        "%s的权限已更新！",
 	WEBHOOK_TEST:                                              "测试消息已发送！请注意查收！",
 	MAIL_TEST:                                                 "测试邮件已发送！请注意查收！",
-	ERR_LDAP_TEST:                                             "ldap连接失败,请检查配置/测试用户密码！",
-	SUCCESS_LDAP_TEST:                                         "ldap连接成功!",
 	ER_MISSING_DATA_SOURCE:                                    "数据源没有添加流程!无法提交工单",
 	ER_USER_REGUSTER:                                          "用户已存在请重新注册！",
 	USER_REGUSTER_SUCCESS:                                     "注册成功！",

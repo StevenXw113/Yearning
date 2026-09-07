@@ -47,17 +47,11 @@ func loadDBInit() error {
 		return err
 	}
 	var message model.Message
-	var ldap model.Ldap
 	var other model.Other
 	var role engine.AuditRole
 	var ai model.AI
 	if model.GloPer.Message != nil {
 		if err := json.Unmarshal(model.GloPer.Message, &message); err != nil {
-			return err
-		}
-	}
-	if model.GloPer.Ldap != nil {
-		if err := json.Unmarshal(model.GloPer.Ldap, &ldap); err != nil {
 			return err
 		}
 	}
@@ -77,7 +71,6 @@ func loadDBInit() error {
 		}
 	}
 	model.GloMessage.Store(&message)
-	model.GloLdap.Store(&ldap)
 	model.GloOther.Store(&other)
 	model.GloRole.Store(&role)
 	model.GloAI.Store(&ai)

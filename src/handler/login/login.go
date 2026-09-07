@@ -16,7 +16,6 @@ package login
 import (
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
-	"Yearning-go/src/lib/ad"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"encoding/json"
@@ -30,53 +29,6 @@ type loginForm struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	MFACode  string `json:"mfa_code"`
-}
-
-func UserLdapLogin(c yee.Context) (err error) {
-	u := new(loginForm)
-	if err = c.Bind(u); err != nil {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
-	}
-	ldap := ad.ALdap{Ldap: *model.GloLdap.Load()}
-	isOk, err := ldap.LdapConnect(u.Username, u.Password, false)
-	if err != nil {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
-	}
-	if isOk {
-		var account model.CoreAccount
-		if err := model.DB().Where("username = ?", u.Username).First(&account).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-			model.DB().Create(&model.CoreAccount{
-				Username:   u.Username,
-				RealName:   ldap.RealName,
-				Password:   factory.DjangoEncrypt(factory.GenWorkId(), string(factory.GetRandom())),
-				Department: ldap.Department,
-				Email:      ldap.Email,
-				IsRecorder: 2,
-			})
-			ix, _ := json.Marshal([]string{})
-			model.DB().Create(&model.CoreGrained{Username: u.Username, Group: ix})
-			// 重新查询，否则为新建用户签发的令牌中会带上空的用户名/部门信息
-			model.DB().Where("username = ?", u.Username).First(&account)
-		}
-
-		token, tokenErr := factory.JwtAuth(factory.Token{
-			Username: u.Username,
-			RealName: account.RealName,
-			IsRecord: account.IsRecorder == 1,
-		})
-		if tokenErr != nil {
-			c.Logger().Error(tokenErr.Error())
-			return
-		}
-		dataStore := map[string]interface{}{
-			"token":     token,
-			"real_name": account.RealName,
-			"user":      u.Username,
-			"is_record": account.IsRecorder,
-		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(dataStore))
-	}
-	return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(errors.New(i18n.DefaultLang.Load(i18n.ER_LOGIN))))
 }
 
 func UserGeneralLogin(c yee.Context) (err error) {

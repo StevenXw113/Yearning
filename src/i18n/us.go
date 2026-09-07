@@ -67,8 +67,6 @@ var en_US = map[int]string{
 	GROUP_EDIT_SUCCESS:                                        "%s permissions have been updated!",
 	WEBHOOK_TEST:                                              "Test message sent! Please check your inbox!",
 	MAIL_TEST:                                                 "Test email sent! Please check your inbox!",
-	ERR_LDAP_TEST:                                             "LDAP connection failed, please check the configuration/test user password!",
-	SUCCESS_LDAP_TEST:                                         "LDAP connection successful!",
 	ER_MISSING_DATA_SOURCE:                                    "No data source added for workflow! Unable to submit order",
 	ER_USER_REGUSTER:                                          "User already exists, please register again!",
 	USER_REGUSTER_SUCCESS:                                     "Registration successful!",

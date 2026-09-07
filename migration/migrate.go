@@ -18,15 +18,6 @@ type originOther struct {
 	ExQueryTime int      `json:"ex_query_time"`
 }
 
-type originLDAP struct {
-	Url      string `json:"url"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Type     string `json:"type"`
-	Sc       string `json:"sc"`
-	Ldaps    bool   `json:"ldaps"`
-}
-
 func main() {
 	model.DBNew("./conf.toml")
 	var s []model.CoreDataSource
@@ -103,9 +94,7 @@ func main() {
 	var conf model.CoreGlobalConfiguration
 	model.DB().Model(model.CoreGlobalConfiguration{}).First(&conf)
 	var o originOther
-	var l originLDAP
 	_ = json.Unmarshal(conf.Other, &o)
-	_ = json.Unmarshal(conf.Ldap, &l)
 	num, _ := strconv.Atoi(o.Limit)
 	other := model.Other{
 		Limit:       uint64(num),
@@ -115,16 +104,7 @@ func main() {
 		Export:      o.Export,
 		Query:       o.Query,
 	}
-	ldap := model.Ldap{
-		Url:      l.Url,
-		User:     l.User,
-		Password: l.Password,
-		Type:     "(&(objectClass=organizationalPerson)(sAMAccountName=%s))",
-		Sc:       l.Sc,
-		Ldaps:    l.Ldaps,
-	}
 	b, _ := json.Marshal(other)
-	ld, _ := json.Marshal(ldap)
-	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{Other: b, Ldap: ld})
+	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{Other: b})
 	fmt.Println("迁移完成！")
 }

@@ -39,29 +39,8 @@ type Message struct {
 	Key      string `json:"key"`
 }
 
-type Ldap struct {
-	Url          string `json:"url"`
-	User         string `json:"user"`
-	Password     string `json:"password"`
-	Type         string `json:"type"`
-	Sc           string `json:"sc"`
-	Ldaps        bool   `json:"ldaps"`
-	Map          string `json:"map"`
-	TestUser     string `json:"test_user"`
-	TestPassword string `json:"test_password"`
-}
-
-type LabelWithValue struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-}
-
 type PermissionList struct {
 	DDLSource   []string `json:"ddl_source"`
 	DMLSource   []string `json:"dml_source"`
 	QuerySource []string `json:"query_source"`
-}
-
-type Permission struct {
-	Permissions PermissionList `json:"permissions"`
 }

@@ -16,7 +16,6 @@ package settings
 import (
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
-	"Yearning-go/src/lib/ad"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
 	"encoding/json"
@@ -25,7 +24,6 @@ import (
 )
 
 type set struct {
-	Ldap    model.Ldap    `json:"ldap"`
 	Message model.Message `json:"message"`
 	Other   model.Other   `json:"other"`
 	AI      model.AI      `json:"ai"`
@@ -38,8 +36,6 @@ type delOrder struct {
 
 // maskSensitive 清空设置里的凭据字段，避免明文口令出现在响应体中
 func maskSensitive(u *set) {
-	u.Ldap.Password = ""
-	u.Ldap.TestPassword = ""
 	u.Message.Password = ""
 	u.Message.Key = ""
 	u.AI.APIKey = ""
@@ -49,10 +45,9 @@ func SuperFetchSetting(c yee.Context) (err error) {
 
 	var k model.CoreGlobalConfiguration
 
-	model.DB().Select("ldap,message,other,ai").First(&k)
+	model.DB().Select("message,other,ai").First(&k)
 
-	s := set{Ldap: model.Ldap{}, Message: model.Message{}, Other: model.Other{}, AI: model.AI{}}
-	_ = k.Ldap.UnmarshalToJSON(&s.Ldap)
+	s := set{Message: model.Message{}, Other: model.Other{}, AI: model.AI{}}
 	_ = k.Message.UnmarshalToJSON(&s.Message)
 	_ = k.Other.UnmarshalToJSON(&s.Other)
 	_ = k.AI.UnmarshalToJSON(&s.AI)
@@ -70,16 +65,14 @@ func SuperSaveSetting(c yee.Context) (err error) {
 	}
 	other, _ := json.Marshal(u.Other)
 	message, _ := json.Marshal(u.Message)
-	ldap, _ := json.Marshal(u.Ldap)
 	ai, _ := json.Marshal(u.AI)
 
 	if !u.Other.Query {
 		model.DB().Model(model.CoreQueryOrder{}).Where("`status` in (?)", []int{1, 2}).Updates(&model.CoreQueryOrder{Status: 3})
 	}
 
-	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{Other: other, Message: message, Ldap: ldap, AI: ai})
+	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{Other: other, Message: message, AI: ai})
 	model.GloOther.Store(&u.Other)
-	model.GloLdap.Store(&u.Ldap)
 	model.GloMessage.Store(&u.Message)
 	model.GloAI.Store(&u.AI)
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_DATA_IS_EDIT)))
@@ -101,16 +94,6 @@ func SuperTestSetting(c yee.Context) (err error) {
 	case "ding":
 		go pusher.PusherMessages(u.Message, pusher.Commontext)
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.WEBHOOK_TEST)))
-	case "ldap":
-		ldap := ad.ALdap{Ldap: u.Ldap}
-		k, err := ldap.LdapConnect("", "", true)
-		if err != nil {
-			c.Logger().Error(err)
-			return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ERR_LDAP_TEST)))
-		}
-		if k {
-			return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.SUCCESS_LDAP_TEST)))
-		}
 	}
 	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 }

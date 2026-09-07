@@ -133,10 +133,9 @@ var SQLAgentPrompt = `
 As a MySQL language teaching specialist, you must follow the above rules and communicate with users in {{lang}}, the default language.
 `
 
-func DataInit(o *engine.AuditRole, other *model.Other, ldap *model.Ldap, message *model.Message, a *model.PermissionList, ai *model.AI) {
+func DataInit(o *engine.AuditRole, other *model.Other, message *model.Message, a *model.PermissionList, ai *model.AI) {
 	c, _ := json.Marshal(o)
 	oh, _ := json.Marshal(other)
-	l, _ := json.Marshal(ldap)
 	m, _ := json.Marshal(message)
 	ak, _ := json.Marshal(a)
 	aigc, _ := json.Marshal(ai)
@@ -155,7 +154,6 @@ func DataInit(o *engine.AuditRole, other *model.Other, ldap *model.Ldap, message
 		Other:         oh,
 		AuditRole:     c,
 		Message:       m,
-		Ldap:          l,
 		AI:            aigc,
 	})
 	model.DB().Debug().Create(&model.CoreGrained{
@@ -236,14 +234,6 @@ func Migrate() {
 			ExQueryTime: 60,
 		}
 
-		ldap := model.Ldap{
-			Url:      "",
-			User:     "",
-			Password: "",
-			Type:     "(&(objectClass=organizationalPerson)(sAMAccountName=%s))",
-			Sc:       "",
-		}
-
 		message := model.Message{
 			WebHook:  "",
 			Host:     "",
@@ -275,7 +265,7 @@ func Migrate() {
 			SQLAgentPrompt:   SQLAgentPrompt,
 		}
 		time.Sleep(2)
-		DataInit(&o, &other, &ldap, &message, &a, &ai)
+		DataInit(&o, &other, &message, &a, &ai)
 		fmt.Println(i18n.DefaultLang.Load(i18n.INFO_INITIALIZATION_SUCCESS_USERNAME_PASSWORD_RUN_COMMAND))
 	} else {
 		fmt.Println(i18n.DefaultLang.Load(i18n.INFO_ALREADY_INITIALIZED))
@@ -355,15 +345,6 @@ func MargeRuleGroup() {
 	_ = model.DB().Migrator().DropColumn(&model.CoreSqlOrder{}, "rejected")
 	_ = model.DB().Migrator().DropColumn(&model.CoreGrained{}, "permissions")
 	_ = model.DB().Migrator().DropColumn(&model.CoreGrained{}, "rule")
-	ldap := model.Ldap{
-		Url:      "",
-		User:     "",
-		Password: "",
-		Type:     "(&(objectClass=organizationalPerson)(sAMAccountName=%s))",
-		Sc:       "",
-	}
-	b, _ := json.Marshal(ldap)
-	model.DB().Model(model.CoreGlobalConfiguration{}).Where("1=1").Updates(&model.CoreGlobalConfiguration{Ldap: b})
 	_ = model.DB().Exec("alter table core_sql_orders modify assigned varchar(550) not null")
 	_ = model.DB().Exec("alter table core_workflow_details modify action varchar(550) not null")
 	fmt.Println(i18n.DefaultLang.Load(i18n.INFO_FIX_SUCCESS))

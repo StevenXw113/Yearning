@@ -61,7 +61,6 @@ type CoreAccount struct {
 type CoreGlobalConfiguration struct {
 	ID            uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
 	Authorization string `gorm:"type:varchar(50);not null" json:"authorization"`
-	Ldap          JSON   `gorm:"type:json;" json:"ldap"`
 	Message       JSON   `gorm:"type:json;" json:"message"`
 	Other         JSON   `gorm:"type:json;" json:"other"`
 	Stmt          uint   `gorm:"type:tinyint(2) not null default 0" json:"stmt"`

@@ -87,7 +87,6 @@ var GloPer CoreGlobalConfiguration
 // 全局配置会在运行时被管理端接口修改，同时被请求路径并发读取。
 // 使用原子指针整体替换，避免结构体（内含 slice）赋值时读到撕裂值。
 var (
-	GloLdap    atomic.Pointer[Ldap]
 	GloAI      atomic.Pointer[AI]
 	GloOther   atomic.Pointer[Other]
 	GloMessage atomic.Pointer[Message]
@@ -95,7 +94,6 @@ var (
 )
 
 func init() {
-	GloLdap.Store(&Ldap{})
 	GloAI.Store(&AI{})
 	GloOther.Store(&Other{})
 	GloMessage.Store(&Message{})
