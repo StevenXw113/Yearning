@@ -1,6 +1,6 @@
 <template>
   <a-row>
-    <a-col :span="10">
+    <a-col :span="12">
       <a-divider orientation="left">{{ $t('setting.message.push') }}</a-divider>
       <a-form v-bind="layout">
         <a-form-item :label="$t('setting.message.hook.addr')">
@@ -48,91 +48,13 @@
           </a-space>
         </a-form-item>
       </a-form>
-      <a-alert message="Warning" type="warning" show-icon>
-        <template #icon>
-          <SmileOutlined></SmileOutlined>
-        </template>
-        <template #description>
-          <div v-html="$t('setting.ldap.alert')"></div>
-        </template>
-      </a-alert>
-    </a-col>
-    <a-col :span="11" offset="1">
-      <a-divider orientation="left">{{ $t('setting.ldap') }}</a-divider>
-      <a-form v-bind="layout">
-        <a-form-item :label="$t('setting.ldap.url')">
-          <a-input
-            v-model:value="config.ldap.url"
-            :placeholder="$t('setting.ldap.url.tips')"
-          >
-          </a-input>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.ssl')">
-          <a-checkbox v-model:checked="config.ldap.ldaps"></a-checkbox>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.dn')">
-          <a-input
-            v-model:value="config.ldap.user"
-            :placeholder="$t('setting.ldap.dn.tips')"
-          >
-          </a-input>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.password')">
-          <a-input-password
-            v-model:value="config.ldap.password"
-            :placeholder="$t('setting.ldap.password.tips')"
-          ></a-input-password>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.filter')">
-          <a-input
-            v-model:value="config.ldap.type"
-            :placeholder="$t('setting.ldap.filter.tips')"
-          >
-          </a-input>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.sc')">
-          <a-input
-            v-model:value="config.ldap.sc"
-            placeholder="LDAP Search Base"
-          ></a-input>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.map')">
-          <a-textarea
-            v-model:value="config.ldap.map"
-            :rows="5"
-            allow-clear
-            :placeholder="$t('setting.ldap.map.tips')"
-          />
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.test.user')">
-          <a-input
-            v-model:value="config.ldap.test_user"
-            placeholder="LDAP Test User"
-          >
-          </a-input>
-        </a-form-item>
-        <a-form-item :label="$t('setting.ldap.test.password')">
-          <a-input-password
-            v-model:value="config.ldap.test_password"
-            placeholder="LDAP Test User Password"
-          >
-            >
-          </a-input-password>
-        </a-form-item>
-        <a-form-item :label="$t('common.action')">
-          <a-button type="primary" @click="testMessageHook('ldap', config)">{{
-            $t('setting.ldap.test')
-          }}</a-button>
-        </a-form-item>
-        <Btn :config="config" />
-      </a-form>
+      <Btn :config="config" />
     </a-col>
   </a-row>
 </template>
 
 <script setup lang="ts">
   import Btn from './btn.vue';
-  import { SmileOutlined } from '@ant-design/icons-vue';
   import CommonMixins from '@/mixins/common';
   import { testMessageHook, Settings } from '@/apis/setting';
   import { inject } from 'vue';

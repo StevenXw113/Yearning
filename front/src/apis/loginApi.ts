@@ -3,12 +3,12 @@ import { request } from '@/config/request';
 export interface LoginFrom {
   username: string;
   password: string;
-  is_ldap: boolean;
   is_oidc: boolean;
 }
 
 export function signIn(login: LoginFrom) {
-  return request.post(login.is_ldap ? '/ldap' : '/login', login);
+  // LDAP 已从后端彻底移除，仅保留本地账号登录
+  return request.post('/login', login);
 }
 
 export function systemRegisterState() {

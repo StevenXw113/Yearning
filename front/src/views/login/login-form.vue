@@ -18,13 +18,6 @@
         @press-enter="() => userSignIn()"
       />
     </a-form-item>
-    <a-form-item>
-      <a-space :size="50">
-        <a-checkbox v-model:checked="loginForm.is_ldap">
-          <span class="fff">LDAP</span>
-        </a-checkbox>
-      </a-space>
-    </a-form-item>
     <a-button type="dashed" block ghost @click="userSignIn">{{
       $t('common.signin')
     }}</a-button>
@@ -51,7 +44,6 @@
   const loginForm: UnwrapRef<LoginFrom> = reactive({
     username: '',
     password: '',
-    is_ldap: false,
     is_oidc: false,
   });
 

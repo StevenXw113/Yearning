@@ -31,7 +31,6 @@
 
   const config = ref({
     message: {},
-    ldap: {},
     other: {
       limit: 0,
       export: false,

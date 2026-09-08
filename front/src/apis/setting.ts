@@ -14,18 +14,6 @@ export interface Message {
   ding: boolean;
 }
 
-export interface LDAP {
-  url: string;
-  ldaps: boolean;
-  user: string;
-  password: string;
-  type: string;
-  sc: string;
-  map: string;
-  test_user: string;
-  test_password: string;
-}
-
 export interface Other {
   limit: number;
   idc: string[];
@@ -58,7 +46,6 @@ export interface AI {
 
 export interface Settings {
   message: Message;
-  ldap: LDAP;
   other: Other;
   ai: AI;
 }
