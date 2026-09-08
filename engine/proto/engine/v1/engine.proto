@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package engine.v1;
+
+option go_package = "engine/gen/engine/v1;enginev1";
+
+// EngineService 提供与 Juno 一致的审核/执行能力，首期实现 MySQL。
+service EngineService {
+  // Check 执行 SQL 静态审核，返回逐条语句的审核结果。
+  rpc Check(CheckRequest) returns (CheckReply);
+  // MergeAlterTables 合并多条 ALTER TABLE 语句。
+  rpc MergeAlterTables(MergeAlterTablesRequest) returns (MergeAlterTablesReply);
+  // Exec 执行已审批工单中的 SQL（DDL/DML）。
+  rpc Exec(ExecRequest) returns (ExecReply);
+  // Query 执行查询并返回结果集（经敏感字段收敛）。
+  rpc Query(QueryRequest) returns (QueryReply);
+  // StopDelay 停止/调度延迟工单立即执行。
+  rpc StopDelay(StopDelayRequest) returns (StopDelayReply);
+}
+
+// 数据源连接信息。密码仅用于建立到目标库的连接，绝不落日志。
+message DataSource {
+  string ip = 1;
+  int32 port = 2;
+  string username = 3;
+  string password = 4;
+  string ca = 5;
+  string cert = 6;
+  string key = 7;
+  string kind = 8; // "mysql"（首期仅支持）
+}
+
+// 审核规则，与 Yearning engine.AuditRole 对齐。
+message AuditRole {
+  bool dml_transaction = 1;
+  bool dml_allow_limit_stmt = 2;
+  bool dml_insert_columns = 3;
+  int32 dml_max_insert_rows = 4;
+  bool dml_where = 5;
+  bool dml_where_expr_value_is_null = 6;
+  bool dml_order = 7;
+  bool dml_select = 8;
+  bool dml_allow_insert_null = 9;
+  bool dml_insert_must_explicitly = 10;
+  bool ddl_enable_primary_key = 11;
+  bool ddl_check_table_comment = 12;
+  bool ddl_check_column_comment = 13;
+  bool ddl_check_column_nullable = 14;
+  bool ddl_check_column_default = 15;
+  bool ddl_enable_across_db_rename = 16;
+  bool ddl_enable_autoincrement_init = 17;
+  bool ddl_enable_auto_increment = 18;
+  bool ddl_enable_autoincrement_unsigned = 19;
+  bool ddl_enable_drop_table = 20;
+  bool ddl_enable_drop_database = 21;
+  bool ddl_enable_null_index_name = 22;
+  bool ddl_index_name_spec = 23;
+  uint32 ddl_max_key_parts = 24;
+  uint32 ddl_max_key = 25;
+  uint32 ddl_max_char_length = 26;
+  int32 max_table_name_len = 27;
+  uint32 max_affect_rows = 28;
+  uint32 max_ddl_affect_rows = 29;
+  string support_charset = 30;
+  string support_collation = 31;
+  bool check_identifier = 32;
+  string must_have_columns = 33;
+  bool ddl_multi_to_commit = 34;
+  bool ddl_primary_key_must = 35;
+  bool ddl_allow_column_type = 36;
+  bool ddl_implicit_type_conversion = 37;
+  bool ddl_allow_pri_not_int = 38;
+  bool ddl_allow_multi_alter = 39;
+  bool ddl_enable_foreign_key = 40;
+  string ddl_table_prefix = 41;
+  string ddl_columns_must_have_index = 42;
+  bool ddl_allow_change_column_position = 43;
+  bool ddl_check_float_double = 44;
+  bool is_osc = 45;
+  string osc_expr = 46;
+  uint32 osc_size = 47;
+  bool allow_create_view = 48;
+  bool allow_create_view_with_select_star = 49;
+  bool allow_create_partition = 50;
+  bool allow_special_type = 51;
+  bool pri_roll_back = 52;
+}
+
+// 工单（用于 Exec），字段与 Yearning CoreSqlOrder 对齐。
+message Order {
+  string work_id = 1;
+  string username = 2;
+  uint32 status = 3;
+  int32 type = 4; // 1 dml, 0 ddl
+  uint32 backup = 5;
+  string idc = 6;
+  string source = 7;
+  string source_id = 8;
+  string data_base = 9;
+  string table = 10;
+  string date = 11;
+  string sql = 12;
+  string text = 13;
+  string assigned = 14;
+  string delay = 15;
+  string real_name = 16;
+  string execute_time = 17;
+  int32 current_step = 18;
+  string osc_info = 19;
+  string file = 20;
+}
+
+// 单条语句审核记录，与 Yearning engine.Record 对齐。
+message Record {
+  string sql = 1;
+  uint32 affect_rows = 2;
+  string status = 3;
+  string error = 4;
+  uint32 level = 5; // critical=0 error=1 warning=2 info=3 debug=4
+  string exec_time = 6;
+  string table = 7;
+  string schema = 8;
+  bool is_osc = 9;
+  repeated string insulate_word_list = 10;
+}
+
+message CheckRequest {
+  string sql = 1;
+  string schema = 2;
+  DataSource source = 3;
+  string lang = 4;
+  AuditRole rule = 5;
+}
+
+message CheckReply {
+  bool ok = 1;
+  string error = 2;
+  repeated Record records = 3;
+}
+
+message MergeAlterTablesRequest {
+  string sqls = 1;
+}
+
+message MergeAlterTablesReply {
+  bool ok = 1;
+  string error = 2;
+  string sql = 3;
+}
+
+message ExecRequest {
+  Order order = 1;
+  AuditRole rules = 2;
+  DataSource source = 3;
+  uint32 max_affect_rows = 4;
+}
+
+message ExecReply {
+  bool ok = 1;
+  string error = 2;
+  repeated Record records = 3; // 逐条执行明细（影响行/错误/回滚）。
+}
+
+message QueryRequest {
+  string sql = 1;
+  uint64 limit = 2;
+  string insulate_word_list = 3;
+}
+
+message QueryReply {
+  bool ok = 1;
+  string error = 2;
+  repeated Record records = 3;
+}
+
+// 与 Yearning audit.Confirm 对齐，用于 StopDelay 定位待执行的延迟工单。
+message Confirm {
+  string work_id = 1;
+  int32 page = 2;
+  int32 flag = 3;
+  string text = 4;
+  string tp = 5;
+  string source_id = 6;
+  string delay = 7;
+}
+
+message StopDelayRequest {
+  Confirm confirm = 1;
+}
+
+message StopDelayReply {
+  bool ok = 1;
+  string error = 2;
+  string message = 3;
+}

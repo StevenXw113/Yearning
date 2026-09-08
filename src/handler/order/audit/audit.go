@@ -3,7 +3,6 @@ package audit
 import (
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
-	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
@@ -49,16 +48,26 @@ func ScheduledChange(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
-	var isCall string
-	client, err := calls.NewRpc()
-	if err != nil {
-		c.Logger().Error(err.Error())
-		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	user := new(factory.Token).JwtParse(c)
+	if !hasOrderPermission(u.WorkId, user.Username) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
 	}
-	defer client.Close()
-	if err := client.Call("Engine.StopDelay", u, &isCall); err != nil {
-		return err
+	// 延迟调度在 Yearning 侧完成：'none'/空 表示立即执行，否则重排到新时间点由 cron 到点触发。
+	if u.Delay == "" || u.Delay == "none" {
+		var od model.CoreSqlOrder
+		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", u.WorkId).First(&od)
+		if od.WorkId == "" {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH)))
+		}
+		if err := ExecuteWorkOrder(&od, user.Username); err != nil {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+		}
+		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", u.WorkId).
+			Updates(map[string]interface{}{"status": 1, "delay": "none", "execute_time": time.Now().Format("2006-01-02 15:04")})
+		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_DELAY_SUCCESS)))
 	}
+	model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", u.WorkId).
+		Updates(map[string]interface{}{"delay": u.Delay, "status": 5})
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_DELAY_SUCCESS)))
 }
 

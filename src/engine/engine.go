@@ -64,7 +64,7 @@ type Record struct {
 	ExecTime         string   `json:"exec_time"`
 	Table            string   `json:"table"`
 	Schema           string   `json:"schema"`
-	isOSC            bool     `json:"is_osc"`
+	IsOSC            bool     `json:"is_osc"`
 	InsulateWordList []string `json:"insulate_word_list"`
 }
 

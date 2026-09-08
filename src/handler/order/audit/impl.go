@@ -10,26 +10,15 @@ import (
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
+	"context"
 	"encoding/json"
+	enginev1 "engine/gen/engine/v1"
+	"errors"
 	"fmt"
 	"github.com/cookieY/yee/logger"
 	"strings"
 	"time"
 )
-
-type ExecArgs struct {
-	Order         *model.CoreSqlOrder
-	Rules         engine.AuditRole
-	IP            string
-	Port          int
-	Username      string
-	Password      string
-	CA            string
-	Cert          string
-	Key           string
-	Message       model.Message
-	MaxAffectRows uint
-}
 
 type Confirm struct {
 	WorkId   string `json:"work_id"`
@@ -57,59 +46,93 @@ func (e *Confirm) GetTPL() []flow.Tpl {
 
 func ExecuteOrder(u *Confirm, user string) common.Resp {
 	var order model.CoreSqlOrder
-	var source model.CoreDataSource
 	model.DB().Where("work_id =?", u.WorkId).First(&order)
 
 	if order.Status != 2 && order.Status != 5 {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
-	order.Assigned = user
+	if err := ExecuteWorkOrder(&order, user); err != nil {
+		logger.DefaultLogger.Error(err)
+		return common.ERR_COMMON_MESSAGE(err)
+	}
+	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE))
+}
 
+// ExecuteWorkOrder 执行单个已通过审批/待执行(status 2 或 5)的工单。
+// 被 HTTP 人工执行与延迟调度 cron 共用：读取数据源与规则，调用引擎 Exec，
+// 并将逐条明细回写 core_sql_records 与 core_workflow_detail。
+// actor 为操作者标识（审批人用户名，或延迟触发时的执行者）。
+func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
+	var source model.CoreDataSource
+	if order == nil || order.WorkId == "" {
+		return errors.New(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
+	}
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil || rule == nil {
-		logger.DefaultLogger.Error(err)
-		return common.ERR_COMMON_MESSAGE(err)
+		return err
 	}
-
 	p := enc.Decrypt(model.C.General.SecretKey, source.Password)
 	if p == "" {
-		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+		return errors.New(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
 	}
 
-	var isCall bool
-	client, err := calls.NewRpc()
+	client, conn, err := calls.NewClient()
 	if err != nil {
-		logger.DefaultLogger.Error(err)
-		return common.ERR_COMMON_MESSAGE(err)
+		return err
 	}
-	defer client.Close()
-	if err := client.Call("Engine.Exec", &ExecArgs{
-		Order:    &order,
-		Rules:    *rule,
-		IP:       source.IP,
-		Port:     source.Port,
-		Username: source.Username,
-		Password: p,
-		CA:       source.CAFile,
-		Cert:     source.Cert,
-		Key:      source.KeyFile,
-		Message:  *model.GloMessage.Load(),
-	}, &isCall); err != nil {
-		return common.ERR_COMMON_MESSAGE(err)
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
+		Order: calls.OrderToProto(order),
+		Rules: engine.AuditRoleToProto(rule),
+		Source: &enginev1.DataSource{
+			Ip:       source.IP,
+			Port:     int32(source.Port),
+			Username: source.Username,
+			Password: p,
+			Ca:       source.CAFile,
+			Cert:     source.Cert,
+			Key:      source.KeyFile,
+			Kind:     calls.DataSourceKind(source.DBType),
+		},
+	})
+	if rep == nil || !rep.Ok {
+		return calls.CombineReplyErr(rep, err)
+	}
+	// 将引擎返回的逐条执行明细回写到 core_sql_records，供工单详情展示。
+	for _, r := range rep.Records {
+		rec := engine.RecordFromProto(r)
+		model.DB().Create(&model.CoreSqlRecord{
+			WorkId:    order.WorkId,
+			SQL:       rec.SQL,
+			State:     rec.Status,
+			Affectrow: rec.AffectRows,
+			Time:      time.Now().Format("2006-01-02 15:04"),
+			Error:     rec.Error,
+		})
 	}
 	model.DB().Create(&model.CoreWorkflowDetail{
-		WorkId:   u.WorkId,
-		Username: user,
+		WorkId:   order.WorkId,
+		Username: actor,
 		Time:     time.Now().Format("2006-01-02 15:04"),
 		Action:   i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE),
 	})
-	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE))
+	return nil
 }
 
 func MultiAuditOrder(req *Confirm, user string) common.Resp {
 	if assigned, isExecute, ok := isNotIdempotent(req, user); ok {
 		if isExecute {
+			// 末级审批通过：带延迟执行时间(delay!='none')的工单进入"等待延迟执行"(status=5)，
+			// 由延迟调度 cron 到点触发；普通工单立即执行。
+			var od model.CoreSqlOrder
+			model.DB().Model(model.CoreSqlOrder{}).Select("delay").Where("work_id =?", req.WorkId).First(&od)
+			if od.Delay != "" && od.Delay != "none" {
+				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
+				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_STATE))
+			}
 			return ExecuteOrder(req, user)
 		}
 		model.DB().Model(model.CoreSqlOrder{}).Where("work_id = ?", req.WorkId).Updates(&model.CoreSqlOrder{CurrentStep: req.Flag + 1, Assigned: strings.Join(assigned, ",")})

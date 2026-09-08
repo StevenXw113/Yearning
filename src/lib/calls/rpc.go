@@ -2,15 +2,20 @@ package calls
 
 import (
 	"Yearning-go/src/model"
-	"net/rpc"
+
+	enginev1 "engine/gen/engine/v1"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-// NewRpc 返回到审核引擎的 RPC 客户端。
-// 调用方必须在使用结束后 Close，否则每次调用都会泄漏一条 TCP 连接。
-func NewRpc() (*rpc.Client, error) {
-	client, err := rpc.DialHTTP("tcp", model.C.General.RpcAddr)
+// NewClient 返回到审核引擎的 gRPC 客户端与连接。
+// 调用方必须在使用结束后 conn.Close()，否则会泄漏一条 gRPC 连接。
+// RpcAddr 语义为审核引擎的 gRPC 监听地址，如 0.0.0.0:13307。
+func NewClient() (enginev1.EngineServiceClient, *grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(model.C.General.RpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return client, nil
+	return enginev1.NewEngineServiceClient(conn), conn, nil
 }

@@ -85,6 +85,7 @@ func StartYearning(port string) {
 	}
 	go cronTabMaskQuery()
 	go cronTabTotalTickets()
+	go cronTabDelayOrder()
 	e := yee.New()
 	e.Pack("/front", f, "dist")
 	e.Pack("/_next", chatf, "chat")

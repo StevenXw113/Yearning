@@ -6,6 +6,7 @@ import (
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,7 +15,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
+	enginev1 "engine/gen/engine/v1"
 )
 
 const (
@@ -44,11 +47,6 @@ type Query struct {
 	Field []map[string]interface{} `msgpack:"field"`
 	Data  []map[string]interface{} `msgpack:"data"`
 }
-type QueryArgs struct {
-	SQL              string
-	Limit            uint64
-	InsulateWordList string
-}
 
 // identifierRegexp 限定 MySQL 标识符允许的字符，用于阻断标识符注入
 var identifierRegexp = regexp.MustCompile(`^[\w$\-]+$`)
@@ -64,24 +62,27 @@ func escapeIdentifier(s string) string {
 }
 
 func (q *QueryDeal) PreCheck(insulateWordList string) error {
-	var rs []engine.Record
-	client, err := calls.NewRpc()
+	client, conn, err := calls.NewClient()
 	if err != nil {
 		return err
 	}
-	defer client.Close()
-	if err := client.Call("Engine.Query", &QueryArgs{
-		SQL:              q.Ref.Sql,
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rep, err := client.Query(ctx, &enginev1.QueryRequest{
+		Sql:              q.Ref.Sql,
 		Limit:            model.GloOther.Load().Limit,
 		InsulateWordList: insulateWordList,
-	}, &rs); err != nil {
-		return err
+	})
+	if rep == nil || !rep.Ok {
+		return calls.CombineReplyErr(rep, err)
 	}
-	for _, i := range rs {
-		if i.Error != "" {
-			return errors.New(i.Error)
+	for _, i := range rep.Records {
+		rec := engine.RecordFromProto(i)
+		if rec.Error != "" {
+			return errors.New(rec.Error)
 		}
-		q.MultiSQLRunner = append(q.MultiSQLRunner, MultiSQLRunner{SQL: i.SQL, InsulateWordList: factory.MapOn(i.InsulateWordList)})
+		q.MultiSQLRunner = append(q.MultiSQLRunner, MultiSQLRunner{SQL: rec.SQL, InsulateWordList: factory.MapOn(rec.InsulateWordList)})
 	}
 	return nil
 }

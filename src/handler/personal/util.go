@@ -1,17 +1,18 @@
 package personal
 
 import (
-	"Yearning-go/src/handler/order/audit"
+	"Yearning-go/src/engine"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
+	"context"
 	"errors"
 	"github.com/cookieY/yee/logger"
 	"gorm.io/gorm"
-	"log"
 	"time"
+	enginev1 "engine/gen/engine/v1"
 )
 
 func autoTask(order *model.CoreSqlOrder, length int) {
@@ -23,7 +24,6 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 		First(&autoTask).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return
 	}
-	var isCall bool
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil || rule == nil {
@@ -35,24 +35,35 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 		logger.DefaultLogger.Error(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
 		return
 	}
-	client, err := calls.NewRpc()
+	var isCall bool
+	client, conn, err := calls.NewClient()
 	if err != nil {
 		logger.DefaultLogger.Error(err)
 		return
 	}
-	defer client.Close()
-	if err := client.Call("Engine.Exec", &audit.ExecArgs{
-		Order:         order,
-		Rules:         *rule,
-		IP:            source.IP,
-		Port:          source.Port,
-		Username:      source.Username,
-		Password:      p,
-		Message:       *model.GloMessage.Load(),
-		MaxAffectRows: autoTask.Affectrow,
-	}, &isCall); err != nil {
-		log.Println(err)
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
+		Order: calls.OrderToProto(order),
+		Rules: engine.AuditRoleToProto(rule),
+		Source: &enginev1.DataSource{
+			Ip:       source.IP,
+			Port:     int32(source.Port),
+			Username: source.Username,
+			Password: p,
+			Ca:       source.CAFile,
+			Cert:     source.Cert,
+			Key:      source.KeyFile,
+			Kind:     calls.DataSourceKind(source.DBType),
+		},
+		MaxAffectRows: uint32(autoTask.Affectrow),
+	})
+	if err != nil {
+		logger.DefaultLogger.Error(err)
+		return
 	}
+	isCall = rep != nil && rep.Ok
 	if isCall {
 		model.DB().Create(&model.CoreWorkflowDetail{
 			WorkId:   order.WorkId,

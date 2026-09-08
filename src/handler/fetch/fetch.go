@@ -24,6 +24,7 @@ import (
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	enginev1 "engine/gen/engine/v1"
 )
 
 func FetchIDC(c yee.Context) (err error) {
@@ -260,27 +262,35 @@ func FetchSQLTest(c yee.Context) (err error) {
 	if p == "" {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED)))
 	}
-	var rs []engine.Record
-	client, err := calls.NewRpc()
+	client, conn, err := calls.NewClient()
 	if err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	defer client.Close()
-	if err := client.Call("Engine.Check", engine.CheckArgs{
-		SQL:      u.SQL,
-		Schema:   u.Database,
-		IP:       s.IP,
-		Username: s.Username,
-		Port:     s.Port,
-		Password: p,
-		CA:       s.CAFile,
-		Cert:     s.Cert,
-		Key:      s.KeyFile,
-		Kind:     u.Kind,
-		Lang:     model.C.General.Lang,
-		Rule:     *rule,
-	}, &rs); err != nil {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rep, err := client.Check(ctx, &enginev1.CheckRequest{
+		Sql:    u.SQL,
+		Schema: u.Database,
+		Source: &enginev1.DataSource{
+			Ip:       s.IP,
+			Port:     int32(s.Port),
+			Username: s.Username,
+			Password: p,
+			Ca:       s.CAFile,
+			Cert:     s.Cert,
+			Key:      s.KeyFile,
+			Kind:     calls.DataSourceKind(s.DBType),
+		},
+		Lang: model.C.General.Lang,
+		Rule: engine.AuditRoleToProto(rule),
+	})
+	if rep == nil || !rep.Ok {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(calls.CombineReplyErr(rep, err)))
+	}
+	rs := make([]engine.Record, 0, len(rep.Records))
+	for _, r := range rep.Records {
+		rs = append(rs, engine.RecordFromProto(r))
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayload(rs))
 }
@@ -328,17 +338,19 @@ func FetchMergeDDL(c yee.Context) error {
 	if err := c.Bind(req); err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	var optimizeSQL string
 	if req.SQLs != "" {
-		client, err := calls.NewRpc()
+		client, conn, err := calls.NewClient()
 		if err != nil {
 			return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 		}
-		defer client.Close()
-		if err := client.Call("Engine.MergeAlterTables", req.SQLs, &optimizeSQL); err != nil {
+		defer conn.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		rep, err := client.MergeAlterTables(ctx, &enginev1.MergeAlterTablesRequest{Sqls: req.SQLs})
+		if rep == nil || !rep.Ok {
 			return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(optimizeSQL))
+		return c.JSON(http.StatusOK, common.SuccessPayload(rep.Sql))
 	}
 	return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 
