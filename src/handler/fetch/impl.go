@@ -5,6 +5,7 @@ import (
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -82,9 +83,17 @@ func (a *advisorFrom) Go() (tables []string, err error) {
 		return nil, err
 	}
 	defer model.Close(db)
+	// 库名/表名来自客户端且无法占位符参数化，拼进 SQL 前必须先校验标识符再转义，防止注入
+	if !factory.IsValidIdentifier(a.Schema) {
+		return nil, errors.New("invalid database name")
+	}
 	for _, i := range a.Tables {
+		if !factory.IsValidIdentifier(i) {
+			return nil, errors.New("invalid table name")
+		}
 		var result ShowCreateTable
-		err = db.Raw(fmt.Sprintf("SHOW CREATE TABLE %s.%s", a.Schema, i)).Scan(&result).Error
+		err = db.Raw(fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`",
+			factory.EscapeIdentifier(a.Schema), factory.EscapeIdentifier(i))).Scan(&result).Error
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute query: %v", err)
 		}
@@ -105,11 +114,18 @@ func (u *_FetchBind) FetchTableFieldsOrIndexes() error {
 
 	defer model.Close(db)
 
-	if err := db.Raw(fmt.Sprintf("SHOW FULL FIELDS FROM `%s`.`%s`", u.DataBase, u.Table)).Scan(&u.Rows).Error; err != nil {
+	// 库名/表名来自客户端且无法占位符参数化，拼进 SQL 前必须先校验标识符再转义，防止注入
+	if !factory.IsValidIdentifier(u.DataBase) || !factory.IsValidIdentifier(u.Table) {
+		return errors.New("invalid database or table name")
+	}
+	dbName := factory.EscapeIdentifier(u.DataBase)
+	tbName := factory.EscapeIdentifier(u.Table)
+
+	if err := db.Raw(fmt.Sprintf("SHOW FULL FIELDS FROM `%s`.`%s`", dbName, tbName)).Scan(&u.Rows).Error; err != nil {
 		return err
 	}
 
-	if err := db.Raw(fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", u.DataBase, u.Table)).Scan(&u.Idx).Error; err != nil {
+	if err := db.Raw(fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbName, tbName)).Scan(&u.Idx).Error; err != nil {
 		return err
 	}
 	return nil

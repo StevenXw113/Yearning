@@ -93,9 +93,10 @@
         </a-card>
       </a-tab-pane>
       <a-tab-pane :key="2" :tab="$t('order.apply.tab.assistant')" force-render>
+        <!-- 聊天页与主应用同源，凭据经 sessionStorage(yrn_jwt) 交接，不再放进 URL，避免 JWT 落入浏览器历史/访问日志/Referer -->
         <iframe
           id="chat2"
-          :src="`/chatbot?token=${store.state.user.account.token}`"
+          src="/chatbot"
           style="width: 100%; height: 500px; border: none"
         />
       </a-tab-pane>
@@ -126,11 +127,9 @@
   import { FetchSQLAdvisor } from '../../apis/advisor';
   import Vditor from 'vditor';
   import 'vditor/dist/index.css';
-  import { useStore } from '@/store';
+  import { sanitizeHTML } from '@/lib/sanitize';
 
   const { t } = useI18n();
-
-  const store = useStore();
 
   const activeKey = ref(1);
 
@@ -161,10 +160,14 @@
 
   const fetch = async (type: string) => {
     const { data } = await FetchSQLAdvisor(orderItems, type);
-    Vditor.preview(
-      document.getElementById('previewResults') as any,
-      data.payload
-    );
+    // AI 输出视为不可信内容（存在提示词注入风险）：先在脱离 DOM 的容器中渲染，
+    // 清洗后再挂载，避免 <img onerror>/<svg onload> 等在本就位于文档内的节点上即时触发
+    const previewResult = document.getElementById('previewResults');
+    if (previewResult) {
+      const holder = document.createElement('div');
+      Vditor.preview(holder, data.payload);
+      previewResult.innerHTML = sanitizeHTML(holder.innerHTML);
+    }
   };
 
   const fetchTable = async (schema: string) => {

@@ -22,7 +22,6 @@ var en_US = map[int]string{
 	INFO_YEARNING_STARTUP:                                     "Start Yearning",
 	INFO_YEARNING_STARTUP_PORT:                                "Yearning startup port",
 	INFO_PLATFORM_ADDRESS:                                     "Platform address displayed in DingTalk/Email notifications",
-	INFO_SPONSOR_KEY:                                          "Sponsor key",
 	ER_LOGIN:                                                  "Account/password incorrect, please enter the correct account password!",
 	ER_REGISTER:                                               "Registration channel not open!",
 	ER_REQ_BIND:                                               "Parameter error!",

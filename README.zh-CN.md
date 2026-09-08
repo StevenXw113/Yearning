@@ -64,6 +64,9 @@ docker run --rm -it -p8000:8000 -e SECRET_KEY=$SECRET_KEY -e MYSQL_USER=$MYSQL_U
 ## 启动 Yearning
 docker run -d -it -p8000:8000 -e SECRET_KEY=$SECRET_KEY -e MYSQL_USER=$MYSQL_USER -e MYSQL_ADDR=$MYSQL_ADDR -e MYSQL_PASSWORD=$MYSQL_PASSWORD -e MYSQL_DB=$Yearning_DB -e Y_LANG=zh_CN yeelabs/yearning
 ```
+> \[!TIP]
+> **国内网络加速与生产安全**：完整的 Docker 部署、`SECRET_KEY` 安全要求、以及**国内 Docker 镜像拉取加速**（registry-mirrors / 镜像加速前缀）与源码构建依赖源（Go GOPROXY、前端 `.npmrc`）说明，详见 [`docker/README.md`](docker/README.md)。自源码构建/二次开发见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
+> 其中 `SECRET_KEY` 为 JWT 签名与数据源口令加密主密钥，**必须替换为随机串（≥ 32 字符）**，示例中的 `$SECRET_KEY` 仅示意。
 ## 🤖 AI 助手
 
 我们的AI助手利用大型语言模型提供SQL优化建议和文本到SQL的转换。无论是使用默认还是自定义提示词，AI助手都能通过优化语句和将自然语言输入转换为SQL查询来提升SQL性能。

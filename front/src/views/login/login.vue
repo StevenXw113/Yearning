@@ -37,9 +37,6 @@
                 <template #title>{{ $t('common.qq') }}</template>
                 {{ $t('common.community') }}
               </a-tooltip>
-              <a-typography-link style="color: #ffffff" @click="openSponsor">
-                {{ $t('common.sponsor') }}
-              </a-typography-link>
               <a-typography-link
                 style="color: #ffffff"
                 @click="announce.open()"
@@ -59,8 +56,6 @@
       </a-row>
     </div>
 
-    <Sponsor ref="sponsor"></Sponsor>
-
     <Announce ref="announce"></Announce>
 
     <a-modal v-model:visible="is_open" :title="$t('user.form.title')">
@@ -72,7 +67,6 @@
 
 <script lang="ts" setup>
   import LoginForm from '@/views/login/login-form.vue';
-  import Sponsor from '@/views/common/sponsor.vue';
   import { ref, onMounted } from 'vue';
   import { Copyright, Version } from '@/config/vars';
   import CommonMixin from '@/mixins/common';
@@ -83,17 +77,11 @@
 
   const is_register = ref(false);
 
-  const sponsor = ref();
-
   const announce = ref();
 
   const register = ref();
 
   const { is_open } = CommonMixin();
-
-  const openSponsor = () => {
-    sponsor.value.open();
-  };
 
   onMounted(async () => {
     const { data } = await systemRegisterState();

@@ -16,13 +16,14 @@ juno
 *.egg-info/
 *.egg
 
-# ===== 前端与运行产物（保留目录自身，忽略其中的构建输出）=====
-# 说明：engine/ 与 front/ 均为纳入版本控制的源码目录，
-#       各自的构建产物由 engine/.gitignore 与 front/.gitignore 负责忽略，
-#       此处不再针对整个目录做 ignore。
+# ===== 前端 embed 产物 =====
+# 说明：
+#   - 前端源码在本仓库 front/，构建产物由 front 编译产出（vite 默认 outDir=front/dist）。
+#   - 后端经 go:embed 内嵌前端，产物需位于 src/service/dist/（go:embed 无法引用上级目录），
+#     因此 front 构建完成后需将产物放入 src/service/dist/（见 docs/DEVELOPMENT.md 第 3 节）。
+#   - engine/ 与 front/ 为纳入版本控制的源码目录，产物不入库，交由各自子 .gitignore 处理。
 src/service/dist/
 src/service/chat/*
-webpage/dist
 
 # ===== 编辑器 / IDE =====
 .idea/

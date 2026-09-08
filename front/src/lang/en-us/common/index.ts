@@ -3,7 +3,6 @@ export default {
   'common.add': 'Add',
   'common.qq': 'https://gitter.im/talk-to-yearning',
   'common.statement': 'Statement',
-  'common.sponsor': 'Sponsor',
   'common.community': 'Community',
   'common.about': 'About Yearning',
   'common.signin': 'Sign In',
@@ -109,9 +108,6 @@ export default {
   'common.policy.group': 'Policy',
 
   'common.stmt.title': 'welcome to Yearning',
-  'common.sponsor.title': 'Keep Yearning providing better services',
-  'common.sponsor.content':
-    'Thank you for your support. On the basis of ensuring the continued development of the community edition, a sponsored version of the community edition is launched in recognition of those who have actively helped on the road.<br/>The sponsored version is based on the latest community version with the following features currently added:<br/>1. Support auditor mobile terminal (mobile phone) audit work order <br/>2. Support custom hook message push <br/>3. Support SQL file upload extract statement <br/>4. Exclusive wechat group, timely problem solving <br/>5. Additional audit rules support <br/>6. Work order replication (suitable for multi-environment work order transfer) <br/>7. Search function supports multi-condition merge search. <br/>Customization Requirements :<br/> Enterprises can seek customized function services from the author based on actual needs. <br/><br/> Contact information <br/>henry@yearning.io',
   'common.theme.light': 'Light',
   'common.theme.dark': 'Dark',
   'common.session.title': 'Session expiration',

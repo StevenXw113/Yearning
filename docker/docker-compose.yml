@@ -1,4 +1,20 @@
-version: '3'
+# Yearning + MySQL 部署组合
+# 完整部署与“国内 Docker 镜像拉取/依赖源加速”说明见同目录 README.md（第 1~4 节）。
+#
+# 国内拉取镜像慢时：1) 按 README.md 第 1 节配置 registry-mirrors；
+#   2) 或把下面 image 改为加速前缀，如 docker.m.daocloud.io/yeelabs/yearning:latest
+#      （mysql 同理：docker.m.daocloud.io/library/mysql:5.7）。
+#
+# ⚠️ SECRET_KEY 是 JWT 签名与数据源口令加密主密钥，请务必替换为随机串（≥32 字符）：
+#    openssl rand -base64 32
+#    下方值仅为演示占位，严禁生产使用。默认账号 admin，初始密码 Yearning_admin（登录后请立即修改）。
+#
+# 首次使用请先执行初始化（init 一次性；初始化完成后请把下面 command 的 install 去掉，避免重复建表）：
+#   docker compose run --rm yearning /opt/Yearning install
+# 日常启动 / 升级迁移 / 重置密码：
+#   docker compose up -d
+#   docker compose run --rm yearning /opt/Yearning migrate
+#   docker compose run --rm yearning /opt/Yearning reset_super
 
 services:
     yearning:
@@ -8,11 +24,12 @@ services:
            MYSQL_PASSWORD: ukC2ZkcG_ZTeb
            MYSQL_ADDR: mysql
            MYSQL_DB: yearning
-           SECRET_KEY: dbcjqheupqjsuwsm
+           # ⚠️ 生产必改：设为随机串（openssl rand -base64 32）。以下仅为“能启动的演示值”，切勿生产使用。
+           SECRET_KEY: please-replace-this-secret-key-0000
            IS_DOCKER: is_docker
         ports:
            - 8000:8000
-        # 首次使用请先初始化
+        # 首次使用请先初始化（生产建议去掉 install，单独执行 init 后再 up -d）
         command: /bin/bash -c "./Yearning install && ./Yearning run"
         depends_on:
            - mysql

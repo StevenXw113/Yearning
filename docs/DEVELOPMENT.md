@@ -1,9 +1,14 @@
 # 本地开发指南（Yearning Go 后端）
 
-本文说明在 **dev 分支** 上进行本地开发的完整流程。Yearning 仓库只含 Go 后端，前端源码在独立工程中；本仓库通过 `go:embed` 把前端构建产物打进可执行文件。
+本文说明在 **dev 分支** 上进行本地开发的完整流程。仓库结构为：
+
+- `front/` —— 前端（Vue3 + Vite）源码，前端构建产物由此目录编译产出（见第 3 节）。
+- `src/` —— Go 后端主程序，通过 `go:embed` 把前端构建产物打进可执行文件。
+- `engine/` —— SQL 解析 / 审核 / 执行引擎（独立 Go module，见第 8 节），由 `go.mod` 的 `replace engine => ./engine` 引用。
 
 > 技术栈：Go ≥ 1.26、GORM、自研 Web 框架 `github.com/cookieY/yee`、MySQL。
-> SQL 解析 / 审核 / 执行由独立的「审核引擎」进程提供（见下文「审核引擎」），**不在本仓库内**。
+> 前端为 Vue3 + Vite + TypeScript，技术栈详见 `front/README.md`。
+> SQL 解析 / 审核 / 执行由独立的「审核引擎」进程提供（源码在本仓库 `engine/`，见下文「审核引擎」）。
 
 ---
 
@@ -13,8 +18,8 @@
 |---|---|---|
 | Go | >= 1.26（`go.mod` 已声明 `go 1.26.0`） | 编译后端 |
 | MySQL | 5.7+ / 8.0，字符集 **utf8mb4** | 元数据存储（工单、用户、权限等） |
-| 前端产物 | 见第 3 节 | 随二进制内嵌的前端静态文件 |
-| 审核引擎 | 独立进程 | SQL 检测 / 执行 / 查询预检（RPC） |
+| Node.js + yarn | 前端 `front/` 使用 | 前端依赖安装与构建（Vue3 + Vite） |
+| 审核引擎 | 见第 8 节（源码在 `engine/`） | SQL 检测 / 执行 / 查询预检（RPC） |
 
 > Windows / PowerShell 与 macOS / Linux / bash 命令在下方分别给出。
 
@@ -67,25 +72,33 @@ Copy-Item conf.toml.template conf.toml
 
 ## 3. 前端 embed 产物（启动前必做）
 
-`src/service/yearning.go` 通过 `go:embed` 内嵌：
+前端源码在本仓库 **`front/`**，构建产物由 `front` 编译产出。`src/service/yearning.go` 通过 `go:embed` 把下列目录内嵌进可执行文件：
 
-- `src/service/dist/` —— 主前端页面
-- `src/service/chat/server/app/index.html` —— AI 助手（SSE）页面
+- `src/service/dist/` —— 主前端页面（`/`、`/front`）
+- `src/service/chat/server/app/index.html` —— AI 助手（SSE）页面（`/chatbot`）
 
-这两个目录被 `.gitignore` 忽略，clone 后**不存在**。缺少它们时 `go build ./...` 会报：
+> **为什么产物要放到 `src/service/dist/`？** Go 的 `//go:embed` 只能引用声明它的 `.go` 文件所在目录的子目录，**不能引用 `../front/dist`**。因此前端在 `front/` 编译产出后，还需拷贝进 `src/service/dist/` 才能被后端内嵌。产物路径由 `.gitignore` 忽略，不入库。
 
+### 3.1 构建完整前端并接入后端
+
+在仓库根目录下，先在 `front/` 中安装依赖并构建，再把产物拷贝到 embed 目录：
+
+```powershell
+cd front
+yarn install          # 首次或依赖变更后
+yarn build            # 产出到 front/dist
+cd ..
+Remove-Item src/service/dist/* -Recurse -Force -ErrorAction SilentlyContinue
+Copy-Item front/dist/* src/service/dist/ -Recurse -Force
 ```
-src/service/yearning.go:28:12: pattern chat/*: no matching files found
-```
 
-### 3.1 有前端构建产物
-
-把 `dist` 输出放到 `src/service/dist/`，`chat` 工程输出放到 `src/service/chat/`，保持
-`index.html` 的路径正确即可。
+> Linux/macOS 将 `Remove-Item`/`Copy-Item` 对应改为 `rm -rf src/service/dist/*` 与 `cp -r front/dist/* src/service/dist/`。
+>
+> AI 助手（SSE）页面 `src/service/chat/` 若属独立前端工程，同样按其构建产物放入 `src/service/chat/server/app/index.html` 即可；当前仓库如无该工程可跳过（需相应去掉 `yearning.go` 中的 embed 声明，否则见下报错）。
 
 ### 3.2 仅开发后端（最小占位）
 
-为让编译通过，可放入最小占位文件（见下方命令）。此时页面为空壳，但 HTTP API / 路由 / JWT 等后端逻辑可正常开发与自测。
+无前端产物时，为让 `go build` 通过，可放入最小占位文件（见下方命令）。此时页面为空壳，但 HTTP API / 路由 / JWT 等后端逻辑可正常开发与自测。
 
 ```powershell
 New-Item -ItemType Directory -Force -Path src/service/dist, src/service/chat/server/app | Out-Null
@@ -103,20 +116,33 @@ New-Item -ItemType Directory -Force -Path src/service/dist, src/service/chat/ser
 
 ## 4. 安装依赖
 
-依赖已由 `go.sum` 管理（dev 分支已恢复其版本控制）。
+### 4.1 Go 依赖（统一国内加速源）
+
+Go 依赖已由 `go.sum` 管理（dev 分支已恢复其版本控制）。仓库**统一使用国内加速源**，请先配置一次（会写入本机 go env，全局生效；`.\scripts\dev.ps1 prepare` 也会自动执行）：
+
+```powershell
+go env -w GOPROXY=https://goproxy.cn,direct
+go env -w GOSUMDB=sum.golang.google.cn
+```
+
+再拉取/校验依赖：
 
 ```powershell
 cd c:/hub/Yearning
 go mod tidy
 ```
 
-若访问 `proxy.golang.org` 超时（本项目此前即遇到），切换到国内代理：
+### 4.2 前端依赖（统一国内镜像）
+
+`front/` 下已内置 `front/.npmrc`，将 registry 固定为国内镜像
+`https://registry.npmmirror.com`，`npm`/`yarn` 安装时会自动生效，无需额外配置：
 
 ```powershell
-go env -w GOPROXY=https://goproxy.cn,direct
-go env -w GOSUMDB=sum.golang.google.cn
-go mod tidy
+cd front
+yarn install     # 或 npm install
 ```
+
+> 如需临时切回官方源，可删除 `front/.npmrc` 或执行 `npm config set registry https://registry.npmjs.org`。
 
 ---
 
@@ -162,7 +188,7 @@ Yearning is running on port:  8000
 
 ## 8. 审核引擎（可选但功能必需）
 
-`[General].RpcAddr` 指向的「审核引擎」**独立于本仓库**，负责：
+SQL 解析 / 审核 / 执行引擎**源码在本仓库 `engine/`**（独立 Go module，`go.mod` 通过 `replace engine => ./engine` 引用，grpc 定义见 `engine/proto/engine/v1/engine.proto`）。它是**独立进程**，单独编译部署后，后端经 `[General].RpcAddr` 指明的地址（默认 `127.0.0.1:50001`）调用其方法：
 
 | RPC 方法 | 用途 |
 |---|---|
@@ -171,6 +197,16 @@ Yearning is running on port:  8000
 | `Engine.Exec` | 工单执行 |
 | `Engine.MergeAlterTables` | 合并多条 ALTER |
 | `Engine.StopDelay` | 停止定时执行 |
+
+### 8.1 编译并启动引擎
+
+```powershell
+cd engine
+go build -o ../bin/engine ./cmd/engine   # 产出引擎可执行文件
+../bin/engine                             # 默认监听 127.0.0.1:50001
+```
+
+> `engine/.gitignore` 已忽略引擎自身的编译产物（`/bin/`、`*.exe`、`*.test`）。
 
 缺引擎时：登录、用户、数据源 CRUD、设置、权限等不依赖引擎的接口可正常自测；凡发起 `Engine.*` 的调用（SQL 检测、执行、查询）会报连接错误。若需完整联调，请先在 `RpcAddr` 指定的地址部署引擎进程。
 
@@ -192,9 +228,9 @@ Yearning --help         # 帮助
 
 | 现象 | 原因与解决 |
 |---|---|
-| `go build` 报 `chat/*: no matching files found` | 前端 embed 产物缺失，见第 3 节补 `dist/` 与 `chat/` |
+| `go build` 报 `chat/*: no matching files found` | 前端 embed 产物缺失，见第 3 节在 `src/service/dist/` 放入产物或使用最小占位 |
 | 进程秒退，日志含 `SecretKey 强度不足或仍是模板示例值` | `conf.toml` 的 SecretKey 仍是占位值，替换为随机串（第 2 节） |
-| `go mod tidy` / `go get` 网络超时 | 切 `GOPROXY=https://goproxy.cn,direct` |
+| `go mod tidy` / `go get` 网络超时 | 未启用国内源；先按第 4.1 节 `go env -w GOPROXY=https://goproxy.cn,direct` |
 | 提示工具链损坏、`textflag.h:1: expected identifier` | 使用了损坏的 Go（含此前临时目录 `%USERPROFILE%\sdk`）。请用官方安装包重装到默认路径 |
 | 页面空白 | 使用了第 3.2 节的占位产物；接上真实前端构建产物即可 |
 | 端口被占用 | `run` 命令加 `-p <端口>` |

@@ -1,15 +1,5 @@
 import dayjs from 'dayjs';
 
-const FeatureList = [
-  '1.支持审核人移动端(手机)审核工单',
-  '2.支持自定义hook消息推送',
-  '3.支持SQL文件上传提取语句',
-  '4.专属微信群,及时解决问题',
-  '5.额外的审核规则支持',
-  '6.工单复制(适用于多环境工单流转)',
-  '7.搜索功能支持多条件合并搜索',
-];
-
 const Announce = [
   'Yearning MYSQL SQL语句审核平台。提供查询，SQL审核等多种功能。非常欢迎大家体验并使用Yearning!',
   '关于二次开发的声明:',
@@ -21,7 +11,6 @@ const Announce = [
   '4.本平台所有条款符合相应开源许可，请严格按照相关许可使用及开发。',
   '免责声明:',
   '由Yearning平台所产生的一切后果,Yearning作者本人不负一切责任! 请在进行安全评估及测试体验后使用。',
-  '当然用的喜欢,就打赏下我吧 ^_^ 登录界面赞助按钮',
 ];
 
 const AnnounceEN = [
@@ -35,13 +24,12 @@ const AnnounceEN = [
   '4. All terms of the platform comply with the relevant open source license, please use and develop in strict accordance with the relevant license.',
   'Disclaimer :',
   'Yearning platform produced by all the consequences, Yearning author himself is not responsible for all! Please use it after safety evaluation and testing experience.',
-  'Of course you like it, please tip me to login interface sponsorship button ',
 ];
 
-const Version = 'ver.3.1.9.1';
+const Version = 'ver.3.2.0';
 
 const Copyright = `Yearning © 2018-${dayjs().format(
   'YYYY'
 )}  Created by HenryYee ${Version}`;
 
-export { FeatureList, Version, Copyright, Announce, AnnounceEN };
+export { Version, Copyright, Announce, AnnounceEN };

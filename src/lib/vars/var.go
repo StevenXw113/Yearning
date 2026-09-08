@@ -1,7 +1,7 @@
 package vars
 
 const (
-	Version   = "3.1.9.1 Uranus"
+	Version   = "3.2.0"
 	Kind      = Community
 	Community = "Community"
 )

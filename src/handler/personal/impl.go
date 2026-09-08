@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"github.com/cookieY/sqlx"
 	"github.com/cookieY/yee/logger"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -48,19 +47,6 @@ type Query struct {
 	Data  []map[string]interface{} `msgpack:"data"`
 }
 
-// identifierRegexp 限定 MySQL 标识符允许的字符，用于阻断标识符注入
-var identifierRegexp = regexp.MustCompile(`^[\w$\-]+$`)
-
-// isValidIdentifier 校验库名/表名是否合法，长度遵循 MySQL 64 字符上限
-func isValidIdentifier(s string) bool {
-	return s != "" && len(s) <= 64 && identifierRegexp.MatchString(s)
-}
-
-// escapeIdentifier 在标识符进入反引号前把反引号双写，防止闭合反引号逃逸
-func escapeIdentifier(s string) string {
-	return strings.ReplaceAll(s, "`", "``")
-}
-
 func (q *QueryDeal) PreCheck(insulateWordList string) error {
 	client, conn, err := calls.NewClient()
 	if err != nil {
@@ -93,10 +79,10 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_DATABASE_CONNECTION_FAILED))
 	}
 	// schema 来自 websocket 客户端，必须先校验再拼进 SQL
-	if !isValidIdentifier(schema) {
+	if !factory.IsValidIdentifier(schema) {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
 	}
-	_, err := db.Exec(fmt.Sprintf("use `%s`", escapeIdentifier(schema)))
+	_, err := db.Exec(fmt.Sprintf("use `%s`", factory.EscapeIdentifier(schema)))
 	if err != nil {
 		logger.LogCreator().Error(err)
 	}

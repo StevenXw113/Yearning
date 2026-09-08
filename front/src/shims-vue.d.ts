@@ -14,4 +14,3 @@ declare module 'sql-formatter';
 declare module 'lodash-es';
 
 declare module 'insert-css';
-declare module 'marked';

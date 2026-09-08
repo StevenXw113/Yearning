@@ -231,7 +231,9 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   NProgress.start();
-  if (store.state.user.account.token === '' && to.name !== 'login') {
+  // user.account 可能为 null/undefined（storage 还原或 plugin 整体覆盖时的边界），用可选链保护
+  const token = store.state.user?.account?.token;
+  if (!token && to.name !== 'login') {
     // 判断是否已经登录且前往的页面不是登录页
     next(false);
     router

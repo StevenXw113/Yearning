@@ -25,6 +25,13 @@ function Assert-Go {
     }
 }
 
+function Set-GoChinaMirror {
+    # 统一使用国内 Go 依赖加速源（写入本机 go env，全局生效）
+    go env -w GOPROXY=https://goproxy.cn,direct
+    go env -w GOSUMDB=sum.golang.google.cn
+    Write-Host "  [mirror] Go 依赖源：GOPROXY=https://goproxy.cn,direct（国内加速）" -ForegroundColor Green
+}
+
 function Write-Step($msg) {
     Write-Host "==> $msg" -ForegroundColor Cyan
 }
@@ -57,6 +64,8 @@ function Invoke-Prepare {
     }
     Write-Step "补齐前端 embed 占位"
     New-EmbedPlaceholder
+    Write-Step "统一 Go 依赖国内加速源"
+    Set-GoChinaMirror
     Write-Step "拉取依赖 go mod tidy"
     go mod tidy
     Write-Host "完成。下一步：.\scripts\dev.ps1 install" -ForegroundColor Green

@@ -22,7 +22,6 @@ var zh_CN = map[int]string{
 	INFO_YEARNING_STARTUP:                                     "启动Yearning",
 	INFO_YEARNING_STARTUP_PORT:                                "Yearning启动端口",
 	INFO_PLATFORM_ADDRESS:                                     "钉钉/邮件推送时显示的平台地址",
-	INFO_SPONSOR_KEY:                                          "赞助版秘钥",
 	ER_LOGIN:                                                  "账号/密码错误,请输入正确的账号密码!",
 	ER_REGISTER:                                               "没有开启注册通道！",
 	ER_REQ_BIND:                                               "传参错误！",

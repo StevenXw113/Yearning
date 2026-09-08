@@ -77,9 +77,6 @@
             <a href="https://next.yearning.io" target="_blank">{{
               $t('common.help')
             }}</a>
-            <a href="https://next.yearning.io/sponsor.html" target="_blank">{{
-              $t('common.sponsor')
-            }}</a>
           </a-space>
         </a-layout-footer>
       </a-layout>

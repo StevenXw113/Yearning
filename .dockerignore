@@ -1,0 +1,29 @@
+# 构建上下文精简：排除 git、密钥、产物、依赖与本地数据
+.git
+.github
+
+# 密钥 / 运行时配置（不得进上下文/镜像）；保留 docker/conf.toml 作为镜像内兜底配置
+/conf.toml
+/conf.toml.template
+
+# 前端依赖与本地产物
+front/node_modules
+front/dist
+src/service/dist
+src/service/chat
+node_modules
+
+# Go 引擎产物 / 临时
+engine/bin
+engine/*.exe
+engine/tmp_exec
+*.exe
+*.test
+*.out
+
+# 数据 / 缓存 / 编辑器
+data
+*.log
+.idea
+.vscode
+.DS_Store

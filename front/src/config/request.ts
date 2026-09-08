@@ -27,6 +27,7 @@ const resetSession = () => {
     token: '',
     real_name: '',
     user: '',
+    rule: '',
     is_record: 2,
   });
   sessionStorage.clear();
@@ -38,7 +39,7 @@ const errorHandler = (error: {
   if (error.response) {
     if (error.response.status === 401) {
       // 若仍持有失效凭据，先清理，避免“跳登录后守卫仍放行 → 再次 401”的死循环
-      if (store.state.user.account.token !== '') {
+      if (store.state.user?.account?.token) {
         resetSession();
       }
       notification.error({
@@ -77,9 +78,11 @@ const responseInject = (res: Res<never>) => {
 
 request.interceptors.request.use((config) => {
   // 每个请求都从 store 实时取 token，避免模块加载时快照到失效/空凭据
-  const token = store.state.user.account.token;
+  const token = store.state.user?.account?.token;
   if (token) {
-    config.headers['Authorization'] = 'Bearer ' + token;
+    config.headers.set('Authorization', 'Bearer ' + token);
+    // 供同源内嵌页（如 AI 聊天 iframe）读取，避免把 JWT 放进 URL
+    sessionStorage.setItem('yrn_jwt', token);
   }
   return config;
 }, errorHandler);

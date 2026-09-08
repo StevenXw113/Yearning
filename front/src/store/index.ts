@@ -17,8 +17,10 @@ export const store = createStore<AllStoreTypes>({
     highlight,
   },
   plugins: [
+    // 仅持久化 user.account，避免 storage 中残留的旧/异常结构被整体回写覆盖 user 模块，
+    // 导致 store.state.user.account 变成 null/undefined 引发登录页路由/拦截器崩溃
     createPersistedState({
-      paths: ['user', 'menu', 'order'],
+      paths: ['user.account', 'menu', 'order'],
       storage: window.sessionStorage,
     }),
   ],
