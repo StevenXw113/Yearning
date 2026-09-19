@@ -63,8 +63,9 @@ cd engine
 ./scripts/check-upstream.sh          # 对比当前内化版本与上游最新 release
 ```
 
-`.github/workflows/check-bytebase-upstream.yml` 每天只做检测（发现新版本即失败提醒），
-**不会自动修改代码**；确认要升级后，人工执行上面的 `sync-bytebase.sh` 并审阅 diff。
+页面「设置 → 审核规则 → 检测上游更新」也会告诉你有没有新版本（拿到新版本号后在 `engine/` 下执行
+`./scripts/upgrade-engine.sh` 即可自动同步，先加 `--preview` 可以只预演、不动工作区）。
+**检测与预演都不会自动改代码**，确认后再正式执行并审阅 diff。
 
 本目录**只放同步来的代码，不要手改**——手改会在下次同步时丢失。
 自研规则请写在 [`internal/customrules/`](../customrules/README.md)（同步脚本不触碰）。

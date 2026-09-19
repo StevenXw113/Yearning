@@ -11,7 +11,8 @@ import (
 )
 
 // bytebaseRef 为当前内化的 Bytebase 版本，需与 engine/internal/bytebase/UPSTREAM
-// 的 ref 保持一致（升级后手工改这一行）。
+// 的 ref 保持一致；engine/scripts/sync-bytebase.sh 会在同步成功后自动改写本行，
+// 不需要手工维护（src/handler/manage/roles/upstream_test.go 会校验一致性）。
 const bytebaseRef = "3.22.1"
 
 // bytebaseLatestURL 会 302 到 .../releases/tag/<tag>，无需 GitHub API（避免限流）。

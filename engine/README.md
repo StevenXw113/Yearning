@@ -125,8 +125,9 @@ Go 是编译型语言，Bytebase 规则是 Go 代码，**无法运行时热加�
 ./scripts/sync-bytebase.sh <ref>         # 同步并跑全套护栏
 ```
 
-CI 侧见 [`.github/workflows/check-bytebase-upstream.yml`](../../.github/workflows/check-bytebase-upstream.yml)：
-每天只做检测，发现新 release 就让 job 失败作为提醒；**CI 不修改任何代码，更新由人工执行**。
+检测在页面上完成：「设置 → 审核规则 → 检测上游更新」，用 GitHub 的 `releases/latest` 302 取最新 tag，
+与主程序里的内化版本号（`src/handler/manage/roles/upstream.go` 的 `bytebaseRef`，由同步脚本自动维护）比较。
+**页面只做检测，不改任何代码**；升级在源码侧用下面的一键脚本完成。
 
 ### Docker 升级与回滚（无预发环境）
 
@@ -165,23 +166,26 @@ docker run -d --name yearning-engine --restart always -p 13307:13307 yearning-en
 - 发布后到「设置 → 审核规则 → 检测上游更新」核对版本号（该数字来自主程序的 `bytebaseRef` 常量，
   同步脚本会自动写入新版本号，无需手工改）。
 
-### 源码侧升级流程（配合页面「检测上游更新」按钮）
+### 源码侧升级流程（一条命令）
 
-页面只负责告诉你「上游有新版本」，更新动作全部在源码侧完成：
+页面只负责告诉你「上游有新版本」，更新动作在源码侧完成：
 
 ```bash
-# 1) 预演：在临时 git worktree 里跑一遍真实同步，报告影响面，不动当前目录
-cd engine && ./scripts/preview-upgrade.sh 3.23.0
+cd engine
+./scripts/upgrade-engine.sh            # 自动检测上游最新版本并升级
+./scripts/upgrade-engine.sh 3.23.0     # 或指定版本 / 分支 / commit
+```
 
-# 2) 正式同步：稀疏拉取 → 复制子集 → 改写 import → 重放裁剪 → go mod tidy
-#              → build → 登记新规则 → test
-./scripts/sync-bytebase.sh 3.23.0
+脚本依次做：检测目标版本 → 重放同步（稀疏拉取 → 复制子集 → 改写 import → 重放裁剪 →
+`go mod tidy` → `build` / `test` → 登记新增规则 → 更新主程序版本号）→ 打印规则增删 →
+构建镜像 `yearning-engine:<ref>`（有 docker 时）→ 打印对拍与重新部署的命令。
 
-# 3) 审阅 diff（重点 engine/RULES.md 与 engine/go.mod）后提交
-git diff && git add -A && git commit -m "chore(engine): 内化 Bytebase 3.23.0"
+跑完你要做三件事：审阅 `git diff` 并提交 → 对拍线上引擎 → 同端口替换容器（旧 tag 留回滚）。
 
-# 4) 对拍线上引擎后再发布（见上方「Docker 升级与回滚」）
-go run ./tools/checkdiff -old <线上引擎> -new <候选引擎> -meta-dsn '...'
+只想先看看改动量、不动工作区：
+
+```bash
+./scripts/upgrade-engine.sh 3.23.0 --preview   # 等价于 PREVIEW=1，内部走 preview-upgrade.sh
 ```
 
 同步脚本会自动做掉三件机械活，避免升级卡在半路：
