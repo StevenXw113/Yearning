@@ -59,7 +59,7 @@ export default {
   upstreamLatest: '已是最新版本（{version}）',
   upstreamNew: '上游规则有新版本',
   upstreamNewDesc:
-    '当前 {current}，上游最新 {latest}。更新需重新同步源码并编译引擎，页面不会自动执行。',
+    '当前 {current}，上游最新 {latest}。更新在源码侧完成：先跑 engine/scripts/preview-upgrade.sh {latest} 预演影响面，再正式同步并对拍线上引擎后重新部署（步骤见 engine/README.md）。本页只做检测，不会自动改动代码。',
   ruleHistory: '变更历史',
   ruleOperator: '操作人',
   ruleCreatedAt: '时间',

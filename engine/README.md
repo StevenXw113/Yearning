@@ -163,7 +163,51 @@ docker run -d --name yearning-engine --restart always -p 13307:13307 yearning-en
 - diff 用的是「当前全局规则集」，配置本身不参与比较——门禁只看引擎行为。
 - 没有元数据库权限时可先导出 SQL：`-sql-file`（每行一个工单）+ `-rule-file`（`audit_role` JSON）。
 - 发布后到「设置 → 审核规则 → 检测上游更新」核对版本号（该数字来自主程序的 `bytebaseRef` 常量，
-  升级引擎时要同步改，否则会一直提示有新版本）。
+  同步脚本会自动写入新版本号，无需手工改）。
+
+### 源码侧升级流程（配合页面「检测上游更新」按钮）
+
+页面只负责告诉你「上游有新版本」，更新动作全部在源码侧完成：
+
+```bash
+# 1) 预演：在临时 git worktree 里跑一遍真实同步，报告影响面，不动当前目录
+cd engine && ./scripts/preview-upgrade.sh 3.23.0
+
+# 2) 正式同步：稀疏拉取 → 复制子集 → 改写 import → 重放裁剪 → go mod tidy
+#              → build → 登记新规则 → test
+./scripts/sync-bytebase.sh 3.23.0
+
+# 3) 审阅 diff（重点 engine/RULES.md 与 engine/go.mod）后提交
+git diff && git add -A && git commit -m "chore(engine): 内化 Bytebase 3.23.0"
+
+# 4) 对拍线上引擎后再发布（见上方「Docker 升级与回滚」）
+go run ./tools/checkdiff -old <线上引擎> -new <候选引擎> -meta-dsn '...'
+```
+
+同步脚本会自动做掉三件机械活，避免升级卡在半路：
+
+| 自动处理 | 为什么需要 |
+| --- | --- |
+| `go mod tidy` | 上游可能新增依赖，不补 `engine/go.mod` 就直接编译失败 |
+| 更新主程序的 `bytebaseRef` | 否则「检测上游更新」会一直显示有新版本 |
+| 把新增规则按「未启用」登记进 `engine/RULES.md` | 否则 archguard 清单测试会失败 → 同步被判失败并回滚，升级卡死 |
+
+任何一步失败，脚本都会把 `internal/bytebase` 还原成同步前的内容，**仓库不会停在半成品状态**。
+预演脚本用的是 HEAD（已提交）的代码与脚本；改过同步脚本请先提交再预演。
+
+### 把上游规则接到开关上
+
+`engine/RULES.md` 里「未启用」的规则若要启用，需要四处一起改（少一处就会出现「页面勾了但不生效」）：
+
+1. `engine/internal/server/rules.go`：把 Yearning 开关映射到该规则类型（含 payload：数值/列表/命名规范）
+2. `engine/RULES.md`：`UPDATE_RULES_MANIFEST=1 go test ./internal/archguard -run TestRulesManifest` 重新生成
+3. `front/src/views/manager/rules/rules.ts`：加一条开关（`name` 必须与第 1 步里用作 key 的字段名一致）
+   + `front/src/lang/{zh-cn,en-us}` 文案
+4. `src/engine/engine.go` 加字段 + `src/engine/convert.go` 的映射：**缺了会被 `SuperSaveRoles` 的
+   `json.Marshal` 静默丢掉**（前端选了开关但永远传不到引擎）
+
+默认级别是 `error`（命中即拦截）。想先灰度，就在规则集页把该规则设为「观察」或「提示」，
+跑一段时间看命中率与误报，确认后再收紧。
 
 需要数据库元数据或执行计划才能判定的规则（`statement.dml-dry-run`、`column.no-null` 的存量判定、
 `statement.affected-row-limit` 等）当前未启用：审核阶段不连业务库，待需要时通过

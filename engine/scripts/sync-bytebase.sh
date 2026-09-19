@@ -119,9 +119,19 @@ commit: $COMMIT
 synced: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
-echo "==> 校验 go build / go test"
+echo "==> 同步依赖（上游可能引入新依赖）"
 cd "$ROOT"
+if ! go mod tidy >/tmp/sync-tidy.log 2>&1; then
+	# 离线/代理不通时 tidy 会失败，但若上游没引入新依赖，构建仍然能过，故只告警
+	echo "    go mod tidy 未成功（可能是网络/代理问题），继续尝试构建："
+	tail -3 /tmp/sync-tidy.log | sed 's/^/    /'
+fi
+
+echo "==> 校验 go build / go test"
 go build ./...
+# 上游可能新增规则：先把它们按「未启用」登记进 RULES.md，否则 archguard 的清单测试会失败，
+# 而失败会让本脚本回滚、升级卡在半路。人工审阅 RULES.md 的 diff 决定是否接到开关上即可。
+UPDATE_RULES_MANIFEST=1 go test ./internal/archguard -run TestRulesManifest >/dev/null
 go test ./...
 DONE=1 # 到这里才认为同步成功，失败时 cleanup 会还原旧目录
 
@@ -140,5 +150,15 @@ fi
 
 echo
 echo "同步完成: $REPO@$REF ($COMMIT)"
-git -C "$ROOT/.." --no-pager diff --stat -- engine/internal/bytebase || true
-echo "请审阅 git diff 后提交。"
+git -C "$ROOT/.." --no-pager diff --stat -- engine/internal/bytebase engine/go.mod engine/go.sum || true
+grep -m1 '^## 已启用' "$ROOT/RULES.md" 2>/dev/null || true
+grep -m1 '^## 未启用' "$ROOT/RULES.md" 2>/dev/null || true
+cat <<'NEXT'
+
+下一步：
+  1) 审阅 git diff —— 重点看 engine/RULES.md（上游规则增删）与 engine/go.mod
+  2) 对拍线上引擎与候选引擎（行为 diff 门禁）：
+     go run ./tools/checkdiff -old <线上引擎> -new <候选引擎> -meta-dsn '...' -limit 200
+  3) 构建镜像并同端口替换容器（见 engine/README.md「Docker 升级与回滚」），保留旧 tag 以便回滚
+  4) 需要把新规则接到 Yearning 开关上时，按 engine/README.md「把上游规则接到开关上」的清单改
+NEXT

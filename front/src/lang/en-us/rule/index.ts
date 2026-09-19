@@ -67,7 +67,7 @@ export default {
   upstreamLatest: 'Already up to date ({version})',
   upstreamNew: 'New upstream version',
   upstreamNewDesc:
-    'Current {current}, upstream latest {latest}. Updating requires re-syncing the source and rebuilding the engine; this page will not do it automatically.',
+    'Current {current}, upstream latest {latest}. Updating happens in the source tree: run engine/scripts/preview-upgrade.sh {latest} to preview the impact, then sync, diff against the live engine and redeploy (see engine/README.md). This page only detects.',
   ruleHistory: 'Change history',
   ruleOperator: 'Operator',
   ruleCreatedAt: 'Time',
