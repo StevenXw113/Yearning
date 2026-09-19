@@ -68,7 +68,7 @@ func (q *QueryDeal) PreCheck(insulateWordList string) error {
 		if rec.Error != "" {
 			return errors.New(rec.Error)
 		}
-		q.MultiSQLRunner = append(q.MultiSQLRunner, MultiSQLRunner{SQL: rec.SQL, InsulateWordList: factory.MapOn(rec.InsulateWordList)})
+		q.MultiSQLRunner = append(q.MultiSQLRunner, MultiSQLRunner{SQL: rec.SQL, InsulateWordList: factory.MapOn(lowerList(rec.InsulateWordList))})
 	}
 	return nil
 }
@@ -110,6 +110,13 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 		results := make(map[string]interface{})
 		_ = rows.MapScan(results)
 		for key := range results {
+			// 脱敏优先于类型处理：命中脱敏字段就直接替换，不再看它是什么类型。
+			// 逐个类型分支判断会漏掉 float / 时间 / 布尔 / NULL 等类型（原实现只覆盖了
+			// []uint8、int64、uint64），那等于把敏感值原样发给前端。
+			if m.excludeFieldContext(key) {
+				results[key] = i18n.DefaultLang.Load(i18n.INFO_SENSITIVE_FIELD)
+				continue
+			}
 			switch r := results[key].(type) {
 			case []uint8:
 				if len(r) > BUF {
@@ -123,22 +130,11 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 					default:
 						results[key] = bytesToString(r)
 					}
-					if m.excludeFieldContext(key) {
-						results[key] = i18n.DefaultLang.Load(i18n.INFO_SENSITIVE_FIELD)
-					}
 				}
 			case int64:
-				if m.excludeFieldContext(key) {
-					results[key] = i18n.DefaultLang.Load(i18n.INFO_SENSITIVE_FIELD)
-				} else {
-					results[key] = strconv.FormatInt(r, 10)
-				}
+				results[key] = strconv.FormatInt(r, 10)
 			case uint64:
-				if m.excludeFieldContext(key) {
-					results[key] = i18n.DefaultLang.Load(i18n.INFO_SENSITIVE_FIELD)
-				} else {
-					results[key] = strconv.FormatUint(r, 10)
-				}
+				results[key] = strconv.FormatUint(r, 10)
 			}
 		}
 		query.Data = append(query.Data, results)
@@ -156,9 +152,23 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 	return query, nil
 }
 
+// excludeFieldContext 判断结果列是否命中脱敏词表（大小写不敏感）。
 func (m *MultiSQLRunner) excludeFieldContext(field string) bool {
 	_, ok := m.InsulateWordList[strings.ToLower(field)]
 	return ok
+}
+
+// lowerList 把词表统一小写并去掉空白项。
+// 字段名比较统一走 strings.ToLower，词表不规范化的话，配置里写成 Phone / Email
+// 就会静默不脱敏（数据源页面的「脱敏字段」是自由输入，很容易带大写）。
+func lowerList(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if t := strings.TrimSpace(s); t != "" {
+			out = append(out, strings.ToLower(t))
+		}
+	}
+	return out
 }
 
 func removeDuplicateElement(addrs []string) []string {

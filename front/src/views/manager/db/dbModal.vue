@@ -216,7 +216,10 @@
     dbForm.value = Object.assign({}, vl);
     turnState();
     excludeDB.value = dbForm.value.exclude_db_list.split(',');
-    insulateWord.value = dbForm.value.insulate_word_list.split(',');
+    insulateWord.value = dbForm.value.insulate_word_list
+      .split(',')
+      .map((i: string) => i.trim())
+      .filter(Boolean);
     fetchSchema();
     const { data } = await getFlowProfile(dbForm.value.flow_id);
     steps.value = data.payload.steps;
