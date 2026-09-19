@@ -98,4 +98,7 @@ var en_US = map[int]string{
 	ER_RULE_SET_EMPTY:                                         "Suspicious empty rule set: every rule is at its default value, save rejected (a client that omits fields would silently reset the whole rule set). Pass confirm=true if this is intended.",
 	ER_RULE_HISTORY_NOT_FOUND:                                 "Rule set history entry not found or already cleaned",
 	INFO_RULE_ROLLBACK:                                        "Rule set rolled back",
+	ERR_RULE_SET_IN_USE:                                       "This rule set is still used by data sources (%s); rebind them to another rule set first",
+	INFO_RULE_SET_DELETE:                                      "Rule set deleted (you can restore it from the change history)",
+	ORDER_AGREE_WAIT_MANUAL:                                   "Approved. The order is now waiting for manual execution — click Execute to run it",
 }

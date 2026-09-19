@@ -8,6 +8,9 @@
       />
     </a-col>
     <a-col :span="9" offset="1" style="text-align: right">
+      <a-button style="margin-right: 8px" @click="helpOpen = true">{{
+        $t('ruleHelp')
+      }}</a-button>
       <a-button
         v-if="!isAdd"
         style="margin-right: 8px"
@@ -69,6 +72,21 @@
       </template>
     </template>
   </a-table>
+
+  <a-modal
+    v-model:visible="helpOpen"
+    :title="$t('ruleHelp')"
+    :footer="null"
+    :width="680"
+  >
+    <p>{{ $t('ruleHelpIntro') }}</p>
+    <ul style="padding-left: 18px">
+      <li>{{ $t('ruleHelpAdd') }}</li>
+      <li>{{ $t('ruleHelpEnable') }}</li>
+      <li>{{ $t('ruleHelpDelete') }}</li>
+    </ul>
+    <p style="margin-bottom: 0">{{ $t('ruleHelpDoc') }}</p>
+  </a-modal>
 
   <a-drawer
     v-model:visible="historyOpen"
@@ -229,6 +247,8 @@
   const ruleId = computed(() => (props.global ? 0 : id.value));
 
   const historyOpen = ref(false);
+
+  const helpOpen = ref(false);
 
   const history = ref<RuleHistory[]>([]);
 

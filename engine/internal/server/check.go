@@ -50,8 +50,9 @@ func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*engine
 		rec := &enginev1.Record{Sql: text, Schema: req.Schema, Status: "审核通过", Level: 0}
 		if f, ok := runCustomRules(req.Rule, text, req.Schema); ok {
 			rec.Error = fmt.Sprintf("[%s] %s", f.Title, f.Content)
-			rec.Status = "审核不通过"
-			rec.Level = uint32(f.Level)
+			// 状态跟随级别：自研规则的 Level 与上游规则同义（1 拦截 / 2 警告 / 3 观察），
+			// 原先一律写「审核不通过」会让观察级规则在结果里自相矛盾。
+			rec.Status, rec.Level = customStatus(f.Level), uint32(f.Level)
 			recs = append(recs, rec)
 			continue
 		}
@@ -165,6 +166,18 @@ func review(ctx context.Context, stmts []base.ParsedStatement, schema string, ru
 	return warn, nil
 }
 
+// customStatus 把自研规则的级别渲染成与上游规则一致的状态文案。
+func customStatus(l customrules.Level) string {
+	switch l {
+	case customrules.LevelWarning:
+		return "警告"
+	case customrules.LevelInfo:
+		return "观察"
+	default:
+		return "审核不通过"
+	}
+}
+
 // adviceText 把 Bytebase 建议渲染成检测结果里的错误文案。
 func adviceText(a *storepb.Advice) string {
 	return fmt.Sprintf("[%s] %s", a.GetTitle(), a.GetContent())
@@ -203,6 +216,7 @@ func runCustomRules(role *enginev1.AuditRole, sql, schema string) (customrules.F
 	cfg := customrules.Config{
 		AllowDropDatabase: role.GetDdlEnableDropDatabase(),
 		AllowDropTable:    role.GetDdlEnableDropTable(),
+		ForbidTruncate:    role.GetDdlForbidTruncate(),
 	}
 	ctx := customrules.Context{SQL: sql, Schema: schema}
 

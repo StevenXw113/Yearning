@@ -31,7 +31,8 @@ export function addRules(params: CustomRule): AxiosPromise {
   return request.post(`${COMMON_URI}/manage/roles/add`, params);
 }
 
-export function deleteRules(params: CustomRule): AxiosPromise {
+// 删除规则集：被数据源引用时后端会拒绝并说明是哪些数据源
+export function deleteRules(params: { id?: number }): AxiosPromise {
   return request.post(`${COMMON_URI}/manage/roles/delete`, params);
 }
 

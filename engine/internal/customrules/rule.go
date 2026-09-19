@@ -27,6 +27,8 @@ type Config struct {
 	AllowDropDatabase bool
 	// AllowDropTable 语义为“允许删除表”，false 表示禁止。
 	AllowDropTable bool
+	// ForbidTruncate 语义为“禁止 TRUNCATE”，true 表示启用该规则（默认 false）。
+	ForbidTruncate bool
 }
 
 // Context 是单条 SQL 的审核输入。

@@ -17,6 +17,10 @@ export default {
   DDLEnableAcrossDBRename: 'Allow migration across tables',
   DDLEnableDropTable: 'Table deletion is allowed',
   DDLEnableDropDatabase: 'Allow database deletion',
+  DDLForbidTruncate: 'Forbid TRUNCATE statement (custom rule example)',
+  DMLInsertMustExplicitly: 'Require explicit column list in INSERT',
+  DDLEnableForeignKey: 'Allow foreign keys',
+  DDLTablePrefix: 'Table name prefix (e.g. app_)',
   DDLAllowPRINotInt: 'Non-int /bigint primary key type is allowed',
   DDLEnableNullIndexName: 'Empty index name is allowed',
   DDLMultiToCommit:
@@ -69,6 +73,19 @@ export default {
   upstreamNewDesc:
     'Current {current}, upstream latest {latest}. Updating happens in the source tree: run ./scripts/upgrade-engine.sh inside engine/ (syncs upstream and regenerates the rule list; add --preview to dry-run first), then redeploy the engine (see engine/README.md). This page only detects.',
   ruleHistory: 'Change history',
+  ruleHelp: 'How to use',
+  ruleDeleteConfirm: 'Delete this rule set? (refused if a data source still uses it)',
+  ruleDeleteDone: 'Rule set deleted — you can restore it from the change history',
+  ruleHelpIntro:
+    'Every row on this page (including custom rules that default to off) is defined in engine code; the page only controls the switch and the level. Data sources bind a rule set and configure masked fields in Data source management.',
+  ruleHelpAdd:
+    'Add: copy engine/internal/customrules/forbid_truncate.go inside engine/internal/customrules/ (implement Name/Check + Register in init). If it needs a switch, follow the four-place wiring in that directory README — missing the convert.go mapping makes the switch silently ineffective.',
+  ruleHelpEnable:
+    'Enable: tick the switch and save. Set the level to "observe" or "notify" first and watch for false positives before promoting it to "block".',
+  ruleHelpDelete:
+    'Delete: to merely disable it, untick the switch (or set the level to observe). To remove it for good, delete the rule file and its switch wiring (proto / app / frontend). Rule sets themselves can be deleted in the Custom rules tab; deletion is refused while a data source uses it.',
+  ruleHelpDoc:
+    'Full details: engine/internal/customrules/README.md and the "把上游规则接到开关上" section in engine/README.md.',
   ruleOperator: 'Operator',
   ruleCreatedAt: 'Time',
   ruleLevelTitle: 'Level',

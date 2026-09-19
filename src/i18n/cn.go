@@ -98,4 +98,7 @@ var zh_CN = map[int]string{
 	ER_RULE_SET_EMPTY:                                         "疑似空规则集：本次提交的规则全为默认值，已拒绝保存（前端漏传字段会导致规则被整体重置）。如确需清空，请携带 confirm=true 重试。",
 	ER_RULE_HISTORY_NOT_FOUND:                                 "规则集历史记录不存在或已被清理",
 	INFO_RULE_ROLLBACK:                                        "规则集已回滚",
+	ERR_RULE_SET_IN_USE:                                       "该规则集正在被数据源使用（%s），请先把这些数据源改绑到其他规则集再删除",
+	INFO_RULE_SET_DELETE:                                      "规则集已删除（可在「变更历史」里回滚恢复）",
+	ORDER_AGREE_WAIT_MANUAL:                                   "审核已通过，工单进入「等待执行」，请由人工点「执行」触发",
 }

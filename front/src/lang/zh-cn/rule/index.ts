@@ -14,6 +14,10 @@ export default {
   DDLEnableAcrossDBRename: '允许跨库表迁移',
   DDLEnableDropTable: '允许删除表',
   DDLEnableDropDatabase: '允许删除数据库',
+  DDLForbidTruncate: '禁止 TRUNCATE 语句（自研规则示例）',
+  DMLInsertMustExplicitly: '检查 insert 语句必须显式声明字段',
+  DDLEnableForeignKey: '允许外键',
+  DDLTablePrefix: '表名前缀（如 app_）',
   DDLAllowPRINotInt: '允许主键类型为非int/bigint',
   DDLEnableNullIndexName: '允许索引名为空',
   DDLMultiToCommit: '允许单个工单提交多条DDL语句',
@@ -61,6 +65,19 @@ export default {
   upstreamNewDesc:
     '当前 {current}，上游最新 {latest}。更新在源码侧完成：在 engine 目录执行 ./scripts/upgrade-engine.sh（自动同步上游并生成新规则，加 --preview 可先预演影响面），随后重新部署引擎即可（步骤见 engine/README.md）。本页只做检测，不会自动改动代码。',
   ruleHistory: '变更历史',
+  ruleHelp: '使用说明',
+  ruleDeleteConfirm: '删除该规则集？（若正被数据源使用会被拒绝）',
+  ruleDeleteDone: '规则集已删除，可在「变更历史」里回滚恢复',
+  ruleHelpIntro:
+    '本页每一条规则（含默认关闭的自研规则）都由引擎代码定义，页面只负责开关与级别；数据源在「数据源管理」里绑定规则集、配置脱敏字段。',
+  ruleHelpAdd:
+    '新增：在 engine/internal/customrules/ 下照抄 forbid_truncate.go（实现 Name/Check + init 里 Register），要开关键则按该目录 README 的「四处接线」补齐——漏掉 convert.go 的映射会出现"勾了没反应"。',
+  ruleHelpEnable:
+    '启用：勾上开关保存即可；建议先把级别设成「观察」或「提示」跑一段时间，确认误报可控再改为「拦截」。',
+  ruleHelpDelete:
+    '删除：只想停用就取消勾选（或设为「观察」）；要彻底移除需删掉规则文件并清掉对应开关的前端/proto/主程序接线。规则集本身可在「自定义规则」标签页删除，被数据源引用时会被拒绝。',
+  ruleHelpDoc:
+    '完整说明见仓库 engine/internal/customrules/README.md 与 engine/README.md「把上游规则接到开关上」。',
   ruleOperator: '操作人',
   ruleCreatedAt: '时间',
   ruleLevelTitle: '级别',

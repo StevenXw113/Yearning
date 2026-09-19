@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/cookieY/yee"
@@ -66,8 +67,18 @@ func SuperRoleDelete(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
+	// 被数据源引用的规则集不能删：删掉之后这些数据源检测时读不到规则集，会直接报错。
+	var used []string
+	model.DB().Model(model.CoreDataSource{}).Where("rule_id =?", u.ID).Pluck("source", &used)
+	if len(used) > 0 {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(
+			fmt.Sprintf(i18n.DefaultLang.Load(i18n.ERR_RULE_SET_IN_USE), strings.Join(used, "、"))))
+	}
+	// 删除是破坏性操作：记一条历史（回滚可恢复），便于审计与反悔。
+	before, _ := loadRuleSet(u.ID)
 	model.DB().Model(model.CoreRules{}).Where("id =?", u.ID).Delete(&model.CoreRules{})
-	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.RULE_IS_DELETE)))
+	writeRuleHistory(u.ID, before, engine.AuditRole{}, operatorName(c), "删除规则集")
+	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_RULE_SET_DELETE)))
 }
 
 func SuperRoleUpdate(c yee.Context) (err error) {
@@ -125,11 +136,23 @@ func SuperRoleRollback(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_HISTORY_NOT_FOUND)))
 	}
 	var target engine.AuditRole
-	before, ok := loadRuleSet(h.RuleId)
-	if !ok || h.Before.UnmarshalToJSON(&target) != nil {
+	if h.Before.UnmarshalToJSON(&target) != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_HISTORY_NOT_FOUND)))
 	}
-	applyRuleSet(h.RuleId, h.Before)
+	before, exists := loadRuleSet(h.RuleId)
+	if !exists {
+		// 规则集已被删除（删除同样记历史）：按快照重建，让删除也能反悔
+		if h.RuleId == 0 {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_HISTORY_NOT_FOUND)))
+		}
+		model.DB().Create(&model.CoreRules{
+			ID:        h.RuleId,
+			Desc:      fmt.Sprintf("从历史 #%d 恢复", h.ID),
+			AuditRole: h.Before,
+		})
+	} else {
+		applyRuleSet(h.RuleId, h.Before)
+	}
 	writeRuleHistory(h.RuleId, before, target, operatorName(c), fmt.Sprintf("回滚到历史 #%d", h.ID))
 	return c.JSON(http.StatusOK, common.SuccessPayload(target))
 }

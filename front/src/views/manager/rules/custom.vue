@@ -34,6 +34,14 @@
             "
             >{{ $t('common.profile') }}</a-button
           >
+          <a-popconfirm
+            :title="$t('ruleDeleteConfirm')"
+            @confirm="onDelete(record.id)"
+          >
+            <a-button size="small" danger ghost style="margin-left: 8px">{{
+              $t('common.delete')
+            }}</a-button>
+          </a-popconfirm>
         </template>
       </template>
     </a-table>
@@ -65,12 +73,13 @@
 </template>
 
 <script setup lang="ts">
-  import { getCustomRulesList } from '@/apis/rules';
+  import { deleteRules, getCustomRulesList } from '@/apis/rules';
   import { onMounted, ref } from 'vue';
   import CommonMixins from '@/mixins/common';
   import rules from './rules.vue';
   import { useElementSize } from '@vueuse/core';
   import { useI18n } from 'vue-i18n';
+  import { message } from 'ant-design-vue';
 
   const { is_open, turnState } = CommonMixins();
 
@@ -107,6 +116,14 @@
   const get = async () => {
     const { data } = await getCustomRulesList();
     list.value = data.payload;
+  };
+
+  // 被数据源引用的规则集后端会拒绝删除，并把数据源名字写在 text 里（拦截器已提示）
+  const onDelete = async (id: number) => {
+    const { data } = await deleteRules({ id });
+    if (data.code !== 1200) return;
+    message.success(t('ruleDeleteDone'));
+    get();
   };
 
   onMounted(async () => {

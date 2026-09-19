@@ -63,6 +63,7 @@ func AuditRoleToProto(r *AuditRole) *enginev1.AuditRole {
 		AllowSpecialType:               r.AllowSpecialType,
 		PriRollBack:                    r.PRIRollBack,
 		RuleLevels:                     r.RuleLevel,
+		DdlForbidTruncate:              r.DDLForbidTruncate,
 	}
 }
 

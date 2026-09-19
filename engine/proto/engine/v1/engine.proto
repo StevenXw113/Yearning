@@ -87,7 +87,10 @@ message AuditRole {
   // 规则级别：key 为规则集里的字段名（与前端规则开关同名），value 取 error/warn/observe。
   // 缺省 error（命中即拦截）；warn 提示不拦、observe 只记录不拦，用于新规则灰度上线。
   map<string, string> rule_levels = 53;
+  // 自研规则开关（internal/customrules）：true = 禁止 TRUNCATE。
+  bool ddl_forbid_truncate = 54;
 }
+
 
 // 工单（用于 Exec），字段与 Yearning CoreSqlOrder 对齐。
 message Order {

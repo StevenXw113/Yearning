@@ -56,6 +56,8 @@ type AuditRole struct {
 	// RuleLevel 规则级别：key 为上面的字段名，value 为 error/warn/observe。
 	// 缺省 error（命中即拦截）；warn 提示不拦、observe 只记录不拦，用于新规则灰度上线。
 	RuleLevel map[string]string `json:"RuleLevel"`
+	// DDLForbidTruncate 为自研规则开关：true 表示禁止 TRUNCATE（默认 false，不生效）。
+	DDLForbidTruncate bool `json:"DDLForbidTruncate"`
 }
 
 type Record struct {
