@@ -40,6 +40,12 @@
             <a-radio :value="true">{{ $t('common.yes') }}</a-radio>
           </a-radio-group>
         </a-form-item>
+        <a-form-item :label="$t('setting.adv.order.manual')">
+          <a-switch v-model:checked="config.other.manual_execute"></a-switch>
+          <span style="margin-left: 8px; color: #888">{{
+            $t('setting.adv.order.manual.tips')
+          }}</span>
+        </a-form-item>
         <a-form-item :label="$t('setting.adv.query.expire')">
           <a-input-number v-model:value="config.other.ex_query_time" :min="1">
           </a-input-number>

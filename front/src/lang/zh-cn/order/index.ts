@@ -65,6 +65,8 @@ export default {
   'order.agree.tips': '确认同意工单?',
   'order.reject': '驳回',
   'order.reject.tips': '确认驳回工单?',
+  'order.execute': '执行',
+  'order.execute.tips': '立即执行该工单的 SQL？（人工执行模式下工单会停在此处等待）',
   'order.end': '结束',
   'order.roll.tips': '回滚语句提交不得为空',
 

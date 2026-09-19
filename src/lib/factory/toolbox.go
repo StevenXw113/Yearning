@@ -16,9 +16,9 @@ package factory
 import (
 	"Yearning-go/src/engine"
 	"Yearning-go/src/model"
+	crand "crypto/rand"
 	"encoding/json"
 	"github.com/cookieY/yee/logger"
-	"github.com/google/uuid"
 	"github.com/vmihailenco/msgpack/v5"
 	"math"
 	"strconv"
@@ -52,8 +52,22 @@ func Paging(page interface{}, total int) (start int, end int) {
 	return
 }
 
+// workIdAlphabet 去掉了容易看混的字符（0/O、1/l/I），便于口头转述与手工输入。
+const workIdAlphabet = "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ"
+
+// GenWorkId 生成 8 位随机工单号。
+// 早先用 36 位 UUID：太长、不便于人工转述。8 位 × 56 字符表 ≈ 9.7e13 种组合，
+// 十万级工单量下碰撞概率可忽略（且 work_id 在库里是普通索引，不强制唯一）。
 func GenWorkId() string {
-	return uuid.NewString()
+	b := make([]byte, 8)
+	if _, err := crand.Read(b); err != nil {
+		// 几乎不可能发生；真发生时退回时间戳，保证调用方拿到一个非空 ID
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	for i, v := range b {
+		b[i] = workIdAlphabet[int(v)%len(workIdAlphabet)]
+	}
+	return string(b)
 }
 
 func TimeDifference(t string) bool {

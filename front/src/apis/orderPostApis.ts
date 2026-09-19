@@ -84,6 +84,14 @@ export function scheduledChange(work_id: string, delay: string) {
   });
 }
 
+// 人工执行：把已通过、停在「等待执行」(status=5) 的工单落到引擎执行
+export function executeOrder(work_id: string) {
+  return request.post(`${COMMON_URI}/audit/order/state`, {
+    tp: 'execute',
+    work_id,
+  });
+}
+
 export function changeOrderStateUndo(args: SQLAuditOrder) {
   return request.post(`${COMMON_URI}/audit/order/state`, args);
 }

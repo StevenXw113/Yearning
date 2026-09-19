@@ -69,6 +69,9 @@ export default {
   'order.agree': 'Agree',
   'order.reject.tips': 'Confirm reject of order?',
   'order.reject': 'Rejected',
+  'order.execute': 'Execute',
+  'order.execute.tips':
+    'Execute the SQL of this order now? (with manual execution the order waits here)',
   'order.end': 'End',
   'order.roll.tips': 'SQL must not be empty',
   'order.order.title': 'Order Audit',

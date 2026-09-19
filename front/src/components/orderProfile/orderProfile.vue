@@ -34,6 +34,18 @@
             <a-button key="1" danger ghost>{{ $t('order.undo') }}</a-button>
           </a-popconfirm>
         </template>
+        <!-- 人工执行：审批已通过但停在「等待执行」的工单，由相关人点这里落地执行 -->
+        <template v-if="order.status === 5">
+          <a-popconfirm
+            :title="$t('order.execute.tips')"
+            placement="bottomLeft"
+            @confirm="executeNext"
+          >
+            <a-button key="1" type="primary">{{
+              $t('order.execute')
+            }}</a-button>
+          </a-popconfirm>
+        </template>
       </template>
 
       <a-row type="flex" justify="center" align="middle">
@@ -192,9 +204,11 @@
   import {
     changeOrderStateUndo,
     checkSQLS,
+    executeOrder,
     getNextOrderState,
     SQLTestParams,
   } from '@/apis/orderPostApis';
+  import { message } from 'ant-design-vue';
   import { SQLTesting } from '@/types';
   import { useRoute } from 'vue-router';
   import JunoMixin from '@/mixins/juno';
@@ -291,6 +305,16 @@
       work_id: order.value.work_id as string,
       tp: 'undo',
     });
+    spinning.value = !spinning.value;
+  }, 200);
+
+  const executeNext = debounce(async () => {
+    spinning.value = !spinning.value;
+    const { data } = await executeOrder(order.value.work_id as string);
+    if (data.code === 1200) {
+      message.success(data.text);
+      emit('close');
+    }
     spinning.value = !spinning.value;
   }, 200);
 

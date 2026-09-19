@@ -24,6 +24,8 @@ export interface Other {
   overdue: Dayjs[];
   export: boolean;
   register: boolean;
+  // 人工执行：末级审批通过后停在「等待执行」，由人工点「执行」触发
+  manual_execute: boolean;
   close_ai: string;
   proxy: string;
   domain: string;

@@ -149,6 +149,12 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
 				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_STATE))
 			}
+			// 人工执行模式：审批通过只置为「等待执行」，由人工点「执行」触发。
+			// delay 置 none，延迟调度 cron（筛 delay!='none'）不会碰它。
+			if model.GloOther.Load().ManualExecute {
+				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
+				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_WAIT_MANUAL))
+			}
 			return ExecuteOrder(req, user)
 		}
 		model.DB().Model(model.CoreSqlOrder{}).Where("work_id = ?", req.WorkId).Updates(&model.CoreSqlOrder{CurrentStep: req.Flag + 1, Assigned: strings.Join(assigned, ",")})

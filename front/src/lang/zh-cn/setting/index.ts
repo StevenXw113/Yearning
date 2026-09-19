@@ -26,6 +26,9 @@ export default {
   'setting.adv.query.expire': '查询时限',
   'setting.adv.query.mins': '分',
   'setting.adv.query.export': '查询导出',
+  'setting.adv.order.manual': '人工执行',
+  'setting.adv.order.manual.tips':
+    '开启后：末级审批通过只进入「等待执行」，由相关人在工单详情点「执行」触发',
   'setting.adv.query.register': '开启用户注册',
   'setting.adv.query.closeai': 'openAI AK',
   'setting.adv.query.closeai.proxy': 'HTTP代理地址',

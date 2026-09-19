@@ -8,6 +8,9 @@ type Other struct {
 	Export      bool     `json:"export"`
 	ExQueryTime int      `json:"ex_query_time"`
 	Domain      string   `json:"domain"`
+	// ManualExecute 为 true 时，末级审批通过只把工单置为「等待执行」(status=5)，
+	// 由人工点「执行」触发；false（默认）保持审批通过即自动执行。
+	ManualExecute bool `json:"manual_execute"`
 }
 
 type AI struct {

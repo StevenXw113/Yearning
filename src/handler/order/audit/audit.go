@@ -37,6 +37,13 @@ func AuditOrderState(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, MultiAuditOrder(u, user.Username))
 	case "reject":
 		return c.JSON(http.StatusOK, RejectOrder(u, user.Username))
+	case "execute":
+		// 人工执行：仅工单相关人（申请人 / 审批链上的人）可触发；
+		// 已通过但停在「等待执行」的工单（人工执行模式或延迟执行）由此处落地执行。
+		if !hasOrderPermission(u.WorkId, user.Username) {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+		}
+		return c.JSON(http.StatusOK, ExecuteOrder(u, user.Username))
 	default:
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}

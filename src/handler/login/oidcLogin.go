@@ -165,9 +165,11 @@ func getAccount(code string) (ac *model.CoreAccount, err error) {
 	account := new(model.CoreAccount)
 	if err := model.DB().Where("username = ?", username).First(&account).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		coreAccount := model.CoreAccount{
-			Username:   username,
-			RealName:   realname,
-			Password:   factory.DjangoEncrypt(factory.GenWorkId(), string(factory.GetRandom())),
+			Username: username,
+			RealName: realname,
+			// 用 16 位随机盐作初始口令：SSO 用户不走口令登录，
+			// 但不要把口令熵依赖在 GenWorkId 上（它现在是 8 位短 ID）
+			Password:   factory.DjangoEncrypt(string(factory.GetRandom()), string(factory.GetRandom())),
 			Department: "",
 			Email:      email,
 			IsRecorder: 2,

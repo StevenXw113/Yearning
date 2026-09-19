@@ -26,6 +26,9 @@ export default {
   'setting.adv.query.expire': 'Query time',
   'setting.adv.query.mins': 'mins',
   'setting.adv.query.export': 'Query Export',
+  'setting.adv.order.manual': 'Manual execution',
+  'setting.adv.order.manual.tips':
+    'When on: the final approval only moves the order to "waiting to execute"; a human clicks Execute in the order detail',
   'setting.adv.query.register': 'Register',
   'setting.adv.query.closeai': 'OpenAI AK',
   'setting.adv.query.closeai.proxy': 'Proxy Server',

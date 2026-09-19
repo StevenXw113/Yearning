@@ -101,6 +101,26 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
+    // 自研规则（engine/internal/customrules）的开关，作为新增自定义规则的接线示例
+    name: 'DDLForbidTruncate',
+    desc: t('DDLForbidTruncate'),
+    type: 'DDL',
+    tp: 0,
+  },
+  {
+    name: 'DDLEnableForeignKey',
+    desc: t('DDLEnableForeignKey'),
+    type: 'DDL',
+    tp: 0,
+  },
+  {
+    // 表名前缀：与「表名最大长度」合成同一条命名规则（tp=2 为文本输入）
+    name: 'DDLTablePrefix',
+    desc: t('DDLTablePrefix'),
+    type: 'DDL',
+    tp: 2,
+  },
+  {
     name: 'DDLAllowPRINotInt',
     desc: t('DDLAllowPRINotInt'),
     type: 'DDL',
@@ -235,6 +255,12 @@ const rule: Rule[] = [
   {
     name: 'DMLInsertColumns',
     desc: t('DMLInsertColumns'),
+    type: 'DML',
+    tp: 0,
+  },
+  {
+    name: 'DMLInsertMustExplicitly',
+    desc: t('DMLInsertMustExplicitly'),
     type: 'DML',
     tp: 0,
   },
