@@ -1,7 +1,14 @@
+//go:build dbtest
+
+// 这套用例是上游遗留的集成测试：需要可用的元数据库、并会启动完整 HTTP 栈，
+// 因此用 dbtest 构建标签隔离，默认不参与 go test ./...（CI 里也就不会因缺库而红）。
+//
+// 需要时执行：go test -tags dbtest ./src/handler/manage/flow/
 package flow
 
 import (
 	"Yearning-go/src/handler/common"
+	"Yearning-go/src/i18n"
 	"Yearning-go/src/model"
 	"Yearning-go/src/test"
 	"encoding/json"
@@ -45,7 +52,7 @@ func TestTplPostSourceTemplate(t *testing.T) {
 	var Ref common.Resp
 	args := `{"steps":[{"desc": "提交阶段", "type": 0, "auditor": ["提交人"]}, {"desc": "321", "type": 1, "auditor": ["admin", "hj"]}],"source":"test"}`
 	apis.Post(args).Do().Unmarshal(&Ref)
-	assert.Equal(t, common.DATA_IS_UPDATED, Ref.Text)
+	assert.Equal(t, i18n.DefaultLang.Load(i18n.INFO_DATA_IS_UPDATED), Ref.Text)
 
 	args = `{"steps":[{"desc": "提交阶段", "type": 0, "auditor": ["提交人"]}, {"desc": "321", "type": 2, "auditor": ["admin", "hj"]}],"source":"test"}`
 	apis.Post(args).Do().Unmarshal(&Ref)

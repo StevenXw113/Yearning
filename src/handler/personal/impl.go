@@ -8,6 +8,7 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/hex"
+	enginev1 "engine/gen/engine/v1"
 	"errors"
 	"fmt"
 	"github.com/cookieY/sqlx"
@@ -16,7 +17,6 @@ import (
 	"strings"
 	"time"
 	"unsafe"
-	enginev1 "engine/gen/engine/v1"
 )
 
 const (

@@ -110,7 +110,14 @@ New-Item -ItemType Directory -Force -Path src/service/dist, src/service/chat/ser
 '@ | Set-Content -Encoding UTF8 src/service/chat/server/app/index.html
 ```
 
-> Linux/macOS 请对应改用 `mkdir -p` 与 `cat > ... <<'EOF'`。
+> Linux/macOS 或 CI 直接用仓库自带脚本（已存在的文件不会被覆盖，可安全重复执行）：
+>
+> ```bash
+> ./scripts/prepare-embed.sh
+> ```
+>
+> 干净 clone 后 `go build ./...` 报 `pattern dist/*: no matching files found` 或
+> `pattern chat/*: no matching files found`，就是缺这一步。
 
 ---
 

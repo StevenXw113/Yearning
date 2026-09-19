@@ -8,11 +8,11 @@ import (
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"context"
+	enginev1 "engine/gen/engine/v1"
 	"errors"
 	"github.com/cookieY/yee/logger"
 	"gorm.io/gorm"
 	"time"
-	enginev1 "engine/gen/engine/v1"
 )
 
 func autoTask(order *model.CoreSqlOrder, length int) {

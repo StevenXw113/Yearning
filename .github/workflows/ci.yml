@@ -1,0 +1,63 @@
+name: ci
+
+# 构建与测试校验：engine（内化 Bytebase 代码 + archguard 护栏）与主程序。
+# 未纳入：前端 vue-tsc（需要 yarn install，本地跑更快；要加就单开 job）。
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache-dependency-path: engine/go.sum
+      - name: gofmt 检查
+        run: |
+          unformatted="$(gofmt -l engine/internal engine/cmd)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::以下文件未 gofmt，请执行 gofmt -w："
+            echo "$unformatted"
+            exit 1
+          fi
+      # 内化代码已在版本控制里，干净 clone 即可构建（archguard 会校验耦合边界与规则映射/清单）
+      - name: build / vet / test
+        working-directory: engine
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # 干净 clone 缺 src/service/dist 与 src/service/chat 的 go:embed 占位，先补上
+      - name: 生成 go:embed 占位页
+        run: ./scripts/prepare-embed.sh
+      - name: gofmt 检查
+        run: |
+          unformatted="$(gofmt -l src cmd migration main.go)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::以下文件未 gofmt，请执行 gofmt -w："
+            echo "$unformatted"
+            exit 1
+          fi
+      # 需要真实元数据库的遗留集成测试带 dbtest 标签，默认不参与
+      - name: build / vet / test
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...

@@ -158,54 +158,10 @@ var levelAndSentinelNames = map[string]bool{
 func TestBytebaseRuleMappingConsistent(t *testing.T) {
 	root := moduleRoot(t)
 
-	// 1. 枚举全集
-	enumSrc, err := os.ReadFile(filepath.Join(root, "internal/bytebase/generated-go/store/review_config.pb.go"))
-	if err != nil {
-		t.Fatalf("读取枚举定义失败: %v", err)
-	}
-	m := enumBlockRe.FindSubmatch(enumSrc)
-	if m == nil {
-		t.Fatal("未在 review_config.pb.go 中找到 SQLReviewRule_Type_name 枚举")
-	}
-	enumNames := map[string]bool{}
-	for _, n := range enumNameRe.FindAllStringSubmatch(string(m[1]), -1) {
-		enumNames[n[1]] = true
-	}
-	if len(enumNames) == 0 {
-		t.Fatal("枚举解析结果为空，review_config.pb.go 结构可能已变化")
-	}
-
-	// 2. MySQL 侧已注册的规则类型
-	registered := map[string]bool{}
-	mysqlDir := filepath.Join(root, "internal/bytebase/plugin/advisor/mysql")
-	for _, path := range goFiles(t, mysqlDir, "") {
-		src, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("读取 %s 失败: %v", path, err)
-		}
-		for _, mm := range registerRe.FindAllStringSubmatch(string(src), -1) {
-			registered[mm[1]] = true
-		}
-	}
-	if len(registered) == 0 {
-		t.Fatal("未扫描到任何 MySQL 规则注册，注册写法可能已变化")
-	}
-
-	// 3. rules.go 实际使用的规则类型
-	rulesSrc, err := os.ReadFile(filepath.Join(root, "internal/server/rules.go"))
-	if err != nil {
-		t.Fatalf("读取 rules.go 失败: %v", err)
-	}
-	used := map[string]bool{}
-	for _, mm := range usedTypeRe.FindAllStringSubmatch(string(rulesSrc), -1) {
-		if levelAndSentinelNames[mm[1]] {
-			continue
-		}
-		used[mm[1]] = true
-	}
-	if len(used) == 0 {
-		t.Fatal("未在 rules.go 中解析到任何规则类型引用")
-	}
+	// 1. 枚举全集；2. MySQL 侧已注册；3. rules.go 实际使用（三个扫描器与规则清单测试共用）
+	enumNames := scanEnumNames(t, root)
+	registered := scanMySQLRegistered(t, root)
+	used := scanEnabledRules(t, root)
 
 	var notInEnum, notRegistered []string
 	for n := range used {
