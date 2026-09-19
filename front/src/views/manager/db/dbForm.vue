@@ -1,5 +1,6 @@
 <template>
-  <a-form ref="formRef" :model="dbForm" :rules="rules" v-bind="layout">
+  <!-- 标签与输入框同排（antd 默认横向布局）；不给标签设固定宽度，长标签自动撑开，不会被输入框截断 -->
+  <a-form ref="formRef" :model="dbForm" :rules="rules">
     <a-form-item :label="$t('common.table.env')" name="idc">
       <a-select v-model:value="dbForm.idc">
         <a-select-option v-for="i in idc" :key="i" :value="i">{{
@@ -123,7 +124,6 @@
 <script lang="ts" setup>
   import { ref, computed, reactive } from 'vue';
   import { Source, createSource as cs } from '@/apis/db';
-  import CommonMixins from '@/mixins/common';
   import { useStore } from '@/store';
   import { EventBus } from '@/lib';
   import { RuleObject } from 'ant-design-vue/es/form';
@@ -192,8 +192,6 @@
     ],
   };
 
-  const { layout } = CommonMixins();
-
   const loading = ref(false);
 
   const principalList = computed(() => store.state.common.principal);
@@ -261,3 +259,14 @@
     fill,
   });
 </script>
+
+<style scoped>
+/* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
+   标签宽度交给内容，长标签（英文）自动撑开，不会被输入框截断 */
+:deep(.ant-form-item) {
+  margin-bottom: 10px;
+}
+:deep(.ant-form-item .ant-form-item-label) {
+  font-size: 12px;
+}
+</style>

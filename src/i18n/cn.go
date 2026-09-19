@@ -95,4 +95,7 @@ var zh_CN = map[int]string{
 	ER_DATABASE_CONNECTION_FAILED:                             "数据库连接失败",
 	ERR_FLOW_ORDER_IS_NOT_COMPLETE:                            "工单编号:%s仍处于审核中状态，请将对应工单完成之后再编辑此流程",
 	ER_LOGIN_TOO_MANY_ATTEMPTS:                                "登录失败次数过多，请 15 分钟后再试",
+	ER_RULE_SET_EMPTY:                                         "疑似空规则集：本次提交的规则全为默认值，已拒绝保存（前端漏传字段会导致规则被整体重置）。如确需清空，请携带 confirm=true 重试。",
+	ER_RULE_HISTORY_NOT_FOUND:                                 "规则集历史记录不存在或已被清理",
+	INFO_RULE_ROLLBACK:                                        "规则集已回滚",
 }

@@ -79,23 +79,46 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 		return db.ExecContext(ctx, q)
 	}
 
+	// 工单要求回滚语句（backup=1）时优先用 binlog 抓真实行镜像，覆盖多表/无主键/全表/INSERT...SELECT
+	// 等全部 DML 场景；binlog 不可用（未开启或无 REPLICATION 权限）再退回执行前 SELECT 前镜像。
+	var (
+		rb  *rollbackBuilder
+		blc *binlogCapture
+	)
+	if req.Order.Backup == 1 {
+		meta := newTableMeta(db, req.Order.DataBase)
+		if c, ok := newBinlogCapture(ctx, req.Source, db, meta, req.Order.DataBase, stmts); ok {
+			blc = c
+		} else {
+			var q rowQueryer = db
+			if dmlTx {
+				q = tx // 事务内取数，保证能看到同事务前面语句的改动
+			}
+			rb = newRollbackBuilder(q, req.Order.DataBase)
+		}
+	}
+
 	recs := make([]*enginev1.Record, 0, len(stmts))
-	for _, st := range stmts {
-		rec := &enginev1.Record{Sql: st.Text, Status: "执行中", Level: 3}
+	for _, text := range stmts {
+		rec := &enginev1.Record{Sql: text, Status: "执行中", Level: 0}
 		// 语法预检
-		if perr := mysqlparse.Check(st.Text); perr != nil {
-			rec.Error = "SQL 语法错误: " + perr.Msg
+		if perr := mysqlparse.Check(text); perr != nil {
+			rec.Error = "SQL 语法错误: " + perr.Error()
 			rec.Status = "执行失败"
 			rec.Level = 1
 			recs = append(recs, rec)
 			if dmlTx {
 				_ = tx.Rollback()
-				return &enginev1.ExecReply{Ok: false, Error: rec.Error}, nil
+				return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
 			}
 			continue
 		}
+		// 回滚语句必须在语句执行前生成（依赖改动前的数据）
+		if rb != nil {
+			rec.Rollback = rb.build(ctx, text)
+		}
 		// DML 影响行上限（先探测影响行很复杂，故先执行后校验）
-		res, err := run(st.Text)
+		res, err := run(text)
 		if err != nil {
 			rec.Error = err.Error()
 			rec.Status = "执行失败"
@@ -104,8 +127,8 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 			if dmlTx {
 				_ = tx.Rollback()
 			}
-			// 非事务模式遇错即停止整单
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
+			// 非事务模式遇错即停止整单；前面已生效的语句仍要给出回滚语句
+			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: captureRollback(ctx, blc, db)}, nil
 		}
 		if n, err := res.RowsAffected(); err == nil {
 			rec.AffectRows = uint32(n)
@@ -119,7 +142,20 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 			return &enginev1.ExecReply{Ok: false, Error: "提交事务失败: " + err.Error(), Records: recs}, nil
 		}
 	}
-	return &enginev1.ExecReply{Ok: true, Records: recs}, nil
+	return &enginev1.ExecReply{Ok: true, Records: recs, Rollback: captureRollback(ctx, blc, db)}, nil
+}
+
+// captureRollback 执行完成（含提交）后读取 binlog 位点并抓取整单回滚语句。
+// blc 为空表示走的是前镜像方案（回滚语句已按条挂在 records 上）。
+func captureRollback(ctx context.Context, blc *binlogCapture, db *sql.DB) []string {
+	if blc == nil {
+		return nil
+	}
+	end, ok := masterStatus(ctx, db)
+	if !ok {
+		return nil
+	}
+	return blc.rollback(ctx, end)
 }
 
 func orderType(t int32) string {

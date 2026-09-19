@@ -1,0 +1,21 @@
+name: check-bytebase-upstream
+
+# 只检测、不修改：发现上游有新 release 就让 job 失败，作为提醒。
+# 更新由人工触发（engine/scripts/sync-bytebase.sh <ref>），CI 不碰代码。
+on:
+  schedule:
+    # 每天 02:00 UTC（北京时间 10:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 有新版本时该脚本退出码为 10 -> 步骤失败 -> GitHub 通知（已是最新则通过）。
+      - name: 检查 Bytebase 是否有新 release
+        run: cd engine && ./scripts/check-upstream.sh

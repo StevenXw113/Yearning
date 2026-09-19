@@ -128,7 +128,7 @@
                     size="small"
                     :body-style="{ padding: 0 }"
                   >
-                    <a-space direction="vertical">
+                    <div style="width: 100%">
                       <editor
                         ref="orderEditor"
                         readonly
@@ -137,7 +137,7 @@
                       ></editor>
                       <a-table :columns="col" size="small" :data-source="tData">
                       </a-table>
-                    </a-space>
+                    </div>
                   </a-card>
                   <br />
                 </a-spin>
@@ -222,6 +222,8 @@
 
   const tData = ref();
 
+  // 初始禁用：审核人须先点一次「SQL检测」，且没有错误级命中（level===1）才解锁「同意」；
+  // 警告/观察级命中不拦提交。
   const enabled = ref(store.state.order.order.type !== 2);
 
   const spin = ref(false);
@@ -257,7 +259,8 @@
     let counter = 0;
     tData.value = data.payload;
     tData.value.forEach((item: SQLTesting) => {
-      if (item.level !== 0) {
+      // 只有 level===1（错误级规则）才拦；警告(2)/观察(3) 仅供参考，不影响提交。
+      if (item.level === 1) {
         counter++;
       }
     });
@@ -336,3 +339,10 @@
     store.commit('common/ORDER_SET_SQL', sql.data.payload.sqls);
   });
 </script>
+
+<style scoped>
+/* 表头文字不换行：否则「错误等级」这类中文表头会被 auto 布局压成两行 */
+:deep(.ant-table-thead th) {
+  white-space: nowrap;
+}
+</style>

@@ -310,7 +310,8 @@
     let counter = 0;
     tData.value = data.payload;
     tData.value.forEach((item: SQLTesting) => {
-      if (item.level !== 0) {
+      // 只有 level===1（错误级规则）才拦；警告(2)/观察(3) 仅供参考，不影响提交。
+      if (item.level === 1) {
         counter++;
       }
     });

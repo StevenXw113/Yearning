@@ -30,6 +30,14 @@ src/service/chat/*
 .vscode/
 *.iml
 
+# ===== macOS / AppleDouble =====
+.DS_Store
+.AppleDouble
+.LSOverride
+__MACOSX/
+# 外置磁盘 / 网络卷上伴随每个文件产生的 macOS 元数据（._xxx）
+._*
+
 # ===== 日志 =====
 *.log
 

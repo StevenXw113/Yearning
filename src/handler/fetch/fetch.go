@@ -26,6 +26,7 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
+	enginev1 "engine/gen/engine/v1"
 	"errors"
 	"fmt"
 	"github.com/cookieY/yee"
@@ -36,7 +37,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	enginev1 "engine/gen/engine/v1"
 )
 
 func FetchIDC(c yee.Context) (err error) {
@@ -317,7 +317,8 @@ func FetchOrderDetailRollSQL(c yee.Context) (err error) {
 	}
 	var roll []model.CoreRollback
 	var count int64
-	model.DB().Select("`sql`").Model(model.CoreRollback{}).Where("work_id =?", workId).Count(&count).Order("id desc").Find(&roll)
+	// 回滚语句有先后依赖（binlog 方案按事件逆序生成），必须按生成顺序返回与执行
+	model.DB().Select("`sql`").Model(model.CoreRollback{}).Where("work_id =?", workId).Count(&count).Order("id asc").Find(&roll)
 	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"sql": roll, "count": count}))
 }
 

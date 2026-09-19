@@ -34,8 +34,8 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 	}
 	var alts []alter
 	allAlter := true
-	for _, st := range stmts {
-		m := reAlterTable.FindStringSubmatch(st.Text)
+	for _, text := range stmts {
+		m := reAlterTable.FindStringSubmatch(text)
 		if m == nil {
 			allAlter = false
 			break
@@ -45,11 +45,7 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 
 	if !allAlter {
 		// 含非 ALTER TABLE 或跨类型语句：无法安全合并，原样返回。
-		parts := make([]string, 0, len(stmts))
-		for _, st := range stmts {
-			parts = append(parts, st.Text)
-		}
-		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(parts, "; ")}, nil
+		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
 	}
 
 	// 校验是否同一张表。
@@ -62,11 +58,7 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 		}
 	}
 	if !sameTable {
-		parts := make([]string, 0, len(stmts))
-		for _, st := range stmts {
-			parts = append(parts, st.Text)
-		}
-		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(parts, "; ")}, nil
+		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
 	}
 
 	// 同一张表：合并动作子句。

@@ -95,4 +95,7 @@ var en_US = map[int]string{
 	ER_DATABASE_CONNECTION_FAILED:                             "Database connection failed",
 	ERR_FLOW_ORDER_IS_NOT_COMPLETE:                            "The workID %s is still in the \"under review\" status. Please edit this workflow after the corresponding work order has been completed.",
 	ER_LOGIN_TOO_MANY_ATTEMPTS:                                "Too many failed login attempts. Please try again in 15 minutes.",
+	ER_RULE_SET_EMPTY:                                         "Suspicious empty rule set: every rule is at its default value, save rejected (a client that omits fields would silently reset the whole rule set). Pass confirm=true if this is intended.",
+	ER_RULE_HISTORY_NOT_FOUND:                                 "Rule set history entry not found or already cleaned",
+	INFO_RULE_ROLLBACK:                                        "Rule set rolled back",
 }

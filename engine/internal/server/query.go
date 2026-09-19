@@ -22,19 +22,19 @@ func (e *Engine) Query(_ context.Context, req *enginev1.QueryRequest) (*enginev1
 	// 空返回：整体语法失败，报错阻断。
 	if len(stmts) == 0 {
 		if perr := mysqlparse.Check(req.Sql); perr != nil {
-			return &enginev1.QueryReply{Ok: false, Error: "SQL 语法错误: " + perr.Msg}, nil
+			return &enginev1.QueryReply{Ok: false, Error: "SQL 语法错误: " + perr.Error()}, nil
 		}
 		return &enginev1.QueryReply{Ok: true, Records: nil}, nil
 	}
 
 	recs := make([]*enginev1.Record, 0, len(stmts))
-	for _, st := range stmts {
+	for _, text := range stmts {
 		rec := &enginev1.Record{
-			Sql:   st.Text,
-			Level: 3,
+			Sql:   text,
+			Level: 0,
 		}
-		if perr := mysqlparse.Check(st.Text); perr != nil {
-			rec.Error = "SQL 语法错误: " + perr.Msg
+		if perr := mysqlparse.Check(text); perr != nil {
+			rec.Error = "SQL 语法错误: " + perr.Error()
 			rec.Level = 1
 		}
 		// 敏感字段词表逐条附带，Yearning 本地据此收敛字段内容。

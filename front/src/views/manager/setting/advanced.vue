@@ -2,7 +2,7 @@
   <a-row>
     <a-col :span="10">
       <a-divider orientation="left">{{ $t('setting.adv') }}</a-divider>
-      <a-form v-bind="layout">
+      <a-form>
         <a-form-item :label="$t('setting.adv.query.limit')">
           <a-input-number
             v-model:value="config.other.limit"
@@ -52,7 +52,7 @@
     </a-col>
     <a-col :span="11" offset="1">
       <a-divider orientation="left">{{ $t('setting.data.clear') }}</a-divider>
-      <a-form v-bind="layout">
+      <a-form>
         <a-form-item :label="$t('setting.data.clear.order')">
           <a-space>
             <a-range-picker
@@ -101,13 +101,11 @@
 </template>
 
 <script setup lang="ts">
-  import CommonMixins from '@/mixins/common';
   import Btn from './btn.vue';
   import { Settings, deleteOrderRecords } from '@/apis/setting';
   import { inject, ref } from 'vue';
   import dayjs from 'dayjs';
   import { SmileOutlined } from '@ant-design/icons-vue';
-  const { layout } = CommonMixins();
 
   const config = ref(inject('config') as Settings);
 
@@ -159,4 +157,14 @@
   };
 </script>
 
-<style scoped></style>
+<style scoped>
+/* 设置项标签偏长且长短不一：12px 字号 + 行距 10px，标签最小 8.5em 让各行的控件左对齐，
+   更长的标签自动撑开，不会被输入框截断 */
+:deep(.ant-form-item) {
+  margin-bottom: 10px;
+}
+:deep(.ant-form-item .ant-form-item-label) {
+  min-width: 8.5em;
+  font-size: 12px;
+}
+</style>

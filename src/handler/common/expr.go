@@ -50,6 +50,31 @@ func AccordingToAllOrderState(state int) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
+// SortClause 把表头排序选项映射为 ORDER BY 子句。
+// 只认白名单取值，避免请求内容被拼进 SQL；未知值退回默认排序。
+func SortClause(order string) string {
+	switch order {
+	case "date_asc":
+		return "date ASC"
+	case "date_desc":
+		return "(status = 2) DESC, date DESC"
+	case "status":
+		return "`status` ASC, date DESC"
+	default:
+		return "(status = 2) DESC, date DESC"
+	}
+}
+
+// AccordingToSource 按数据源名称过滤（表头数据源筛选）。
+func AccordingToSource(source string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if source == "" {
+			return db
+		}
+		return db.Where("`source` = ?", source)
+	}
+}
+
 func AccordingToAllOrderType(state int) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		switch state {

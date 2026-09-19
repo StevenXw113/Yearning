@@ -28,11 +28,9 @@
         <AuditOutlined />
       </template>
       <a-menu-item key="/server/order/audit/list">
-        <function-outlined />
         <span>{{ $t('menu.order.order') }}</span>
       </a-menu-item>
       <a-menu-item key="/server/query/list">
-        <MonitorOutlined />
         <span>{{ $t('menu.order.query') }}</span>
       </a-menu-item>
     </a-sub-menu>
@@ -89,8 +87,6 @@
     DotChartOutlined,
     HomeOutlined,
     LogoutOutlined,
-    MonitorOutlined,
-    FunctionOutlined,
     AuditOutlined,
     ToolOutlined,
     PaperClipOutlined,

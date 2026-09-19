@@ -33,6 +33,8 @@ export interface OrderExpr {
   picker?: RangeValue | string[];
   username: string;
   work_id?: string;
+  order?: string;
+  source?: string;
 }
 
 export interface OrderParams {

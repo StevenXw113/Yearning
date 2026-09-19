@@ -37,6 +37,16 @@
               </a-select-option>
             </a-select>
           </a-form-item>
+          <a-form-item :label="$t('common.lang')">
+            <a-select v-model:value="formItem.lang" @change="changeLang">
+              <a-select-option key="zh_CN" value="zh_CN">{{
+                $t('common.lang.cn')
+              }}</a-select-option>
+              <a-select-option key="en_US" value="en_US">{{
+                $t('common.lang.us')
+              }}</a-select-option>
+            </a-select>
+          </a-form-item>
           <a-form-item :label="$t('user.password.new')" name="password">
             <a-input-password
               v-model:value="formItem.password"
@@ -90,6 +100,11 @@
     location.reload();
   };
 
+  const changeLang = (e: any) => {
+    localStorage.setItem('lang', e);
+    location.reload();
+  };
+
   const { t } = useI18n();
 
   const validPassword = async (rule: RuleObject, value: string) => {
@@ -120,8 +135,9 @@
     localStorage.getItem('theme') === null
       ? (formItem.value.theme = 'dark')
       : (formItem.value.theme = localStorage.getItem('theme') as string);
-    localStorage.getItem('lang') === null
-      ? (formItem.value.lang = 'zh_CN')
-      : (formItem.value.lang = localStorage.getItem('lang') as string);
+    formItem.value.lang =
+      localStorage.getItem('lang') ||
+      sessionStorage.getItem('lang') ||
+      'zh_CN';
   });
 </script>

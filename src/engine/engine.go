@@ -53,6 +53,9 @@ type AuditRole struct {
 	AllowCreatePartition           bool
 	AllowSpecialType               bool // 是否允许特殊类型
 	PRIRollBack                    bool
+	// RuleLevel 规则级别：key 为上面的字段名，value 为 error/warn/observe。
+	// 缺省 error（命中即拦截）；warn 提示不拦、observe 只记录不拦，用于新规则灰度上线。
+	RuleLevel map[string]string `json:"RuleLevel"`
 }
 
 type Record struct {
@@ -66,6 +69,7 @@ type Record struct {
 	Schema           string   `json:"schema"`
 	IsOSC            bool     `json:"is_osc"`
 	InsulateWordList []string `json:"insulate_word_list"`
+	RollBack         string   `json:"rollback"`
 }
 
 type CheckArgs struct {

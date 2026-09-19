@@ -88,6 +88,12 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 	if err := model.DB().Model(model.CoreQueryOrder{}).Where("username =? and status =?", user.Username, 2).First(&t).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		var principal model.CoreDataSource
 		model.DB().Model(model.CoreDataSource{}).Where("source_id = ?", d.SourceId).First(&principal)
+		// 数据源未配置查询审批人时兜底给 admin：assigned 为空会让审批页按 assigned 过滤时
+		// 谁都匹配不到，工单变成无人可见、无法审批的孤儿单。
+		assigned := principal.Principal
+		if assigned == "" {
+			assigned = "admin"
+		}
 		model.DB().Create(&model.CoreQueryOrder{
 			WorkId:   workID,
 			Username: user.Username,
@@ -96,7 +102,7 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 			Export:   d.Export,
 			Status:   1,
 			SourceId: d.SourceId,
-			Assigned: principal.Principal,
+			Assigned: assigned,
 			RealName: user.RealName,
 		})
 		pusher.NewMessagePusher(workID).Query().QueryBuild(pusher.SummitStatus).Push()

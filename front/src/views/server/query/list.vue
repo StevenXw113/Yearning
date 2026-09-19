@@ -151,6 +151,9 @@
           },
         },
         protocols: [store.state.user.account.token],
+        // 挂载时那次查询可能早于 socket 打开而被丢弃，连接成功后再补发一次，
+        // 否则页面会一直停在「暂无数据」。
+        onConnected: () => tbl.value?.manual(),
         onMessage: (e, event) => {
           let payload = JSON.parse(event.data);
           tblRef.data = payload.payload.data;

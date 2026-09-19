@@ -69,7 +69,6 @@
       {
         title: t('common.table.sql'),
         dataIndex: 'sql',
-        ellipsis: true,
       },
       {
         title: t('common.table.result'),

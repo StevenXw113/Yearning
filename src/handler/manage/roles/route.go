@@ -30,6 +30,12 @@ func SuperCustomRoles(c yee.Context) (err error) {
 		return SuperRoleDelete(c)
 	case "profile":
 		return SuperRoleProfile(c)
+	case "history":
+		return SuperRoleHistory(c)
+	case "rollback":
+		return SuperRoleRollback(c)
+	case "upstream":
+		return SuperUpstreamCheck(c)
 	}
 	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 

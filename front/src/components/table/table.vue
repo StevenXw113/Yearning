@@ -54,7 +54,12 @@
     !props.isAll ? (loading.value = false) : null;
   });
 
-  const currentPage = (page: { current: number; pageSize: number }) => {
+  // a-table 的 change 事件同时带来分页、表头筛选与排序，一并交给业务侧处理（服务端筛选/排序）
+  const currentPage = (
+    page: { current: number; pageSize: number },
+    filters?: any,
+    sorter?: any
+  ) => {
     pSize.value = page.pageSize;
     pNumber.value = page.current;
     props.tblRef.fn !== undefined
@@ -62,6 +67,8 @@
           expr: props.tblRef.expr,
           current: page.current,
           pageSize: page.pageSize,
+          filters,
+          sorter,
         })
       : null;
     !props.isAll && !props.tblRef.isloop ? (loading.value = true) : null;

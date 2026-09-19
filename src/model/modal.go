@@ -210,6 +210,18 @@ type CoreRules struct {
 	AuditRole JSON   `gorm:"type:json;" json:"audit_role"`
 }
 
+// CoreRuleSetHistory 记录审核规则集的每次变更，用于审计与一键回滚。
+// RuleId 语义：0 = 全局规则（core_global_configurations.audit_role），>0 = core_rules.id。
+type CoreRuleSetHistory struct {
+	ID        uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
+	RuleId    uint   `gorm:"type:int(11);not null;index:rule_idx" json:"rule_id"`
+	Before    JSON   `gorm:"type:json;" json:"before"`
+	After     JSON   `gorm:"type:json;" json:"after"`
+	Operator  string `gorm:"type:varchar(50);not null" json:"operator"`
+	Note      string `gorm:"type:varchar(255)" json:"note"`
+	CreatedAt string `gorm:"type:varchar(30);not null" json:"created_at"`
+}
+
 type CoreTotalTickets struct {
 	ID         uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
 	Date       string `gorm:"type:varchar(50);not null;index:date_idx" json:"date"`

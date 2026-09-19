@@ -63,4 +63,20 @@ export default {
   custom_list: 'Custom rule list',
   custom: 'Custom rule',
   ruleSearchTips: 'Please enter a rule description to search',
+  upstreamCheck: 'Check upstream',
+  upstreamLatest: 'Already up to date ({version})',
+  upstreamNew: 'New upstream version',
+  upstreamNewDesc:
+    'Current {current}, upstream latest {latest}. Updating requires re-syncing the source and rebuilding the engine; this page will not do it automatically.',
+  ruleHistory: 'Change history',
+  ruleOperator: 'Operator',
+  ruleCreatedAt: 'Time',
+  ruleLevelTitle: 'Level',
+  ruleLevelError: 'Block (error)',
+  ruleLevelWarn: 'Notify (warning)',
+  ruleLevelObserve: 'Observe (no block)',
+  ruleRollback: 'Rollback',
+  ruleRollbackConfirm:
+    'Roll back to this version? Current rules will be overwritten (the rollback itself is recorded too).',
+  ruleRollbackDone: 'Rolled back',
 };

@@ -1,5 +1,6 @@
 <template>
-  <a-form ref="formRef" :model="registerForm" :rules="rules" v-bind="layout">
+  <!-- 标签与输入框同排（antd 默认横向布局）；不给标签设固定宽度，长标签自动撑开，不会被输入框截断 -->
+  <a-form ref="formRef" :model="registerForm" :rules="rules">
     <a-form-item :label="$t('user.form.user')" name="username" has-feedback>
       <a-input v-model:value="registerForm.username"></a-input>
     </a-form-item>
@@ -54,11 +55,6 @@
   const props = withDefaults(defineProps<propsAttr>(), {
     isManager: false,
   });
-
-  const layout = {
-    labelCol: { span: 6 },
-    wrapperCol: { span: 18 },
-  };
 
   const registerForm: UnwrapRef<RegisterForm> = reactive({
     username: '',
@@ -134,3 +130,14 @@
     resetFields,
   });
 </script>
+
+<style scoped>
+/* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
+   标签宽度交给内容，长标签自动撑开，不会被输入框截断 */
+:deep(.ant-form-item) {
+  margin-bottom: 10px;
+}
+:deep(.ant-form-item .ant-form-item-label) {
+  font-size: 12px;
+}
+</style>

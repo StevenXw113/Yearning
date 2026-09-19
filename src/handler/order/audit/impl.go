@@ -55,6 +55,8 @@ func ExecuteOrder(u *Confirm, user string) common.Resp {
 		logger.DefaultLogger.Error(err)
 		return common.ERR_COMMON_MESSAGE(err)
 	}
+	// 执行成功后终结工单状态（1=成功），否则工单会永远停留在"审核中"
+	model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", u.WorkId).Updates(&model.CoreSqlOrder{Status: 1})
 	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE))
 }
 
@@ -98,9 +100,10 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 			Kind:     calls.DataSourceKind(source.DBType),
 		},
 	})
-	if rep == nil || !rep.Ok {
+	if rep == nil {
 		return calls.CombineReplyErr(rep, err)
 	}
+	// 先落执行明细与回滚语句：即使工单中途失败（部分语句已生效），也必须留下可回滚的依据。
 	// 将引擎返回的逐条执行明细回写到 core_sql_records，供工单详情展示。
 	for _, r := range rep.Records {
 		rec := engine.RecordFromProto(r)
@@ -112,6 +115,19 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 			Time:      time.Now().Format("2006-01-02 15:04"),
 			Error:     rec.Error,
 		})
+		// 执行成功的语句若带回了回滚语句，落到 core_rollbacks 供详情页「回滚语句」面板展示/重提。
+		if rec.Status == "已执行" && rec.RollBack != "" {
+			model.DB().Create(&model.CoreRollback{WorkId: order.WorkId, SQL: rec.RollBack})
+		}
+	}
+	// binlog 抓取到的整单回滚语句（覆盖多表/无主键/全表等全部场景），按语句逐条落库
+	for _, s := range rep.Rollback {
+		if s != "" {
+			model.DB().Create(&model.CoreRollback{WorkId: order.WorkId, SQL: s})
+		}
+	}
+	if !rep.Ok {
+		return calls.CombineReplyErr(rep, err)
 	}
 	model.DB().Create(&model.CoreWorkflowDetail{
 		WorkId:   order.WorkId,

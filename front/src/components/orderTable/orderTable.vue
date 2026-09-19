@@ -11,7 +11,12 @@
         "
       >
       </order-table-search>
-      <c-table ref="tbl" :tbl-ref="tblRef" :size="props.size">
+      <c-table
+        ref="tbl"
+        :tbl-ref="tblRef"
+        :size="props.size"
+        :scroll="{ x: 'max-content' }"
+      >
         <template #bodyCell="{ column, text, record }">
           <template v-if="column.dataIndex === 'type'">
             <span>{{ text === 0 ? 'DDL' : 'DML' }}</span>
@@ -69,6 +74,7 @@
   import { checkSchema } from '@/lib';
   import Profile from '@/components/orderProfile/index.vue';
   import Delay from './delay.vue';
+  import { ISource, querySourceList } from '@/apis/source';
 
   interface propsAttr {
     size?: string;
@@ -105,11 +111,14 @@
       {
         title: t('common.table.work_id'),
         dataIndex: 'work_id',
-        width: 200,
+        width: 300,
+        fixed: 'left', // 列多需要横向滚动，编号固定在左侧便于对照
       },
       {
         title: t('common.table.source'),
         dataIndex: 'source',
+        filters: [] as any[], // 选项来自 querySourceList('all')，见 onMounted
+        filterMultiple: false,
       },
       {
         title: t('common.table.remark'),
@@ -119,10 +128,16 @@
       {
         title: t('common.table.type'),
         dataIndex: 'type',
+        filters: [
+          { text: 'DDL', value: 0 },
+          { text: 'DML', value: 1 },
+        ],
+        filterMultiple: false,
       },
       {
         title: t('common.table.post.time'),
         dataIndex: 'date',
+        sorter: true, // 服务端排序，见 applySortFilter
       },
       {
         title: t('common.table.post.user'),
@@ -143,11 +158,21 @@
       {
         title: t('common.table.state'),
         dataIndex: 'status',
+        width: 110,
+        filters: [
+          { text: t('order.state.audit'), value: OrderState.AUDIT },
+          { text: t('order.state.success'), value: OrderState.SUCCESS },
+          { text: t('order.state.reject'), value: OrderState.REJECT },
+          { text: t('order.state.process'), value: OrderState.PROCESS },
+          { text: t('order.undo'), value: OrderState.Undo },
+        ],
+        filterMultiple: false,
       },
       {
         title: t('common.action'),
         dataIndex: 'action',
-        width: 200,
+        width: 160,
+        fixed: 'right', // 详情/延迟操作固定在右侧，横向滚动时始终可点
       },
     ],
     data: [] as OrderTableData[],
@@ -174,10 +199,26 @@
         },
       }
     ),
-    fn: async (expr: OrderParams) => {
-      tblRef.websocket?.send(JSON.stringify(expr));
+    fn: async (params: any) => {
+      params.expr = applySortFilter(tblRef.expr, params.filters, params.sorter);
+      tblRef.expr = params.expr;
+      tblRef.websocket?.send(JSON.stringify(params));
     },
   });
+
+  // 表头排序/筛选翻译成列表查询已有的 expr 字段（order / type / status），后端按白名单处理
+  const applySortFilter = (expr: any, filters: any, sorter: any) => {
+    const next = { ...(expr || {}) };
+    if (filters) {
+      if ('type' in filters) next.type = filters.type ? filters.type[0] : 2; // null = 取消筛选
+      if ('status' in filters) next.status = filters.status ? filters.status[0] : 8;
+      if ('source' in filters) next.source = filters.source ? filters.source[0] : '';
+    }
+    if (sorter?.field === 'date') {
+      next.order = sorter.order === 'ascend' ? 'date_asc' : 'date_desc';
+    }
+    return next;
+  };
 
   const profile = (record: OrderTableData) => {
     store.commit('order/ORDER_STORE', record);
@@ -193,7 +234,37 @@
     tbl.value.manual();
   });
 
-  onMounted(() => {
+  onMounted(async () => {
     isAudit.value = route.params.tp as string;
+    // 数据源筛选项：tp=all 返回全部数据源
+    const { data } = await querySourceList('all');
+    const col = (tblRef.col as any[]).find((c) => c.dataIndex === 'source');
+    if (col) {
+      col.filters = (data.payload as ISource[]).map((s) => ({
+        text: s.source,
+        value: s.source,
+      }));
+    }
   });
 </script>
+
+<style scoped>
+/* 列多且都是短内容，换行会让行高翻倍；统一不换行，超出宽度时表格内部横向滚动 */
+:deep(.ant-table-thead th),
+:deep(.ant-table-tbody td) {
+  white-space: nowrap;
+}
+
+/* 排序/筛选图标紧贴标题：标题默认 flex:1 会撑满整列，把图标顶到列的最右边 */
+:deep(.ant-table-column-title) {
+  flex: none;
+}
+:deep(.ant-table-column-sorters),
+:deep(.ant-table-filter-column) {
+  justify-content: flex-start;
+}
+:deep(.ant-table-column-sorter),
+:deep(.ant-table-filter-trigger) {
+  margin-left: 4px;
+}
+</style>

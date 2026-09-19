@@ -84,6 +84,9 @@ message AuditRole {
   bool allow_create_partition = 50;
   bool allow_special_type = 51;
   bool pri_roll_back = 52;
+  // 规则级别：key 为规则集里的字段名（与前端规则开关同名），value 取 error/warn/observe。
+  // 缺省 error（命中即拦截）；warn 提示不拦、observe 只记录不拦，用于新规则灰度上线。
+  map<string, string> rule_levels = 53;
 }
 
 // 工单（用于 Exec），字段与 Yearning CoreSqlOrder 对齐。
@@ -122,6 +125,7 @@ message Record {
   string schema = 8;
   bool is_osc = 9;
   repeated string insulate_word_list = 10;
+  string rollback = 11; // 该语句的回滚语句（执行前抓取前镜像生成，可能为空）
 }
 
 message CheckRequest {
@@ -159,6 +163,7 @@ message ExecReply {
   bool ok = 1;
   string error = 2;
   repeated Record records = 3; // 逐条执行明细（影响行/错误/回滚）。
+  repeated string rollback = 4; // 整单回滚语句（binlog 抓取，按事件逆序，每条语句一个元素）
 }
 
 message QueryRequest {

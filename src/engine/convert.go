@@ -62,6 +62,7 @@ func AuditRoleToProto(r *AuditRole) *enginev1.AuditRole {
 		AllowCreatePartition:           r.AllowCreatePartition,
 		AllowSpecialType:               r.AllowSpecialType,
 		PriRollBack:                    r.PRIRollBack,
+		RuleLevels:                     r.RuleLevel,
 	}
 }
 
@@ -81,5 +82,6 @@ func RecordFromProto(p *enginev1.Record) Record {
 		Schema:           p.Schema,
 		IsOSC:            p.IsOsc,
 		InsulateWordList: p.InsulateWordList,
+		RollBack:         p.Rollback,
 	}
 }

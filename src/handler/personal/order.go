@@ -45,13 +45,14 @@ func PersonalFetchMyOrder(c yee.Context) (err error) {
 			if !ok {
 				break
 			}
-			u.Paging().OrderBy("(status = 2) DESC, date DESC").Select(common.QueryField).Query(
+			u.Paging().OrderBy(common.SortClause(u.Expr.Order)).Select(common.QueryField).Query(
 				common.AccordingToAllOrderType(u.Expr.Type),
 				common.AccordingToAllOrderState(u.Expr.Status),
 				common.AccordingToUsernameEqual(user),
 				common.AccordingToDate(u.Expr.Picker),
 				common.AccordingToText(u.Expr.Text),
 				common.AccordingToWorkId(u.Expr.WorkId),
+				common.AccordingToSource(u.Expr.Source),
 			)
 			if err = websocket.Message.Send(ws, factory.ToJson(u.ToMessage())); err != nil {
 				c.Logger().Error(err)

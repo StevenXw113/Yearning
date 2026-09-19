@@ -17,9 +17,11 @@
 
   onMounted(async () => {
     const { data } = await systemLang();
-    locale(data.payload);
-    sessionStorage.setItem('lang', data.payload);
-    i18n.global.locale.value = data.payload;
-    lang.value = data.payload === 'en_US' ? enUS : zhCN;
+    // 个人信息页可切换语言，本地选择优先于服务端配置（conf.toml 的 Lang 仅为默认值）
+    const current = localStorage.getItem('lang') || data.payload;
+    locale(current);
+    sessionStorage.setItem('lang', current);
+    i18n.global.locale.value = current;
+    lang.value = current === 'en_US' ? enUS : zhCN;
   });
 </script>
