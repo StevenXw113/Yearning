@@ -1,0 +1,349 @@
+//nolint:revive
+package common
+
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"math/big"
+	"net/url"
+	"reflect"
+	"regexp"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+)
+
+const (
+	// MaxSheetSize is the maximum size (2M) of a sheet for displaying.
+	MaxSheetSize = 2 * 1024 * 1024
+	// MaxSheetCheckSize is the maximum size of a sheet for checking changes.
+	MaxSheetCheckSize = 2 * 1024 * 1024
+	// The maximum number of bytes for sql results in response body.
+	// 100 MB.
+	DefaultMaximumSQLResultSize = int64(100 * 1024 * 1024)
+	// MaximumCommands is the maximum number of commands that can be executed in a single transaction.
+	MaximumCommands = 200
+	// MaximumAdvicePerStatus is the maximum number of advice that can be returned per status.
+	MaximumAdvicePerStatus = 50
+	MaximumLintExplainSize = 10
+)
+
+var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+// ProtojsonMarshaler is a global protojson marshaler with DiscardUnknown set to true.
+//
+//nolint:forbidigo
+var ProtojsonUnmarshaler = protojson.UnmarshalOptions{DiscardUnknown: true}
+
+// RandomString returns a random string with length n.
+func RandomString(n int) (string, error) {
+	var sb strings.Builder
+	sb.Grow(n)
+	for i := 0; i < n; i++ {
+		// The reason for using crypto/rand instead of math/rand is that
+		// the former relies on hardware to generate random numbers and
+		// thus has a stronger source of random numbers.
+		randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			return "", err
+		}
+		if _, err := sb.WriteRune(letters[randNum.Uint64()]); err != nil {
+			return "", err
+		}
+	}
+	return sb.String(), nil
+}
+
+// HasPrefixes returns true if the string s has any of the given prefixes.
+func HasPrefixes(src string, prefixes ...string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(src, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// GetPostgresSocketDir returns the postgres socket directory of Bytebase.
+func GetPostgresSocketDir() string {
+	return "/tmp"
+}
+
+// TruncateString truncates the string to have a maximum length of `limit` characters.
+func TruncateString(str string, limit int) (string, bool) {
+	chars := 0
+	// The string may contain unicode characters, so we iterate here.
+	for i := range str {
+		if chars >= limit {
+			return str[:i], true
+		}
+		chars++
+	}
+	return str, false
+}
+
+// TruncateStringWithDescription tries to truncate the string and append "... (view details in Bytebase)" if truncated.
+func TruncateStringWithDescription(str string) string {
+	const limit = 450
+	if truncatedStr, truncated := TruncateString(str, limit); truncated {
+		return fmt.Sprintf("%s... (view details in Bytebase)", truncatedStr)
+	}
+	return str
+}
+
+// Obfuscate obfuscates a string with a seed string.
+func Obfuscate(src, seed string) string {
+	srcBytes, seedBytes := []byte(src), []byte(seed)
+	obfuscated := make([]byte, len(srcBytes))
+	for i, b := range srcBytes {
+		obfuscated[i] = b ^ seedBytes[i%len(seedBytes)]
+	}
+	return base64.StdEncoding.EncodeToString(obfuscated)
+}
+
+// Unobfuscate unobfuscates a string with a seed string.
+func Unobfuscate(dst, seed string) (string, error) {
+	obfuscated, err := base64.StdEncoding.DecodeString(dst)
+	if err != nil {
+		return "", err
+	}
+	unobfuscated, seedBytes := make([]byte, len(obfuscated)), []byte(seed)
+	for i, b := range obfuscated {
+		unobfuscated[i] = b ^ seedBytes[i%len(seedBytes)]
+	}
+	return string(unobfuscated), nil
+}
+
+// NormalizeExternalURL will format the external url.
+func NormalizeExternalURL(externalURL string) (string, error) {
+	r := strings.TrimSpace(externalURL)
+	r = strings.TrimSuffix(r, "/")
+	u, err := url.Parse(r)
+	if err != nil {
+		return "", errors.Wrapf(err, "%s malformed", externalURL)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", errors.Errorf("%s must start with http:// or https://", externalURL)
+	}
+	if u.Host == "" {
+		return "", errors.Errorf("%s must name a host", externalURL)
+	}
+	if u.User != nil {
+		return "", errors.Errorf("%s must not carry userinfo", externalURL)
+	}
+	if u.RawQuery != "" || u.ForceQuery {
+		return "", errors.Errorf("%s must not carry a query string", externalURL)
+	}
+	if u.Fragment != "" || u.RawFragment != "" {
+		return "", errors.Errorf("%s must not carry a fragment", externalURL)
+	}
+
+	host := strings.ToLower(u.Host)
+	port := u.Port()
+	if port != "" {
+		// The external URL is used as the redirectURL in the get token process of OAuth, and the
+		// RedirectURL needs to be consistent with the RedirectURL in the get code process.
+		// The frontend gets it through window.location.origin in the get code
+		// process, so port 80/443 need to be cropped.
+		if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+			host = strings.ToLower(u.Hostname())
+			if strings.Contains(host, ":") {
+				host = "[" + host + "]"
+			}
+		}
+	}
+	return scheme + "://" + host + strings.TrimSuffix(u.EscapedPath(), "/"), nil
+}
+
+// emailRegex is based on the WHATWG HTML spec for valid email addresses.
+// https://html.spec.whatwg.org/multipage/input.html#valid-e-mail-address
+// Modified to only allow lowercase letters since Bytebase requires lowercase emails.
+var emailRegex = regexp.MustCompile(`^[a-z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$`)
+
+// ValidateEmail validates the email address using WHATWG HTML spec.
+// Only lowercase ASCII letters, digits, and standard email symbols are allowed.
+func ValidateEmail(email string) error {
+	if !emailRegex.MatchString(email) {
+		return errors.New("invalid email address")
+	}
+	return nil
+}
+
+// IsValidEmail returns true if the email is valid per WHATWG HTML spec.
+func IsValidEmail(email string) bool {
+	return emailRegex.MatchString(email)
+}
+
+// SanitizeUTF8String returns a copy of the string s with each run of invalid or unprintable UTF-8 byte sequences
+// replaced by its hexadecimal representation string.
+func SanitizeUTF8String(s string) string {
+	var b strings.Builder
+
+	for i, c := range s {
+		if c != utf8.RuneError {
+			continue
+		}
+
+		_, wid := utf8.DecodeRuneInString(s[i:])
+		if wid == 1 {
+			b.Grow(len(s))
+			_, _ = b.WriteString(s[:i])
+			s = s[i:]
+			break
+		}
+	}
+
+	// Fast path for unchanged input
+	if b.Cap() == 0 { // didn't call b.Grow above
+		return s
+	}
+
+	for i := 0; i < len(s); {
+		c := s[i]
+		// U+0000-U+0019 are control characters
+		if 0x20 <= c && c < utf8.RuneSelf {
+			i++
+			_ = b.WriteByte(c)
+			continue
+		}
+		_, wid := utf8.DecodeRuneInString(s[i:])
+		if wid == 1 {
+			i++
+			_, _ = fmt.Fprintf(&b, "\\x%02x", c)
+			continue
+		}
+		_, _ = b.WriteString(s[i : i+wid])
+		i += wid
+	}
+
+	return b.String()
+}
+
+func FormatMaximumSQLResultSizeMessage(limit int64) string {
+	return fmt.Sprintf("Output of query exceeds max allowed output size of %dMB", limit/1024/1024)
+}
+
+func IsNil(val any) bool {
+	if val == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(val)
+	k := v.Kind()
+	switch k {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
+		reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return v.IsNil()
+	default:
+		// Other types cannot be nil
+	}
+
+	return false
+}
+
+// Uniq returns a new slice with duplicate elements removed, preserving order.
+func Uniq[T comparable](array []T) []T {
+	res := make([]T, 0, len(array))
+	seen := make(map[T]struct{}, len(array))
+
+	for _, e := range array {
+		if _, ok := seen[e]; ok {
+			continue
+		}
+		seen[e] = struct{}{}
+		res = append(res, e)
+	}
+
+	return res
+}
+
+// SanitizeUTF8Message replaces invalid UTF-8 byte sequences in every
+// populated string field of m, recursing into nested messages, repeated
+// fields, and maps (both keys and values). proto3 requires string fields to
+// hold valid UTF-8, so a single raw byte sequence smuggled in by an external
+// system (e.g. a database driver passing through unconverted bytes) makes
+// proto.Marshal fail for the entire message. Callers that assemble metadata
+// from such sources sanitize the finished message once here instead of
+// chasing every scan site.
+func SanitizeUTF8Message(m proto.Message) {
+	if m == nil {
+		return
+	}
+	sanitizeUTF8Value(m.ProtoReflect())
+}
+
+func sanitizeUTF8Value(m protoreflect.Message) {
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		switch {
+		case fd.IsMap():
+			sanitizeUTF8Map(fd, v.Map())
+		case fd.IsList():
+			list := v.List()
+			switch fd.Kind() {
+			case protoreflect.StringKind:
+				for i := 0; i < list.Len(); i++ {
+					s := list.Get(i).String()
+					if !utf8.ValidString(s) {
+						list.Set(i, protoreflect.ValueOfString(SanitizeUTF8String(s)))
+					}
+				}
+			case protoreflect.MessageKind, protoreflect.GroupKind:
+				for i := 0; i < list.Len(); i++ {
+					sanitizeUTF8Value(list.Get(i).Message())
+				}
+			default:
+			}
+		case fd.Kind() == protoreflect.StringKind:
+			if s := v.String(); !utf8.ValidString(s) {
+				m.Set(fd, protoreflect.ValueOfString(SanitizeUTF8String(s)))
+			}
+		case fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind:
+			sanitizeUTF8Value(v.Message())
+		default:
+		}
+		return true
+	})
+}
+
+func sanitizeUTF8Map(fd protoreflect.FieldDescriptor, mp protoreflect.Map) {
+	valueKind := fd.MapValue().Kind()
+	keyIsString := fd.MapKey().Kind() == protoreflect.StringKind
+
+	type rekey struct {
+		oldKey protoreflect.MapKey
+		newKey protoreflect.MapKey
+		value  protoreflect.Value
+	}
+	var rekeys []rekey
+	mp.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
+		switch valueKind {
+		case protoreflect.StringKind:
+			if s := v.String(); !utf8.ValidString(s) {
+				mp.Set(k, protoreflect.ValueOfString(SanitizeUTF8String(s)))
+			}
+		case protoreflect.MessageKind, protoreflect.GroupKind:
+			sanitizeUTF8Value(v.Message())
+		default:
+		}
+		if keyIsString {
+			if s := k.String(); !utf8.ValidString(s) {
+				rekeys = append(rekeys, rekey{
+					oldKey: k,
+					newKey: protoreflect.ValueOfString(SanitizeUTF8String(s)).MapKey(),
+					value:  mp.Get(k),
+				})
+			}
+		}
+		return true
+	})
+	for _, r := range rekeys {
+		mp.Clear(r.oldKey)
+		mp.Set(r.newKey, r.value)
+	}
+}

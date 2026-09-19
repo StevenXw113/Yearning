@@ -1,0 +1,27 @@
+- statement: CREATE TABLE t(a int);
+- statement: |-
+    CREATE EVENT daily_backup
+    ON SCHEDULE
+      EVERY 1 DAY
+    STARTS CURRENT_TIMESTAMP
+    DO
+      INSERT INTO backup_table (backup_date, data)
+      SELECT NOW(), data
+      FROM main_table;
+  want:
+    - status: 2
+      code: 1501
+      title: SYSTEM_EVENT_DISALLOW_CREATE
+      content: |-
+        Event is forbidden, but "CREATE EVENT daily_backup
+        ON SCHEDULE
+          EVERY 1 DAY
+        STARTS CURRENT_TIMESTAMP
+        DO
+          INSERT INTO backup_table (backup_date, data)
+          SELECT NOW(), data
+          FROM main_table;" creates
+      startposition:
+        line: 1
+        column: 0
+      endposition: null

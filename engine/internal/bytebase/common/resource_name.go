@@ -1,0 +1,863 @@
+//nolint:revive
+package common
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"github.com/pkg/errors"
+
+	storepb "engine/internal/bytebase/generated-go/store"
+)
+
+// nolint:revive
+const (
+	WorkspacePrefix            = "workspaces/"
+	ProjectNamePrefix          = "projects/"
+	EnvironmentNamePrefix      = "environments/"
+	InstanceNamePrefix         = "instances/"
+	PolicyNamePrefix           = "policies/"
+	DatabaseIDPrefix           = "databases/"
+	InstanceRolePrefix         = "roles/"
+	UserNamePrefix             = "users/"
+	IdentityProviderNamePrefix = "idps/"
+	SettingNamePrefix          = "settings/"
+	StagePrefix                = "stages/"
+	TaskPrefix                 = "tasks/"
+	TaskRunPrefix              = "taskRuns/"
+	PlanPrefix                 = "plans/"
+	PlanCheckRunPrefix         = "planCheckRuns/"
+	SpecPrefix                 = "specs/"
+	RolePrefix                 = "roles/"
+	WebhookIDPrefix            = "webhooks/"
+	SheetIDPrefix              = "sheets/"
+	SavedQueryIDPrefix         = "savedQueries/"
+	DatabaseGroupNamePrefix    = "databaseGroups/"
+	SchemaNamePrefix           = "schemas/"
+	TableNamePrefix            = "tables/"
+	ChangelogPrefix            = "changelogs/"
+	IssueNamePrefix            = "issues/"
+	IssueCommentNamePrefix     = "issueComments/"
+	PipelineNamePrefix         = "pipelines/"
+	LogNamePrefix              = "logs/"
+	BranchPrefix               = "branches/"
+	DeploymentConfigPrefix     = "deploymentConfigs/"
+	AuditLogPrefix             = "auditLogs/"
+	GroupPrefix                = "groups/"
+	ReviewConfigPrefix         = "reviewConfigs/"
+	ReleaseNamePrefix          = "releases/"
+	FileNamePrefix             = "files/"
+	RevisionNamePrefix         = "revisions/"
+	AccessGrantNamePrefix      = "accessGrants/"
+	QueryHistoryNamePrefix     = "queryHistories/"
+	ServiceAccountNamePrefix   = "serviceAccounts/"
+	WorkloadIdentityNamePrefix = "workloadIdentities/"
+
+	SchemaSuffix       = "/schema"
+	SDLSchemaSuffix    = "/sdlSchema"
+	SchemaStringSuffix = "/schemaString"
+	MetadataSuffix     = "/metadata"
+	CatalogSuffix      = "/catalog"
+
+	UserBindingPrefix             = "user:"
+	GroupBindingPrefix            = "group:"
+	ServiceAccountBindingPrefix   = "serviceAccount:"
+	WorkloadIdentityBindingPrefix = "workloadIdentity:"
+)
+
+// GetProjectID returns the project ID from a resource name.
+func GetProjectID(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetProjectIDDatabaseGroupID returns the project ID and database group ID from a resource name.
+func GetProjectIDDatabaseGroupID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, DatabaseGroupNamePrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// GetProjectIDWebhookID returns the project ID and webhook ID from a resource name.
+func GetProjectIDWebhookID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, WebhookIDPrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// GetProjectIDAccessGrantID returns the project ID and access grant ID from a resource name.
+func GetProjectIDAccessGrantID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, AccessGrantNamePrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// GetProjectIDQueryHistoryID returns the project ID and query history ID from a resource name.
+func GetProjectIDQueryHistoryID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, QueryHistoryNamePrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// FormatAccessGrant returns the resource name for an access grant.
+func FormatAccessGrant(projectID string, id string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProject(projectID), AccessGrantNamePrefix, id)
+}
+
+// TrimSuffixAndGetInstanceDatabaseID trims the suffix from the name and returns the instance ID and database ID.
+func TrimSuffixAndGetInstanceDatabaseID(name string, suffix string) (string, string, error) {
+	trimmed, err := TrimSuffix(name, suffix)
+	if err != nil {
+		return "", "", err
+	}
+	return GetInstanceDatabaseID(trimmed)
+}
+
+// GetEnvironmentID returns the environment ID from a resource name.
+func GetEnvironmentID(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, EnvironmentNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetInstanceResourceName gets the IDs from a workspace- or project-scoped instance resource name.
+func GetInstanceResourceName(name string) (*string, string, error) {
+	if projectID, instanceID, err := GetProjectIDInstanceID(name); err == nil {
+		return &projectID, instanceID, nil
+	}
+	if instanceID, err := GetInstanceID(name); err == nil {
+		return nil, instanceID, nil
+	}
+	return nil, "", errors.Errorf("invalid instance name %q", name)
+}
+
+// GetDatabaseResourceName gets the IDs from a workspace- or project-scoped database resource name.
+func GetDatabaseResourceName(name string) (*string, string, string, error) {
+	if instanceID, databaseID, err := GetInstanceDatabaseID(name); err == nil {
+		return nil, instanceID, databaseID, nil
+	}
+	projectID, instanceID, databaseID, err := GetProjectIDInstanceDatabaseID(name)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return &projectID, instanceID, databaseID, nil
+}
+
+// GetDatabaseResourceNameWithSuffix gets the IDs from a database resource name with the given suffix.
+func GetDatabaseResourceNameWithSuffix(name, suffix string) (*string, string, string, error) {
+	databaseName, err := TrimSuffix(name, suffix)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return GetDatabaseResourceName(databaseName)
+}
+
+// GetDatabaseChangelogResourceName gets the IDs from a workspace- or project-scoped changelog resource name.
+func GetDatabaseChangelogResourceName(name string) (*string, string, string, string, error) {
+	if instanceID, databaseID, changelogID, err := GetInstanceDatabaseChangelogID(name); err == nil {
+		return nil, instanceID, databaseID, changelogID, nil
+	}
+	projectID, instanceID, databaseID, changelogID, err := GetProjectIDInstanceDatabaseChangelogID(name)
+	if err != nil {
+		return nil, "", "", "", err
+	}
+	return &projectID, instanceID, databaseID, changelogID, nil
+}
+
+// GetInstanceID returns the instance ID from a resource name.
+func GetInstanceID(name string) (string, error) {
+	// the instance request should be instances/{instance-id}
+	tokens, err := GetNameParentTokens(name, InstanceNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetInstanceDatabaseID returns the instance ID and database ID from a resource name.
+func GetInstanceDatabaseID(name string) (string, string, error) {
+	// the instance request should be instances/{instance-id}/databases/{database-id}
+	tokens, err := GetNameParentTokens(name, InstanceNamePrefix, DatabaseIDPrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// GetInstanceDatabaseRevisionID returns the instance ID, database ID, and revision ID from a resource name.
+func GetInstanceDatabaseRevisionID(name string) (string, string, string, error) {
+	tokens, err := GetNameParentTokens(name, InstanceNamePrefix, DatabaseIDPrefix, RevisionNamePrefix)
+	if err != nil {
+		return "", "", "", err
+	}
+	return tokens[0], tokens[1], tokens[2], nil
+}
+
+// GetInstanceDatabaseChangelogID returns the instance ID, database ID, and changelog ID from a resource name.
+func GetInstanceDatabaseChangelogID(name string) (string, string, string, error) {
+	// the name should be instances/{instance-id}/databases/{database-id}/changelogs/{changelog-id}
+	tokens, err := GetNameParentTokens(name, InstanceNamePrefix, DatabaseIDPrefix, ChangelogPrefix)
+	if err != nil {
+		return "", "", "", err
+	}
+	return tokens[0], tokens[1], tokens[2], nil
+}
+
+// GetProjectIDInstanceID returns the project ID and instance ID from a project instance resource name.
+func GetProjectIDInstanceID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, InstanceNamePrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// GetProjectIDInstanceDatabaseID returns the project ID, instance ID, and database ID from a project database resource name.
+func GetProjectIDInstanceDatabaseID(name string) (string, string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, InstanceNamePrefix, DatabaseIDPrefix)
+	if err != nil {
+		return "", "", "", err
+	}
+	return tokens[0], tokens[1], tokens[2], nil
+}
+
+// GetProjectIDInstanceDatabaseRevisionID returns the project ID, instance ID, database ID, and revision ID from a project revision resource name.
+func GetProjectIDInstanceDatabaseRevisionID(name string) (string, string, string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, InstanceNamePrefix, DatabaseIDPrefix, RevisionNamePrefix)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return tokens[0], tokens[1], tokens[2], tokens[3], nil
+}
+
+// GetProjectIDInstanceDatabaseChangelogID returns the project ID, instance ID, database ID, and changelog ID from a project changelog resource name.
+func GetProjectIDInstanceDatabaseChangelogID(name string) (string, string, string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, InstanceNamePrefix, DatabaseIDPrefix, ChangelogPrefix)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return tokens[0], tokens[1], tokens[2], tokens[3], nil
+}
+
+// GetUserEmail returns the user email from a resource name.
+func GetUserEmail(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, UserNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetSettingName returns the setting name from a resource name.
+func GetSettingName(name string) (string, error) {
+	token, err := GetNameParentTokens(name, SettingNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return token[0], nil
+}
+
+// GetIdentityProviderID returns the identity provider ID from a resource name.
+func GetIdentityProviderID(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, IdentityProviderNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetProjectIDIssueUID returns the project ID and issue UID from the issue name.
+func GetProjectIDIssueUID(name string) (string, int64, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, IssueNamePrefix)
+	if err != nil {
+		return "", 0, err
+	}
+	issueUID, err := strconv.ParseInt(tokens[1], 10, 64)
+	if err != nil {
+		return "", 0, errors.Errorf("invalid issue ID %q", tokens[1])
+	}
+	return tokens[0], issueUID, nil
+}
+
+// GetProjectIDIssueUIDIssueCommentID returns the project ID, issue UID and issue comment ID from the issue comment name.
+func GetProjectIDIssueUIDIssueCommentID(name string) (string, int64, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, IssueNamePrefix, IssueCommentNamePrefix)
+	if err != nil {
+		return "", 0, "", err
+	}
+	issueUID, err := strconv.ParseInt(tokens[1], 10, 64)
+	if err != nil {
+		return "", 0, "", errors.Errorf("invalid issue ID %q", tokens[1])
+	}
+	return tokens[0], issueUID, tokens[2], nil
+}
+
+// GetProjectIDPlanID returns the project ID and plan ID from a resource name.
+func GetProjectIDPlanID(name string) (string, int64, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, PlanPrefix)
+	if err != nil {
+		return "", 0, err
+	}
+	planID, err := strconv.ParseInt(tokens[1], 10, 64)
+	if err != nil {
+		return "", 0, errors.Errorf("invalid plan ID %q", tokens[1])
+	}
+	return tokens[0], planID, nil
+}
+
+// GetProjectIDPlanIDPlanCheckRunID returns the project ID, plan ID and plan check run ID from a resource name.
+func GetProjectIDPlanIDPlanCheckRunID(name string) (string, int64, int64, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, PlanPrefix, PlanCheckRunPrefix)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	planID, err := strconv.ParseInt(tokens[1], 10, 64)
+	if err != nil {
+		return "", 0, 0, errors.Errorf("invalid plan ID %q", tokens[1])
+	}
+	planCheckRunID, err := strconv.ParseInt(tokens[2], 10, 64)
+	if err != nil {
+		return "", 0, 0, errors.Errorf("invalid plan check run ID %q", tokens[2])
+	}
+	return tokens[0], planID, planCheckRunID, nil
+}
+
+// GetProjectIDPlanIDFromPlanCheckRun returns the project ID and plan ID from a plan check run singleton resource name.
+// Format: projects/{project}/plans/{plan}/planCheckRun
+func GetProjectIDPlanIDFromPlanCheckRun(name string) (string, int64, error) {
+	// Remove the trailing "/planCheckRun" suffix
+	if !strings.HasSuffix(name, "/planCheckRun") {
+		return "", 0, errors.Errorf("invalid plan check run name %q, expected suffix /planCheckRun", name)
+	}
+	planName := strings.TrimSuffix(name, "/planCheckRun")
+	projectID, planID, err := GetProjectIDPlanID(planName)
+	if err != nil {
+		return "", 0, err
+	}
+	return projectID, planID, nil
+}
+
+// GetProjectIDPlanIDFromRolloutName returns the project ID and plan ID from a resource name.
+func GetProjectIDPlanIDFromRolloutName(name string) (string, int64, error) {
+	if !strings.HasSuffix(name, "/rollout") {
+		return "", 0, errors.Errorf("invalid rollout name %q, expected suffix /rollout", name)
+	}
+	planName := strings.TrimSuffix(name, "/rollout")
+	return GetProjectIDPlanID(planName)
+}
+
+// GetProjectIDPlanIDMaybeStageID returns the project ID, plan ID, and maybe stage ID from a resource name.
+func GetProjectIDPlanIDMaybeStageID(name string) (string, int64, *string, error) {
+	parts := strings.Split(name, "/rollout")
+	if len(parts) != 2 {
+		return "", 0, nil, errors.Errorf("invalid rollout stage name %q", name)
+	}
+
+	projectID, planID, err := GetProjectIDPlanID(parts[0])
+	if err != nil {
+		return "", 0, nil, err
+	}
+
+	// suffix should be /stages/{stage}
+	suffixParts := strings.Split(strings.TrimPrefix(parts[1], "/"), "/")
+	if len(suffixParts) != 2 || suffixParts[0]+"/" != StagePrefix {
+		return "", 0, nil, errors.Errorf("invalid stage suffix %q", parts[1])
+	}
+
+	var maybeStageID *string
+	if suffixParts[1] != "-" {
+		maybeStageID = &suffixParts[1]
+	}
+	return projectID, planID, maybeStageID, nil
+}
+
+// GetProjectIDPlanIDStageIDMaybeTaskID returns the project ID, plan ID, and maybe stage ID and maybe task ID from a resource name.
+func GetProjectIDPlanIDStageIDMaybeTaskID(name string) (string, int64, string, *int64, error) {
+	parts := strings.Split(name, "/rollout")
+	if len(parts) != 2 {
+		return "", 0, "", nil, errors.Errorf("invalid rollout task name %q", name)
+	}
+
+	projectID, planID, err := GetProjectIDPlanID(parts[0])
+	if err != nil {
+		return "", 0, "", nil, err
+	}
+
+	// suffix should be /stages/{stage}/tasks/{task}
+	suffixParts := strings.Split(strings.TrimPrefix(parts[1], "/"), "/")
+	if len(suffixParts) != 4 || suffixParts[0]+"/" != StagePrefix || suffixParts[2]+"/" != TaskPrefix {
+		return "", 0, "", nil, errors.Errorf("invalid task suffix %q", parts[1])
+	}
+
+	stageID := suffixParts[1]
+	var maybeTaskID *int64
+	if suffixParts[3] != "-" {
+		taskID, err := strconv.ParseInt(suffixParts[3], 10, 64)
+		if err != nil {
+			return "", 0, "", nil, errors.Errorf("invalid task ID %q", suffixParts[3])
+		}
+		maybeTaskID = &taskID
+	}
+	return projectID, planID, stageID, maybeTaskID, nil
+}
+
+// GetProjectIDPlanIDMaybeStageIDMaybeTaskID returns the project ID, plan ID, and maybe stage ID and maybe task ID from a resource name.
+func GetProjectIDPlanIDMaybeStageIDMaybeTaskID(name string) (string, int64, *string, *int64, error) {
+	parts := strings.Split(name, "/rollout")
+	if len(parts) != 2 {
+		return "", 0, nil, nil, errors.Errorf("invalid rollout task name %q", name)
+	}
+
+	projectID, planID, err := GetProjectIDPlanID(parts[0])
+	if err != nil {
+		return "", 0, nil, nil, err
+	}
+
+	// suffix should be /stages/{stage}/tasks/{task}
+	suffixParts := strings.Split(strings.TrimPrefix(parts[1], "/"), "/")
+	if len(suffixParts) != 4 || suffixParts[0]+"/" != StagePrefix || suffixParts[2]+"/" != TaskPrefix {
+		return "", 0, nil, nil, errors.Errorf("invalid task suffix %q", parts[1])
+	}
+
+	var maybeStageID *string
+	if suffixParts[1] != "-" {
+		maybeStageID = &suffixParts[1]
+	}
+	var maybeTaskID *int64
+	if suffixParts[3] != "-" {
+		taskID, err := strconv.ParseInt(suffixParts[3], 10, 64)
+		if err != nil {
+			return "", 0, nil, nil, errors.Errorf("invalid task ID %q", suffixParts[3])
+		}
+		maybeTaskID = &taskID
+	}
+	return projectID, planID, maybeStageID, maybeTaskID, nil
+}
+
+// GetProjectIDPlanIDStageIDTaskID returns the project ID, plan ID, stage ID, and task ID from a resource name.
+func GetProjectIDPlanIDStageIDTaskID(name string) (string, int64, string, int64, error) {
+	parts := strings.Split(name, "/rollout")
+	if len(parts) != 2 {
+		return "", 0, "", 0, errors.Errorf("invalid rollout task name %q", name)
+	}
+
+	projectID, planID, err := GetProjectIDPlanID(parts[0])
+	if err != nil {
+		return "", 0, "", 0, err
+	}
+
+	// suffix should be /stages/{stage}/tasks/{task}
+	suffixParts := strings.Split(strings.TrimPrefix(parts[1], "/"), "/")
+	if len(suffixParts) != 4 || suffixParts[0]+"/" != StagePrefix || suffixParts[2]+"/" != TaskPrefix {
+		return "", 0, "", 0, errors.Errorf("invalid task suffix %q", parts[1])
+	}
+
+	stageID := suffixParts[1]
+	taskID, err := strconv.ParseInt(suffixParts[3], 10, 64)
+	if err != nil {
+		return "", 0, "", 0, errors.Errorf("invalid task ID %q", suffixParts[3])
+	}
+	return projectID, planID, stageID, taskID, nil
+}
+
+// GetProjectIDPlanIDStageIDTaskIDTaskRunID returns the project ID, plan ID, stage ID, task ID and task run ID from a resource name.
+func GetProjectIDPlanIDStageIDTaskIDTaskRunID(name string) (string, int64, string, int64, int64, error) {
+	parts := strings.Split(name, "/rollout")
+	if len(parts) != 2 {
+		return "", 0, "", 0, 0, errors.Errorf("invalid rollout task run name %q", name)
+	}
+
+	projectID, planID, err := GetProjectIDPlanID(parts[0])
+	if err != nil {
+		return "", 0, "", 0, 0, err
+	}
+
+	// suffix should be /stages/{stage}/tasks/{task}/taskRuns/{taskRun}
+	suffixParts := strings.Split(strings.TrimPrefix(parts[1], "/"), "/")
+	if len(suffixParts) != 6 || suffixParts[0]+"/" != StagePrefix || suffixParts[2]+"/" != TaskPrefix || suffixParts[4]+"/" != TaskRunPrefix {
+		return "", 0, "", 0, 0, errors.Errorf("invalid task run suffix %q", parts[1])
+	}
+
+	stageID := suffixParts[1]
+	taskID, err := strconv.ParseInt(suffixParts[3], 10, 64)
+	if err != nil {
+		return "", 0, "", 0, 0, errors.Errorf("invalid task ID %q", suffixParts[3])
+	}
+	taskRunID, err := strconv.ParseInt(suffixParts[5], 10, 64)
+	if err != nil {
+		return "", 0, "", 0, 0, errors.Errorf("invalid task run ID %q", suffixParts[5])
+	}
+	return projectID, planID, stageID, taskID, taskRunID, nil
+}
+
+// GetRoleID returns the role ID from a resource name.
+func GetRoleID(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, RolePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetProjectResourceIDSheetSha256 returns the project ID and sheet SHA256 from a resource name.
+func GetProjectResourceIDSheetSha256(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, SheetIDPrefix)
+	if err != nil {
+		return "", "", err
+	}
+	// The hash segment is hex: canonicalize to lowercase so it matches the
+	// form the store keys by and the payloads persist.
+	return tokens[0], strings.ToLower(tokens[1]), nil
+}
+
+// GetProjectIDSavedQueryID returns the project ID and saved query ID (resource_id) from a resource name.
+// Format: projects/{project}/savedQueries/{savedQuery}
+func GetProjectIDSavedQueryID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, SavedQueryIDPrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+// FormatSavedQuery formats a saved query resource name.
+// Format: projects/{project}/savedQueries/{savedQuery}
+func FormatSavedQuery(projectID, savedQueryID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProject(projectID), SavedQueryIDPrefix, savedQueryID)
+}
+
+// GetReviewConfigID returns the review config id from a resource name.
+func GetReviewConfigID(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, ReviewConfigPrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+func GetProjectReleaseID(name string) (string, string, error) {
+	tokens, err := GetNameParentTokens(name, ProjectNamePrefix, ReleaseNamePrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return tokens[0], tokens[1], nil
+}
+
+func GetProjectReleaseIDFile(name string) (string, string, string, error) {
+	// Find the "files/" segment - everything after it is the encoded file path
+	parentPart, encodedFileID, found := strings.Cut(name, "/"+FileNamePrefix)
+	if !found {
+		return "", "", "", errors.Errorf("invalid release file name %q: missing files/ segment", name)
+	}
+
+	tokens, err := GetNameParentTokens(parentPart, ProjectNamePrefix, ReleaseNamePrefix)
+	if err != nil {
+		return "", "", "", errors.Errorf("invalid release file name %q", name)
+	}
+
+	fileID, err := url.PathUnescape(encodedFileID)
+	if err != nil {
+		return "", "", "", errors.Errorf("invalid release file name %q: failed to decode file ID", name)
+	}
+
+	return tokens[0], tokens[1], fileID, nil
+}
+
+// GetGroupEmail returns the group email.
+func GetGroupEmail(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, GroupPrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// TrimSuffix trims the suffix from the name and returns the trimmed name.
+func TrimSuffix(name, suffix string) (string, error) {
+	if !strings.HasSuffix(name, suffix) {
+		return "", errors.Errorf("invalid request %q with suffix %q", name, suffix)
+	}
+	return strings.TrimSuffix(name, suffix), nil
+}
+
+// GetNameParentTokens returns the tokens from a resource name.
+func GetNameParentTokens(name string, tokenPrefixes ...string) ([]string, error) {
+	parts := strings.Split(name, "/")
+	if len(parts) != 2*len(tokenPrefixes) {
+		return nil, errors.Errorf("invalid request %q", name)
+	}
+
+	var tokens []string
+	for i, tokenPrefix := range tokenPrefixes {
+		if parts[2*i+1] == "" || fmt.Sprintf("%s/", parts[2*i]) != tokenPrefix {
+			return nil, errors.Errorf("invalid prefix %q in request %q", tokenPrefix, name)
+		}
+		tokens = append(tokens, parts[2*i+1])
+	}
+	return tokens, nil
+}
+
+func GetWorkspaceID(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, WorkspacePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+func FormatWorkspace(id string) string {
+	return fmt.Sprintf("%s%s", WorkspacePrefix, id)
+}
+
+func FormatProject(id string) string {
+	return fmt.Sprintf("%s%s", ProjectNamePrefix, id)
+}
+
+func FormatUserEmail(email string) string {
+	return fmt.Sprintf("%s%s", UserNamePrefix, email)
+}
+
+func FormatGroupEmail(email string) string {
+	return fmt.Sprintf("%s%s", GroupPrefix, email)
+}
+
+// FormatPrincipalMember returns the policy-member form of a principal by its
+// type: users/{email}, serviceAccounts/{email}, or workloadIdentities/{email}.
+// A service account never appears under users/, which is what lets member
+// validation and matching go by prefix alone. The single source for every
+// evaluator — IAM, saved-query bindings, member formatting — so the switches
+// cannot drift.
+func FormatPrincipalMember(email string, principalType storepb.PrincipalType) string {
+	switch principalType {
+	case storepb.PrincipalType_SERVICE_ACCOUNT:
+		return FormatServiceAccountEmail(email)
+	case storepb.PrincipalType_WORKLOAD_IDENTITY:
+		return FormatWorkloadIdentityEmail(email)
+	default:
+		return FormatUserEmail(email)
+	}
+}
+
+// IsWorkloadIdentityEmail checks if the email is a workload identity email.
+func IsWorkloadIdentityEmail(email string) bool {
+	return strings.HasSuffix(email, fmt.Sprintf("@%s", WorkloadIdentitySuffix)) || isProjectLevelEmail(email, WorkloadIdentitySuffix)
+}
+
+// isProjectLevelEmail checks if the email is a project-level email.
+func isProjectLevelEmail(email, suffix string) bool {
+	// Format: {name}@{project-id}.{suffix}
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+	domain := parts[1]
+	return strings.HasSuffix(domain, fmt.Sprintf(".%s", suffix))
+}
+
+func FormatReviewConfig(id string) string {
+	return fmt.Sprintf("%s%s", ReviewConfigPrefix, id)
+}
+
+func FormatEnvironment(resourceID string) string {
+	return fmt.Sprintf("%s%s", EnvironmentNamePrefix, resourceID)
+}
+
+func FormatInstance(resourceID string) string {
+	return fmt.Sprintf("%s%s", InstanceNamePrefix, resourceID)
+}
+
+func FormatDatabase(instance string, database string) string {
+	return fmt.Sprintf("%s/%s%s", FormatInstance(instance), DatabaseIDPrefix, database)
+}
+
+// FormatProjectInstance formats a project instance resource name.
+func FormatProjectInstance(projectID, instanceID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProject(projectID), InstanceNamePrefix, instanceID)
+}
+
+// FormatProjectDatabase formats a project database resource name.
+func FormatProjectDatabase(projectID, instanceID, databaseID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProjectInstance(projectID, instanceID), DatabaseIDPrefix, databaseID)
+}
+
+func FormatRole(role string) string {
+	return fmt.Sprintf("%s%s", RolePrefix, role)
+}
+
+func FormatSheet(projectID string, sheetSha256 string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProject(projectID), SheetIDPrefix, sheetSha256)
+}
+
+func FormatIssue(projectID string, issueUID int64) string {
+	return fmt.Sprintf("%s/%s%d", FormatProject(projectID), IssueNamePrefix, issueUID)
+}
+
+func FormatRollout(projectID string, planUID int64) string {
+	return fmt.Sprintf("%s/rollout", FormatPlan(projectID, planUID))
+}
+
+// EmptyStageID is the placeholder used for stages without environment or with deleted environments.
+const EmptyStageID = "-"
+
+// FormatStageID returns the stage ID, using EmptyStageID placeholder if environment is empty.
+func FormatStageID(environment string) string {
+	if environment == "" {
+		return EmptyStageID
+	}
+	return environment
+}
+
+// stageID is task environmentID.
+func FormatStage(projectID string, planUID int64, stageID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatRollout(projectID, planUID), StagePrefix, stageID)
+}
+
+// stageID is task environmentID.
+func FormatTask(projectID string, planUID int64, stageID string, taskUID int64) string {
+	// stageUID is now environmentID
+	return fmt.Sprintf("%s/%s%d", FormatStage(projectID, planUID, stageID), TaskPrefix, taskUID)
+}
+
+// stageID is task environmentID.
+func FormatTaskRun(projectID string, planUID int64, stageID string, taskUID, taskRunUID int64) string {
+	return fmt.Sprintf("%s/%s%d", FormatTask(projectID, planUID, stageID, taskUID), TaskRunPrefix, taskRunUID)
+}
+
+func FormatReleaseName(projectID string, releaseID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProject(projectID), ReleaseNamePrefix, releaseID)
+}
+
+func FormatReleaseFile(release string, fileID string) string {
+	return fmt.Sprintf("%s/%s%s", release, FileNamePrefix, url.PathEscape(fileID))
+}
+
+func FormatRevision(instanceID, databaseID string, revisionID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatDatabase(instanceID, databaseID), RevisionNamePrefix, revisionID)
+}
+
+func FormatChangelog(instanceID, databaseID string, changelogID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatDatabase(instanceID, databaseID), ChangelogPrefix, changelogID)
+}
+
+// FormatProjectRevision formats a project revision resource name.
+func FormatProjectRevision(projectID, instanceID, databaseID, revisionID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProjectDatabase(projectID, instanceID, databaseID), RevisionNamePrefix, revisionID)
+}
+
+// FormatProjectChangelog formats a project changelog resource name.
+func FormatProjectChangelog(projectID, instanceID, databaseID, changelogID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatProjectDatabase(projectID, instanceID, databaseID), ChangelogPrefix, changelogID)
+}
+
+func FormatPlan(projectID string, planUID int64) string {
+	return fmt.Sprintf("%s/%s%d", FormatProject(projectID), PlanPrefix, planUID)
+}
+
+// FormatPlanCheckRun formats a plan check run singleton resource name.
+// Format: projects/{project}/plans/{plan}/planCheckRun
+func FormatPlanCheckRun(projectID string, planUID int64) string {
+	return fmt.Sprintf("%s/planCheckRun", FormatPlan(projectID, planUID))
+}
+
+func FormatSpec(projectID string, planUID int64, specID string) string {
+	return fmt.Sprintf("%s/%s%s", FormatPlan(projectID, planUID), SpecPrefix, specID)
+}
+
+func GetPolicyResourceTypeAndResource(requestName string) (storepb.Policy_Resource, *string, error) {
+	if requestName == "" {
+		return storepb.Policy_RESOURCE_UNSPECIFIED, nil, errors.New("policy parent resource name must not be empty")
+	}
+
+	if _, err := GetWorkspaceID(requestName); err == nil {
+		return storepb.Policy_WORKSPACE, &requestName, nil
+	}
+
+	if strings.HasPrefix(requestName, ProjectNamePrefix) {
+		projectID, err := GetProjectID(requestName)
+		if err != nil {
+			return storepb.Policy_RESOURCE_UNSPECIFIED, nil, err
+		}
+		if projectID == "-" {
+			return storepb.Policy_PROJECT, nil, nil
+		}
+		return storepb.Policy_PROJECT, &requestName, nil
+	}
+
+	if strings.HasPrefix(requestName, EnvironmentNamePrefix) {
+		// environment policy request name should be environments/{environment id}
+		environmentID, err := GetEnvironmentID(requestName)
+		if err != nil {
+			return storepb.Policy_RESOURCE_UNSPECIFIED, nil, err
+		}
+		if environmentID == "-" {
+			return storepb.Policy_ENVIRONMENT, nil, nil
+		}
+		return storepb.Policy_ENVIRONMENT, &requestName, nil
+	}
+
+	return storepb.Policy_RESOURCE_UNSPECIFIED, nil, errors.Errorf("unknown request name %s", requestName)
+}
+
+// IsServiceAccountEmail checks if the email is a service account email.
+func IsServiceAccountEmail(email string) bool {
+	return strings.HasSuffix(email, fmt.Sprintf("@%s", ServiceAccountSuffix)) || isProjectLevelEmail(email, ServiceAccountSuffix)
+}
+
+// FormatServiceAccountEmail formats a service account email from email.
+func FormatServiceAccountEmail(email string) string {
+	return fmt.Sprintf("%s%s", ServiceAccountNamePrefix, email)
+}
+
+// FormatWorkloadIdentityEmail formats a workload identity email from email.
+func FormatWorkloadIdentityEmail(email string) string {
+	return fmt.Sprintf("%s%s", WorkloadIdentityNamePrefix, email)
+}
+
+// GetServiceAccountEmail extracts email from a service account resource name.
+func GetServiceAccountEmail(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, ServiceAccountNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// GetWorkloadIdentityEmail extracts email from a workload identity resource name.
+func GetWorkloadIdentityEmail(name string) (string, error) {
+	tokens, err := GetNameParentTokens(name, WorkloadIdentityNamePrefix)
+	if err != nil {
+		return "", err
+	}
+	return tokens[0], nil
+}
+
+// BuildServiceAccountEmail constructs a full email from name and optional project ID.
+func BuildServiceAccountEmail(name, projectID string) string {
+	if projectID == "" {
+		return fmt.Sprintf("%s@%s", name, ServiceAccountSuffix)
+	}
+	return fmt.Sprintf("%s@%s.%s", name, projectID, ServiceAccountSuffix)
+}
+
+// BuildWorkloadIdentityEmail constructs a full email from name and optional project ID.
+func BuildWorkloadIdentityEmail(name, projectID string) string {
+	if projectID == "" {
+		return fmt.Sprintf("%s@%s", name, WorkloadIdentitySuffix)
+	}
+	return fmt.Sprintf("%s@%s.%s", name, projectID, WorkloadIdentitySuffix)
+}

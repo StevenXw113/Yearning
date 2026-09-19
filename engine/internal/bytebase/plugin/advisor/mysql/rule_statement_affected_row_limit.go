@@ -1,0 +1,198 @@
+package mysql
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/bytebase/omni/mysql/ast"
+	"github.com/pkg/errors"
+
+	"engine/internal/bytebase/common"
+	storepb "engine/internal/bytebase/generated-go/store"
+	"engine/internal/bytebase/plugin/advisor"
+	"engine/internal/bytebase/plugin/advisor/code"
+	mysqlparser "engine/internal/bytebase/plugin/parser/mysql"
+)
+
+var (
+	_ advisor.Advisor = (*StatementAffectedRowLimitAdvisor)(nil)
+)
+
+func init() {
+	advisor.Register(storepb.Engine_MYSQL, storepb.SQLReviewRule_STATEMENT_AFFECTED_ROW_LIMIT, &StatementAffectedRowLimitAdvisor{})
+	advisor.Register(storepb.Engine_MARIADB, storepb.SQLReviewRule_STATEMENT_AFFECTED_ROW_LIMIT, &StatementAffectedRowLimitAdvisor{})
+}
+
+// StatementAffectedRowLimitAdvisor is the advisor checking for UPDATE/DELETE affected row limit.
+type StatementAffectedRowLimitAdvisor struct {
+}
+
+// Check checks for UPDATE/DELETE affected row limit.
+func (*StatementAffectedRowLimitAdvisor) Check(ctx context.Context, checkCtx advisor.Context) ([]*storepb.Advice, error) {
+	level, err := advisor.NewStatusBySQLReviewRuleLevel(checkCtx.Rule.Level)
+	if err != nil {
+		return nil, err
+	}
+	numberPayload := checkCtx.Rule.GetNumberPayload()
+	if numberPayload == nil {
+		return nil, errors.New("number_payload is required for this rule")
+	}
+
+	maxRow := int(numberPayload.Number)
+	driver := checkCtx.Driver
+	title := checkCtx.Rule.Type.String()
+	var advice []*storepb.Advice
+	explainCount := 0
+
+	if driver != nil {
+		for _, stmt := range checkCtx.ParsedStatements {
+			if stmt.AST == nil {
+				continue
+			}
+			node, ok := mysqlparser.GetOmniNode(stmt.AST)
+			if !ok {
+				continue
+			}
+
+			var limit *ast.Limit
+			switch stmt := node.(type) {
+			case *ast.UpdateStmt:
+				limit = stmt.Limit
+			case *ast.DeleteStmt:
+				limit = stmt.Limit
+			default:
+				continue
+			}
+
+			baseLine := stmt.BaseLine()
+			text := strings.TrimRight(strings.TrimSpace(stmt.Text), ";") + ";"
+			line := baseLine + int(mysqlparser.ByteOffsetToRunePosition(stmt.Text, contentStartIndex(stmt.Text)).Line)
+
+			explainCount++
+			// Prefer the JSON query plan: the tabular EXPLAIN's first "rows" value may
+			// be the scan estimate of a driving table unrelated to the DML target
+			// (BYT-9858). Fall back to the tabular heuristic when the JSON plan yields
+			// no flagged target node.
+			var rowCount int64
+			counted := false
+			if res, err := advisor.Query(ctx, advisor.QueryContext{}, driver, storepb.Engine_MYSQL, fmt.Sprintf("EXPLAIN FORMAT=JSON %s", text)); err == nil {
+				rowCount, counted = getRowsFromJSONPlan(res)
+			}
+			if !counted {
+				res, err := advisor.Query(ctx, advisor.QueryContext{}, driver, storepb.Engine_MYSQL, fmt.Sprintf("EXPLAIN %s", text))
+				if err != nil {
+					advice = append(advice, &storepb.Advice{
+						Status:        level,
+						Code:          code.StatementAffectedRowExceedsLimit.Int32(),
+						Title:         title,
+						Content:       fmt.Sprintf("\"%s\" dry runs failed: %s", text, err.Error()),
+						StartPosition: common.ConvertANTLRLineToPosition(line),
+					})
+				} else if rowCount, err = getRows(res); err != nil {
+					advice = append(advice, &storepb.Advice{
+						Status:        level,
+						Code:          code.Internal.Int32(),
+						Title:         title,
+						Content:       fmt.Sprintf("failed to get row count for \"%s\": %s", text, err.Error()),
+						StartPosition: common.ConvertANTLRLineToPosition(line),
+					})
+				} else {
+					counted = true
+				}
+			}
+			if counted {
+				if rowCount = capRowsByLimit(rowCount, limit); rowCount > int64(maxRow) {
+					advice = append(advice, &storepb.Advice{
+						Status:        level,
+						Code:          code.StatementAffectedRowExceedsLimit.Int32(),
+						Title:         title,
+						Content:       fmt.Sprintf("\"%s\" affected %d rows (estimated). The count exceeds %d.", text, rowCount, maxRow),
+						StartPosition: common.ConvertANTLRLineToPosition(line),
+					})
+				}
+			}
+
+			if explainCount >= common.MaximumLintExplainSize {
+				break
+			}
+		}
+	}
+
+	return advice, nil
+}
+
+// getRowsFromJSONPlan extracts the affected-row estimate from an
+// `EXPLAIN FORMAT=JSON` query result, whose single column holds the JSON plan.
+func getRowsFromJSONPlan(res []any) (int64, bool) {
+	if len(res) != 3 {
+		return 0, false
+	}
+	rowList, ok := res[2].([]any)
+	if !ok {
+		return 0, false
+	}
+	var plan strings.Builder
+	for _, rowAny := range rowList {
+		row, ok := rowAny.([]any)
+		if !ok {
+			return 0, false
+		}
+		for _, col := range row {
+			if s, ok := col.(string); ok {
+				plan.WriteString(s)
+			}
+		}
+	}
+	return mysqlparser.GetEstimatedAffectedRowsFromExplainJSON(plan.String())
+}
+
+func getRows(res []any) (int64, error) {
+	// the res struct is []any{columnName, columnTable, rowDataList}
+	if len(res) != 3 {
+		return 0, errors.Errorf("expected 3 but got %d", len(res))
+	}
+	columns, ok := res[0].([]string)
+	if !ok {
+		return 0, errors.Errorf("expected []string but got %t", res[0])
+	}
+	rowList, ok := res[2].([]any)
+	if !ok {
+		return 0, errors.Errorf("expected []any but got %t", res[2])
+	}
+	if len(rowList) < 1 {
+		return 0, errors.Errorf("not found any data")
+	}
+
+	rowsIndex, err := getColumnIndex(columns, "rows")
+	if err != nil {
+		return 0, errors.Errorf("failed to find rows column")
+	}
+
+	for _, rowAny := range rowList {
+		row, ok := rowAny.([]any)
+		if !ok {
+			return 0, errors.Errorf("expected []any but got %t", row)
+		}
+
+		switch col := row[rowsIndex].(type) {
+		case int:
+			return int64(col), nil
+		case int32:
+			return int64(col), nil
+		case int64:
+			return col, nil
+		case string:
+			v, err := strconv.ParseInt(col, 10, 64)
+			if err != nil {
+				return 0, errors.Errorf("expected int or int64 but got string(%s)", col)
+			}
+			return v, nil
+		default:
+			continue
+		}
+	}
+
+	return 0, nil
+}

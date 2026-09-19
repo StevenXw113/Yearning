@@ -1,0 +1,19 @@
+- statement: CREATE TABLE t(a int);
+- statement: |-
+    CREATE PROCEDURE simpleProcedure()
+    BEGIN
+        SELECT 'Hello, World!' AS Message;
+    END;
+  want:
+    - status: 2
+      code: 1401
+      title: SYSTEM_PROCEDURE_DISALLOW_CREATE
+      content: |-
+        Procedure is forbidden, but "CREATE PROCEDURE simpleProcedure()
+        BEGIN
+            SELECT 'Hello, World!' AS Message;
+        END;" creates
+      startposition:
+        line: 1
+        column: 0
+      endposition: null

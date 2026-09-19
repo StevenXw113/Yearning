@@ -1,0 +1,41 @@
+- statement: CREATE TABLE t(a int);
+- statement: SELECT RAND();
+  want:
+    - status: 2
+      code: 1702
+      title: SYSTEM_FUNCTION_DISALLOWED_LIST
+      content: Function "RAND" is disallowed, but "SELECT RAND();" uses
+      startposition:
+        line: 1
+        column: 0
+      endposition: null
+- statement: |-
+    CREATE TABLE employee (
+      id VARCHAR(36) DEFAULT (UUID()) PRIMARY KEY,
+      name VARCHAR(255),
+      age INT
+    );
+  want:
+    - status: 2
+      code: 1702
+      title: SYSTEM_FUNCTION_DISALLOWED_LIST
+      content: |-
+        Function "UUID" is disallowed, but "CREATE TABLE employee (
+          id VARCHAR(36) DEFAULT (UUID()) PRIMARY KEY,
+          name VARCHAR(255),
+          age INT
+        );" uses
+      startposition:
+        line: 2
+        column: 0
+      endposition: null
+- statement: SELECT SLEEP(5);
+  want:
+    - status: 2
+      code: 1702
+      title: SYSTEM_FUNCTION_DISALLOWED_LIST
+      content: Function "SLEEP" is disallowed, but "SELECT SLEEP(5);" uses
+      startposition:
+        line: 1
+        column: 0
+      endposition: null
