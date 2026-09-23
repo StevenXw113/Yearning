@@ -14,6 +14,15 @@ RpcAddr = "127.0.0.1:50001" # SQL checker rpc server address
 LogLevel = "info"  # debug,info,warn,error
 Lang = "en_US"  # en_US,zh_CN
 
+# 在线表结构变更(OSC)：表行数估算 >= OscMinRows 的大表 ALTER 改由 gh-ost 执行，
+# 迁移进度实时显示在工单详情的「OSC」面板。OscMinRows <= 0 表示关闭（走引擎原生执行）。
+OscMinRows = 0
+# gh-ost 可执行文件路径；留空则从 PATH 中查找 gh-ost
+GhOstPath = ""
+# gh-ost 附加参数（空格分隔），按环境补充。例如数据源账号无 performance_schema 权限时：
+#   GhOstArgs = "--skip-metadata-lock-check"
+GhOstArgs = ""
+
 [Oidc]
 Enable = false
 ClientId = "yearning"

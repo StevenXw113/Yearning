@@ -56,6 +56,10 @@ export interface OrderTableData {
   sql?: string;
   file?: string;
   tables?: string[];
+  // 项目级工单（批量）批次号：同批次子工单在前端折叠为一个项目行
+  batch_id?: string;
+  // 前端聚合出的项目行标记（非后端字段）
+  isProject?: boolean;
 }
 
 export interface OrderItem {
@@ -70,6 +74,8 @@ export interface OrderItem {
   text: string;
   backup: number;
   sql?: string;
+  // 上传 SQL 文件时记录的文件名，随工单保存便于追溯
+  file?: string;
   relevant: string[];
 }
 

@@ -27,7 +27,7 @@
         <a-card ref="leftSize" size="small">
           <a-tabs v-model:activeKey="tool">
             <a-tab-pane key="tree" :tab="$t('common.table.schema')">
-              <Tree @show-table-ref="showTableRef"></Tree>
+              <Tree :height="treeHeight" @show-table-ref="showTableRef"></Tree>
             </a-tab-pane>
             <a-tab-pane key="history" :tab="$t('common.history')">
               <History></History>
@@ -37,7 +37,7 @@
       </a-col>
       <a-col :span="hide ? 24 : 20">
         <div :style="{ width: width - leftz - 15 + 'px' }">
-          <a-card size="small">
+          <a-card ref="rightSize" size="small">
             <a-tabs v-model:activeKey="feat">
               <a-tab-pane key="edit" :tab="$t('query.query')">
                 <a-tabs
@@ -107,6 +107,17 @@
   const { t } = useI18n();
 
   const { width } = useElementSize(colsize);
+
+  const rightSize = ref();
+
+  const rightHeight = useElementSize(rightSize).height;
+
+  // 左栏那棵树的高度跟着右侧卡片走，两栏底边对齐。
+  // 128 = 树上方占位（tabs 头 46 + 搜索框 40 + 卡片内边距 24 等），原值写死 700，
+  // 比右侧 SQL 卡片高出一大截，左栏会比右栏长出一块。
+  const treeHeight = computed(() =>
+    Math.max(240, Math.round(rightHeight.value) - 128)
+  );
 
   const hide = ref(false);
 

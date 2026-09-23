@@ -45,7 +45,8 @@ func PersonalFetchMyOrder(c yee.Context) (err error) {
 			if !ok {
 				break
 			}
-			u.Paging().OrderBy(common.SortClause(u.Expr.Order)).Select(common.QueryField).Query(
+			// 项目级工单按项目聚合分页（同批子工单不跨页），见 common.GroupedOrderPage
+			common.GroupedOrderPage(&u, common.QueryField,
 				common.AccordingToAllOrderType(u.Expr.Type),
 				common.AccordingToAllOrderState(u.Expr.Status),
 				common.AccordingToUsernameEqual(user),
@@ -95,6 +96,9 @@ func GET(c yee.Context) (err error) {
 	switch c.Params("tp") {
 	case "list":
 		return PersonalFetchMyOrder(c)
+	case "batch":
+		// 项目级工单批次查询：/common/batch?batch_id=xxx
+		return BatchOrders(c)
 	default:
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}

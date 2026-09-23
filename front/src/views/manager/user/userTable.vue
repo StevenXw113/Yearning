@@ -191,7 +191,7 @@
 
   const search = (vl: UserExpr) => {
     tblRef.expr = vl;
-    tbl.value.manual();
+    tbl.value.manual(true);
   };
 
   const editUserInfo = async (user: RegisterForm) => {

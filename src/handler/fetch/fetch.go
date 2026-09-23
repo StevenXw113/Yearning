@@ -76,17 +76,11 @@ func FetchSource(c yee.Context) (err error) {
 		return
 	}
 
-	var grained model.CoreGrained
-	var groupIDs []string
 	var source []model.CoreDataSource
 
 	user := new(factory.Token).JwtParse(c).Username
-	model.DB().Where("username =?", user).First(&grained)
-	if err := grained.Group.UnmarshalToJSON(&groupIDs); err != nil {
-		c.Logger().Error(err.Error())
-		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
-	}
-	permission := permission.NewPermissionService(model.DB()).CreatePermissionListFromGroups(groupIDs)
+	// 超级管理员在 CreatePermissionList 内直接取得全部数据源权限
+	permission := permission.NewPermissionService(model.DB()).CreatePermissionList(user)
 	switch u.Tp {
 	case "count":
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"ddl": len(permission.DDLSource), "dml": len(permission.DMLSource), "query": len(permission.QuerySource)}))
@@ -119,7 +113,7 @@ func FetchAuditSteps(c yee.Context) (err error) {
 	u := c.QueryParam("source_id")
 	workId := c.QueryParam("work_id")
 	if workId != "" && !checkOrderPerm(c, workId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	var order model.CoreSqlOrder
 	var s []model.CoreWorkflowDetail
@@ -157,7 +151,7 @@ func FetchAuditSteps(c yee.Context) (err error) {
 func FetchHighLight(c yee.Context) (err error) {
 	sourceId := c.QueryParam("source_id")
 	if !checkSourcePerm(c, sourceId) {
-		return deny(c)
+		return deny(c, sourceId)
 	}
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", sourceId).First(&s)
@@ -175,7 +169,7 @@ func FetchBase(c yee.Context) (err error) {
 	}
 	unescape, _ := url.QueryUnescape(u.SourceId)
 	if !checkSourcePerm(c, unescape) {
-		return deny(c)
+		return deny(c, unescape)
 	}
 
 	var s model.CoreDataSource
@@ -209,7 +203,7 @@ func FetchTable(c yee.Context) (err error) {
 	}
 	unescape, _ := url.QueryUnescape(u.SourceId)
 	if !checkSourcePerm(c, unescape) {
-		return deny(c)
+		return deny(c, unescape)
 	}
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", unescape).First(&s)
@@ -231,7 +225,7 @@ func FetchTableInfo(c yee.Context) (err error) {
 	}
 
 	if !checkSourcePerm(c, u.SourceId) {
-		return deny(c)
+		return deny(c, u.SourceId)
 	}
 	if u.DataBase != "" && u.Table != "" {
 		if err := u.FetchTableFieldsOrIndexes(); err != nil {
@@ -250,7 +244,8 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	user := new(factory.Token).JwtParse(c).Username
 	if !common.HasAnySourcePermission(user, u.SourceId) {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(
+			fmt.Sprintf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, u.SourceId)))
 	}
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", u.SourceId).First(&s)
@@ -301,7 +296,7 @@ func FetchOrderDetailList(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
 	if !checkOrderPerm(c, expr.WorkId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	var record []model.CoreSqlRecord
 	var count int64
@@ -313,7 +308,7 @@ func FetchOrderDetailList(c yee.Context) (err error) {
 func FetchOrderDetailRollSQL(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !checkOrderPerm(c, workId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	var roll []model.CoreRollback
 	var count int64
@@ -360,7 +355,7 @@ func FetchMergeDDL(c yee.Context) error {
 func FetchSQLInfo(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !checkOrderPerm(c, workId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	var sql model.CoreSqlOrder
 	model.DB().Select("`sql`").Where("work_id =?", workId).First(&sql)
@@ -370,7 +365,7 @@ func FetchSQLInfo(c yee.Context) (err error) {
 func FetchStepsProfile(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !checkOrderPerm(c, workId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	var s []model.CoreWorkflowDetail
 	model.DB().Where("work_id = ?", workId).Find(&s)
@@ -386,7 +381,7 @@ func FetchBoard(c yee.Context) (err error) {
 func FetchOrderComment(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !checkOrderPerm(c, workId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
@@ -446,7 +441,7 @@ func FetchUserGroups(c yee.Context) (err error) {
 func FetchOrderState(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !checkOrderPerm(c, workId) {
-		return deny(c)
+		return denyOrder(c)
 	}
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
@@ -473,12 +468,8 @@ func FetchUserInfo(c yee.Context) (err error) {
 	t := new(factory.Token).JwtParse(c)
 	var userInfo model.CoreAccount
 	var sources []model.CoreDataSource
-	var grained model.CoreGrained
-	var groupIDs []string
 	model.DB().Select("department,username,real_name,email").Model(model.CoreAccount{}).Where("username =?", t.Username).First(&userInfo)
-	model.DB().Select("`group`").Where("username =?", t.Username).First(&grained)
-	_ = grained.Group.UnmarshalToJSON(&groupIDs)
-	model.DB().Model(model.CoreDataSource{}).Select("source_id,source").Where("source_id IN ?", permission.NewPermissionService(model.DB()).CreatePermissionListFromGroups(groupIDs).QuerySource).Find(&sources)
+	model.DB().Model(model.CoreDataSource{}).Select("source_id,source").Where("source_id IN ?", permission.NewPermissionService(model.DB()).CreatePermissionList(t.Username).QuerySource).Find(&sources)
 	p := userProfile{
 		Department: userInfo.Department,
 		RealName:   userInfo.RealName,

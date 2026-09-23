@@ -87,7 +87,7 @@
       </a-col>
     </a-row>
 
-    <a-card style="text-align: center">
+    <a-card style="text-align: center; margin-bottom: 24px">
       <a-row :gutter="24">
         <a-col :xs="24" :md="12" :xl="6">
           <a-statistic
@@ -115,7 +115,6 @@
         </a-col>
       </a-row>
     </a-card>
-    <br />
     <a-row :gutter="24">
       <a-col :xs="24" :md="24" :xl="16" :style="{ marginBottom: '24px' }">
         <a-card :title="$t('common.board')">
@@ -139,9 +138,10 @@
   import { getBannerContext } from '@/apis/dash';
   import { getBoardContext } from '@/apis/board';
   import { sanitizeHTML } from '@/lib/sanitize';
-  import { onMounted, ref } from 'vue';
+  import { nextTick, onMounted, ref } from 'vue';
 
-  const loading = false;
+  // 原来是 const loading = false（普通常量），ChartCard 的骨架屏永远不显示
+  const loading = ref(true);
 
   const banner = ref<any>({
     total_order: [],
@@ -156,8 +156,6 @@
   const getBanner = async () => {
     const { data } = await getBannerContext();
     banner.value = data.payload;
-    query.value.makeBuild(banner.value.total_order);
-    order.value.makeBuild(banner.value.total_order);
   };
 
   const getBoard = async () => {
@@ -166,15 +164,13 @@
     boardContent.value = sanitizeHTML(data.payload);
   };
 
-  onMounted(() => {
-    getBanner();
-    getBoard();
+  onMounted(async () => {
+    await Promise.all([getBanner(), getBoard()]);
+    loading.value = false;
+    // 骨架屏期间图表容器还没渲染，等它换成真实节点后再画
+    await nextTick();
+    query.value?.makeBuild(banner.value.total_order);
+    order.value?.makeBuild(banner.value.total_order);
   });
 </script>
 
-<style>
-  .v-note-wrapper .v-note-panel .v-note-show .v-show-content,
-  .v-note-wrapper .v-note-panel .v-note-show .v-show-content-html {
-    color: aliceblue;
-  }
-</style>

@@ -8,26 +8,32 @@ export default function () {
     {
       title: t('common.table.stage'),
       dataIndex: 'status',
+      width: 90,
     },
     {
       title: t('common.table.level'),
       dataIndex: 'level',
+      width: 100,
     },
     {
       title: t('common.table.error'),
       dataIndex: 'error',
+      width: 180,
     },
     {
       title: t('common.table.sql'),
       dataIndex: 'sql',
+      width: 340,
     },
     {
       title: t('common.table.max'),
       dataIndex: 'affect_rows',
-      width: '120',
+      width: 120,
     },
   ];
 
+  // 表结构 / 索引详情：仅作为未取到数据时的初始列头；拿到数据后
+  // 由 apply/order.vue 按接口真实返回的字段重新生成（见 fieldTitles/indexTitles）
   const tableArch = [
     {
       title: t('order.table.field'),

@@ -22,6 +22,7 @@ import (
 
 type Confirm struct {
 	WorkId   string `json:"work_id"`
+	BatchId  string `json:"batch_id"`
 	Page     int    `json:"page"`
 	Flag     int    `json:"flag"`
 	Text     string `json:"text"`
@@ -77,6 +78,12 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 	p := enc.Decrypt(model.C.General.SecretKey, source.Password)
 	if p == "" {
 		return errors.New(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+	}
+
+	// 大表 ALTER 由 gh-ost 接管做在线变更（进度写入 osc_info 供详情页展示）；
+	// 不满足条件时返回 false，按原链路交给引擎执行
+	if handled, oscErr := RunOSC(order, &source, p, actor, rule); handled {
+		return oscErr
 	}
 
 	client, conn, err := calls.NewClient()
@@ -144,14 +151,24 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 			// 末级审批通过：带延迟执行时间(delay!='none')的工单进入"等待延迟执行"(status=5)，
 			// 由延迟调度 cron 到点触发；普通工单立即执行。
 			var od model.CoreSqlOrder
-			model.DB().Model(model.CoreSqlOrder{}).Select("delay").Where("work_id =?", req.WorkId).First(&od)
-			if od.Delay != "" && od.Delay != "none" {
+			model.DB().Model(model.CoreSqlOrder{}).Select("delay, batch_id").Where("work_id =?", req.WorkId).First(&od)
+			// 项目级工单（批量）不默认自动执行：末级审批通过后统一停在「等待执行」(status=5)，
+			// 由人工逐条执行或在批次页手动批量执行，避免审批通过瞬间多条子工单同时压向数据库
+			if od.BatchId != "" {
+				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
+				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_WAIT_MANUAL))
+			}
+			// 执行方式由工单填写时的 delay 决定：manual=人工执行、具体时间=定时执行、
+			// none/空=审批通过即执行（全局「人工执行」开关打开时也会停在这里等人工）。
+			switch {
+			case od.Delay == "manual":
+				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
+				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_WAIT_MANUAL))
+			case od.Delay != "" && od.Delay != "none":
+				// 定时执行：等延迟调度 cron 到点触发
 				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
 				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_STATE))
-			}
-			// 人工执行模式：审批通过只置为「等待执行」，由人工点「执行」触发。
-			// delay 置 none，延迟调度 cron（筛 delay!='none'）不会碰它。
-			if model.GloOther.Load().ManualExecute {
+			case model.GloOther.Load().ManualExecute:
 				model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", req.WorkId).Updates(map[string]interface{}{"status": 5})
 				return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_AGREE_WAIT_MANUAL))
 			}
@@ -171,9 +188,10 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 }
 
 func RejectOrder(req *Confirm, user string) common.Resp {
-	// 驳回与同意同样需要校验：当前用户必须是该工单当前层级的审批人
+	// 驳回与同意同样需要校验：当前用户必须是该工单当前层级的审批人。
+	// 校验不过时返回与「同意」一致的原因文案（原先返回「没有该数据源权限」，会误导排查方向）。
 	if _, _, ok := isNotIdempotent(req, user); !ok {
-		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION))
+		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
 	model.DB().Model(&model.CoreSqlOrder{}).Where("work_id =? AND `status` =?", req.WorkId, 2).Updates(map[string]interface{}{"status": 0})
 	model.DB().Create(&model.CoreWorkflowDetail{

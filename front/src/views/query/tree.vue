@@ -9,7 +9,7 @@
       v-model:expandedKey="expandedKeys"
       :auto-expand-parent="autoExpandParent"
       :tree-data="gData"
-      :height="700"
+      :height="props.height"
       style="overflow: auto"
       show-icon
       @expand="onLoadData"
@@ -53,6 +53,9 @@
   import { useStore } from '@/store';
   import { TreeNodeProps } from 'ant-design-vue/lib/vc-tree';
 
+  // 树高由父级传入（原来写死 700，比右侧 SQL 卡片高出一大截）
+  const props = withDefaults(defineProps<{ height?: number }>(), { height: 700 });
+
   const emit = defineEmits(['showTableRef']);
 
   const route = useRoute();
@@ -74,14 +77,13 @@
   watch(searchValue, (value) => {
     let expanded: string[] = [];
     gData.value.forEach((item: any) => {
-      if (item.children !== undefined) {
-        if (item.children[0].key !== undefined) {
-          item.children.forEach((el: any) => {
-            if (el.title.indexOf(value) > -1) {
-              if (expanded.indexOf(item.title) == -1) expanded.push(item.title);
-            }
-          });
-        }
+      // children 可能是空数组（下钻失败或该库没有表），原来的 children[0].key 会抛
+      if (item.children?.length && item.children[0].key !== undefined) {
+        item.children.forEach((el: any) => {
+          if (el.title?.indexOf(value) > -1) {
+            if (expanded.indexOf(item.title) == -1) expanded.push(item.title);
+          }
+        });
       }
     });
     expandedKeys.value = expanded;
@@ -95,16 +97,21 @@
         return;
       }
       spin();
-      const { data } = await queryTable(
-        route.query.source_id as string,
-        node.dataRef.title
-      );
-      gData.value.filter((item: any) => {
-        if (item.key === node.dataRef.key) {
-          item.children = data.payload.table;
-        }
-      });
-      spin();
+      try {
+        const { data } = await queryTable(
+          route.query.source_id as string,
+          node.dataRef.title
+        );
+        // 同上：接口失败时 payload 为 null，取 .table 会抛，spinner 也关不掉
+        const tables = data.payload?.table || [];
+        gData.value.filter((item: any) => {
+          if (item.key === node.dataRef.key) {
+            item.children = tables;
+          }
+        });
+      } finally {
+        spin();
+      }
     }
   };
 
@@ -130,15 +137,22 @@
 
   const initial = async (source_id: string) => {
     spin();
-    const { data } = await querySchemaList(source_id);
-    gData.value = data.payload;
-    if (data.payload.length > 0) {
-      store.commit('common/SET_SCHEMA_List', {
-        schema: data.payload.map((item: { key: string }) => item.key),
-        source: route.query.source as string,
-        source_id: route.query.source_id as string,
-      });
-      store.commit('common/SET_SCHEMA', '');
+    try {
+      const { data } = await querySchemaList(source_id);
+      // 接口失败（如无数据源权限）时 payload 是 null：直接赋给 tree-data 会让 antd 的
+      // vc-tree 在 toRaw(props.treeData).slice() 上崩（它只判 undefined，null 漏过去），
+      // 下面读 .length 也会抛。原来 spinner 只在「成功且有数据」时才关，失败会一直转圈。
+      const list = data.payload || [];
+      gData.value = list;
+      if (list.length > 0) {
+        store.commit('common/SET_SCHEMA_List', {
+          schema: list.map((item: { key: string }) => item.key),
+          source: route.query.source as string,
+          source_id: route.query.source_id as string,
+        });
+        store.commit('common/SET_SCHEMA', '');
+      }
+    } finally {
       spin();
     }
   };

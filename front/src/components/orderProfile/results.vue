@@ -89,6 +89,8 @@
     ],
     data: [],
     pageCount: 0,
+    // 执行结果表保持原样：不固定列宽、不可拖拽，内容自适应换行
+    resizable: false,
     fn: async ({ current, pageSize }: page) => {
       const { data } = await getOrderResult(props.workId, {
         current: current,
@@ -108,6 +110,7 @@
     ],
     data: [],
     pageCount: 0,
+    resizable: false,
   });
 
   const router = useRouter();

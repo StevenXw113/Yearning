@@ -101,4 +101,5 @@ var zh_CN = map[int]string{
 	ERR_RULE_SET_IN_USE:                                       "该规则集正在被数据源使用（%s），请先把这些数据源改绑到其他规则集再删除",
 	INFO_RULE_SET_DELETE:                                      "规则集已删除（可在「变更历史」里回滚恢复）",
 	ORDER_AGREE_WAIT_MANUAL:                                   "审核已通过，工单进入「等待执行」，请由人工点「执行」触发",
+	ER_ORDER_NOT_RELATED:                                      "你不是该工单的相关人（申请人或审批人），无法执行该操作",
 }

@@ -10,7 +10,7 @@
         @search="
           (exp) => {
             tblRef.expr = exp;
-            tbl.manual();
+            tbl.manual(true);
           }
         "
       ></QuerySearch>

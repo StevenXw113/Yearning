@@ -246,7 +246,55 @@ Yearning --help         # 帮助
 
 ---
 
-## 11. 提交与分支约定（本次安全修复分支）
+## 11. 功能测试（对已部署环境跑一遍）
+
+`tools/ftest` 是端到端功能测试：走真实链路（主程序 HTTP/WS → 审核引擎 gRPC → 目标库），
+断言直接读元数据库与目标库核对，不只看接口返回码。适合每次发版后对目标环境跑一遍。
+
+```bash
+go run ./tools/ftest \
+  -base http://127.0.0.1:8000 \
+  -meta-dsn 'root:pwd@tcp(<元数据库>:3306)/Yearning_go?charset=utf8mb4&parseTime=true' \
+  -target-dsn 'demo:pwd@tcp(<目标库>:3306)/demo?charset=utf8mb4&parseTime=true' \
+  -source-id <数据源 source_id> -schema demo -table users -id-column id
+```
+
+- 47 个用例：认证与越权（含**超级管理员拥有全部权限**：可审/可执行他人工单、数据源权限不依赖权限组）、
+  工单全流程（立即/定时/人工执行、驳回、撤销、回滚语句、**编号 = 自增 id**）、
+  项目级工单（批量提交多条 SQL、批次查询、逐条审核（审一条只通过该条）、批量执行、失败即停、提交原子性、
+  **子工单严格按 -1、-2、-3… 排列**）、
+  规则（级别灰度、自研规则、空载荷护栏、规则集增删与回滚）、查询（结果、脱敏、审计记录、导出开关、编号）、
+  权限读写、上游版本检测、**工单编号规则不变量（含历史数据）**
+- 工单列表（我的工单 / 工单审核 / 记录）统一**按项目聚合**：同批次的子工单在前端折叠成一行项目，
+  展开后逐条查看/审核；**分页单位也是项目**，同一批的子工单不会跨页（见 `common.GroupedOrderPage`）
+- 需要四个测试账号（默认 admin / dev1 / dba1 / readonly1）与至少两级的流程模板（`-approve-flag` 指定审批级下标）
+- **测试数据会保留**（工单文本前缀 `FT-`，可在界面上核对现场）；过程中改过的配置（规则集、
+  数据源脱敏字段、导出开关）会自动还原
+- 退出码：0=全部通过，1=有用例失败，2=参数/环境问题
+
+---
+
+## 12. 数据源 ID 收敛（UUID → 4 位短 ID）
+
+新建数据源已经是 4 位短 ID（`factory.NextSourceId()` 查重分配，撞车会自动加长）。
+历史库里遗留的 UUID 形态 ID 用专用工具收敛（**幂等**，默认只预演、加 `-apply` 才写入）：
+
+```bash
+go run ./tools/shorten-source-id -meta-dsn 'root:pwd@tcp(<元数据库>:3306)/Yearning_go?charset=utf8mb4'
+go run ./tools/shorten-source-id -meta-dsn '...' -apply
+```
+
+它会同步改写所有引用：`core_sql_orders` / `core_query_orders` / `core_auto_tasks` 的 `source_id`，
+以及 `core_role_groups.permissions` 里 `ddl_source` / `dml_source` / `query_source` 列表中的旧 ID
+—— **权限就是按 source_id 授权的，漏改会让这些数据源对所有人变成「没有权限」**（表现为接口报
+`没有该数据源权限`、检测/查询全部失败）。改完重启主程序再核对。
+
+> ⚠️ 不要用 `migration` 那个工具做这件事：它是给「≤ v3.0.0 老库」做破坏性升级的
+> （会重建权限组 group_id、重写权限列表、删列），在当前版本的库上重复执行会把权限配置洗成空。
+
+---
+
+## 13. 提交与分支约定（本次安全修复分支）
 
 ```powershell
 git checkout dev
@@ -258,3 +306,32 @@ git push origin dev
 - `dev` 分支承载开发/安全修复，`main`/`next` 为稳定线。
 - 合入稳定线前请在正常 Go 环境跑一次 `go build ./...` 与 `go test ./...`。
 - `SecretKey`、数据库口令等敏感信息**严禁**进入提交。
+
+---
+
+## 14. 工单编号规则
+
+SQL 工单与查询工单的编号统一为「自增 id」形态（`factory.GenWorkId` 已删除）：
+
+- **普通工单**：`work_id` = 该行的自增 `id`（如 `144`）。做法是先落库拿到 id，再回填 `work_id`。
+- **项目级工单**：项目号 = 项目内**首条子工单**的自增 id；各子工单编号为 `项目号-1`、`项目号-2`…
+  （按提交顺序），并共享 `batch_id` = 项目号。
+- 生成入口统一为 `factory.OrderNo(id, seq)`：`seq=0` 为普通工单/项目号，`seq>0` 追加 `-序号`。
+- **列表里的顺序**：列表本身按「待审批优先 + 时间」排序，会把同一项目的子工单打散（-2 排到 -1 前）。
+  因此 `common.GroupedOrderPage` 出来后会做一次 `groupBatchRows`：把同一批次收拢到该批次首次出现的
+  位置并按 id 升序排列，保证展开后严格是 -1、-2、-3…（普通工单位置与排序不变）。
+- 编号搜索按「精确命中 or 该项目全部子工单」（`common.AccordingToWorkId`）；数字编号用子串
+  匹配会命中大量无关工单（搜 `1` 命中所有含 1 的编号）。
+
+### 14.1 历史数据收敛
+
+历史工单（随机 8 位编号）用专用工具一次性改写（**幂等**，默认只预演、加 `-apply` 才写入）：
+
+```bash
+go run ./tools/renumber-orders -meta-dsn 'root:pwd@tcp(<元数据库>:3306)/Yearning_go?charset=utf8mb4'
+go run ./tools/renumber-orders -meta-dsn '...' -apply
+```
+
+它会同步改写引用旧编号的表：SQL 工单的 `core_sql_records` / `core_rollbacks` /
+`core_workflow_details` / `core_order_comments`，查询工单的 `core_query_records`，
+以及项目级工单的 `batch_id`（旧批次号是随机的，一并收敛成项目号）。改完重启主程序再核对。

@@ -28,8 +28,17 @@ func checkOrderPerm(c yee.Context, workId string) bool {
 	return common.IsOrderRelated(workId, user)
 }
 
-func deny(c yee.Context) error {
-	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+// deny 数据源权限不足。ER_USER_NO_PERMISSION 文案里有两个 %s，
+// 必须把用户名和数据源补进去，否则前端直接看到字面的 "user:%s没有该数据源(%s)权限"
+func deny(c yee.Context, sourceId string) error {
+	user := new(factory.Token).JwtParse(c).Username
+	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(
+		fmt.Sprintf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, sourceId)))
+}
+
+// denyOrder 与工单无关：文案不能说成「没有该数据源权限」，会把人往错误方向引
+func denyOrder(c yee.Context) error {
+	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 }
 
 type userProfile struct {

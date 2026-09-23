@@ -96,6 +96,14 @@ const router = createRouter({
               component: () => import('@/views/apply/order.vue'),
             },
             {
+              path: '/apply/batch',
+              name: 'apply/batch',
+              meta: {
+                title: 'Order - 项目工单（批量）',
+              },
+              component: () => import('@/views/apply/batch.vue'),
+            },
+            {
               path: '/apply/query',
               name: 'apply/query',
               meta: {

@@ -23,6 +23,18 @@
             :title="$t('order.apply.query.desc')"
             :value="count.query"
           ></a-statistic>
+          <a-button
+            type="primary"
+            style="margin-left: 20px"
+            @click="
+              () =>
+                $router.push({
+                  path: '/apply/batch',
+                  query: { type: activeKey },
+                })
+            "
+            >项目工单（批量）</a-button
+          >
         </a-space>
       </a-row>
     </a-page-header>

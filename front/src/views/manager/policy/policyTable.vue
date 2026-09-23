@@ -20,6 +20,7 @@
             :placeholder="$t('common.search') + ' ' + $t('common.policy.group')"
             enter-button
             allow-clear
+            style="max-width: 320px"
             @search="onSearch"
           />
         </a-form-item>
@@ -103,6 +104,6 @@
 
   const onSearch = (vl: string) => {
     tblRef.expr.text = vl;
-    tbl.value.manual();
+    tbl.value.manual(true);
   };
 </script>

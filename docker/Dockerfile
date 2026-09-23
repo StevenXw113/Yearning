@@ -57,6 +57,10 @@ RUN go build -trimpath -ldflags "-s -w" -o /out/Yearning .
 WORKDIR /src/engine
 RUN go build -trimpath -ldflags "-s -w" -o /out/engine ./cmd/engine
 
+# 编译 gh-ost（大表在线表结构变更/OSC 功能运行期依赖，CGO_ENABLED=0 已开故为静态二进制）
+ARG GH_OST_VERSION=v1.1.11
+RUN GOBIN=/out go install github.com/github/gh-ost/go/cmd/gh-ost@${GH_OST_VERSION}
+
 # ---------- 阶段三：运行时 ----------
 FROM alpine:3.20.2 AS run
 
@@ -69,6 +73,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 COPY --from=build /out/Yearning /opt/Yearning
 COPY --from=build /out/engine   /opt/engine
+COPY --from=build /out/gh-ost   /usr/local/bin/gh-ost
 COPY docker/docker-entrypoint.sh /opt/docker-entrypoint.sh
 COPY docker/conf.toml /opt/conf.toml
 

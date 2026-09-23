@@ -4,6 +4,7 @@
       <a-input-search
         :placeholder="$t('ruleSearchTips')"
         enter-button
+        style="max-width: 320px"
         @search="onSearch"
       />
     </a-col>

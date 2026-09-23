@@ -20,7 +20,7 @@
       v-if="store.state.user.account.is_record === 1"
       key="/comptroller/order/record"
     >
-      <area-chart-outlined />
+      <AreaChartOutlined />
       <span>{{ $t('menu.comptroller.title') }}</span>
     </a-menu-item>
     <a-sub-menu :title="$t('menu.order.title')">
@@ -74,10 +74,6 @@
         <span>{{ $t('menu.manage.setting') }}</span>
       </a-menu-item>
     </a-sub-menu>
-    <a-menu-item key="/exist">
-      <LogoutOutlined />
-      <span>{{ $t('menu.loginout') }}</span>
-    </a-menu-item>
   </a-menu>
 </template>
 
@@ -86,7 +82,6 @@
     AreaChartOutlined,
     DotChartOutlined,
     HomeOutlined,
-    LogoutOutlined,
     AuditOutlined,
     ToolOutlined,
     PaperClipOutlined,
@@ -111,12 +106,6 @@
 
   const changeMenu = (vl: { keyPath: string[]; key: string }) => {
     store.commit('menu/CHANGE_SELECTED', vl.keyPath);
-    if (vl.key === '/exist') {
-      sessionStorage.clear();
-      store.state.user.account.token = '';
-    }
-    vl.key === '/exist'
-      ? router.push('/login')
-      : router.push(vl.key).finally(() => emit('close'));
+    router.push(vl.key).finally(() => emit('close'));
   };
 </script>

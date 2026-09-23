@@ -103,6 +103,32 @@ export const StateQueryUsage = (state: number) => {
   }
 };
 
+// ---- SQL 文件上传校验 ----
+// accept 属性只影响文件选择器的默认过滤（可被拖拽/改名绕过），因此实际校验放在读取阶段。
+// 抛出的 Error.message 已是当前语言的提示文案，调用方直接展示即可。
+const SQL_FILE_EXT = ['.sql', '.txt'];
+const MAX_SQL_FILE_SIZE = 10 * 1024 * 1024;
+
+export const readSQLFile = async (file: File): Promise<string> => {
+  if (!SQL_FILE_EXT.some((ext) => file.name.toLowerCase().endsWith(ext))) {
+    throw new Error(t('order.apply.upload.type'));
+  }
+  if (file.size > MAX_SQL_FILE_SIZE) {
+    throw new Error(t('order.apply.upload.tooLarge'));
+  }
+  let text: string;
+  try {
+    text = await file.text();
+  } catch {
+    throw new Error(t('order.apply.upload.failed'));
+  }
+  // 文本文件不应含 NUL 字节：改名伪装成 .sql 的二进制文件在这里被拦下
+  if (text.includes('\u0000')) {
+    throw new Error(t('order.apply.upload.binary'));
+  }
+  return text;
+};
+
 export const checkSchema = () => {
   let baseURL = '127.0.0.1:8000';
   let scheme = 'ws://';

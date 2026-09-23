@@ -5,6 +5,7 @@
         <a-input-search
           placeholder="input search text"
           enter-button
+          style="max-width: 320px"
           @search="onSearch"
         />
       </a-col>

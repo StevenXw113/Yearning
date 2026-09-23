@@ -19,16 +19,20 @@ type AIAssistant struct {
 	req openai.ChatCompletionRequest
 }
 
+// renderPrompt 填充提示词模板中的占位符（模板由调用方提供）
+func renderPrompt(tpl, sql string, tables []string) string {
+	p := strings.ReplaceAll(tpl, "{{tables_info}}", strings.Join(tables, "\n"))
+	p = strings.ReplaceAll(p, "{{sql}}", sql)
+	return strings.ReplaceAll(p, "{{lang}}", model.C.General.Lang)
+}
+
 func replace(sql, kind string, tables []string) string {
 	ai := model.GloAI.Load()
 	pp := ai.AdvisorPrompt
 	if kind == "text2sql" {
 		pp = ai.SQLGenPrompt
 	}
-	p := strings.ReplaceAll(pp, "{{tables_info}}", strings.Join(tables, "\n"))
-	p = strings.ReplaceAll(p, "{{sql}}", sql)
-	p = strings.ReplaceAll(p, "{{lang}}", model.C.General.Lang)
-	return p
+	return renderPrompt(pp, sql, tables)
 }
 
 func NewAIAgent() (*AIAssistant, error) {

@@ -1,18 +1,23 @@
 package common
 
 import (
+	"Yearning-go/src/lib/permission"
 	"gorm.io/gorm"
 	"reflect"
 )
 
-const QueryField = "work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`,`id_c`,`data_base`,`table`,`execute_time`,source_id,assigned,current_step,relevant,`file`"
+// QueryField 工单列表字段。id 用于把项目的子工单按创建顺序排列；
+// batch_id 供前端按项目（批次）聚合展示：先看项目，展开后逐条查看/审核。
+const QueryField = "id, work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`,`id_c`,`data_base`,`table`,`execute_time`,source_id,assigned,current_step,relevant,`file`,batch_id"
 
 func AccordingToWorkId(workId string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if workId == "" {
 			return db
 		}
-		return db.Where("work_id like ?", "%"+workId+"%")
+		// 工单号已改为自增 id（项目子工单形如 123-1）：按「精确命中 or 该项目的全部子工单」查。
+		// 数字编号用 like 子串匹配会命中大量无关工单（搜 1 命中所有含 1 的编号）。
+		return db.Where("work_id = ? OR work_id LIKE ?", workId, workId+"-%")
 	}
 }
 
@@ -50,21 +55,6 @@ func AccordingToAllOrderState(state int) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-// SortClause 把表头排序选项映射为 ORDER BY 子句。
-// 只认白名单取值，避免请求内容被拼进 SQL；未知值退回默认排序。
-func SortClause(order string) string {
-	switch order {
-	case "date_asc":
-		return "date ASC"
-	case "date_desc":
-		return "(status = 2) DESC, date DESC"
-	case "status":
-		return "`status` ASC, date DESC"
-	default:
-		return "(status = 2) DESC, date DESC"
-	}
-}
-
 // AccordingToSource 按数据源名称过滤（表头数据源筛选）。
 func AccordingToSource(source string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
@@ -92,10 +82,12 @@ func AccordingToAssigned(user string) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
+// AccordingQueryToAssigned 把查询工单限定为「当前审批人」名下的。
+// 审计员（isRecord）与内置超管不受此限：他们需要查看全部查询工单/查询记录。
 func AccordingQueryToAssigned(isRecord bool, username string) func(db *gorm.DB) *gorm.DB {
 
 	return func(db *gorm.DB) *gorm.DB {
-		if isRecord {
+		if isRecord || permission.IsSuperUser(username) {
 			return db
 		}
 		return db.Where("`assigned` like ?", "%"+username+"%")

@@ -1,10 +1,14 @@
 <template>
   <div v-watermark="{ text: store.state.user.account.user }">
     <a-layout style="min-height: 100vh">
+      <!-- 窄屏（<992px）自动收起成 0 宽，靠顶栏的折叠图标展开，
+           取代原来那个永远打不开的 drawer（is_open 全文件没人置 true） -->
       <a-layout-sider
         v-model:collapsed="collapsed"
         :trigger="null"
         collapsible
+        breakpoint="lg"
+        :collapsed-width="0"
         :width="200"
       >
         <div class="logo">
@@ -37,23 +41,55 @@
                   </template>
                 </a-button>
               </div>
-              <a-dropdown>
-                <a-space class="user-entry">
-                  <a-avatar :src="profile" />
-                  <span class="user-name">{{
-                    store.state.user.account.user
-                  }}</span>
-                </a-space>
+              <div class="header-right">
+                <a-tooltip
+                  :title="
+                    isDark ? $t('common.theme.light') : $t('common.theme.dark')
+                  "
+                >
+                  <a-button type="text" @click="changeTheme">
+                    <!-- 图标库(icons-vue 7)没有 sun/moon，内联两条描边路径，颜色跟 currentColor -->
+                    <template #icon>
+                      <svg
+                        v-if="isDark"
+                        class="theme-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+                      </svg>
+                      <svg
+                        v-else
+                        class="theme-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4.2" />
+                        <path
+                          d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"
+                        />
+                      </svg>
+                    </template>
+                  </a-button>
+                </a-tooltip>
+                <a-dropdown>
+                <span class="user-entry user-name">{{
+                  store.state.user.account.user
+                }}</span>
                 <template #overlay>
-                  <a-menu @click="() => router.push({ path: '/home/profile' })">
-                    <a-menu-item>
+                  <a-menu @click="changeUser">
+                    <a-menu-item key="/home/profile">
                       <a href="javascript:;">{{
                         $t('common.profile.title')
                       }}</a>
                     </a-menu-item>
+                    <a-menu-item key="/exist">
+                      <a href="javascript:;">{{ $t('menu.loginout') }}</a>
+                    </a-menu-item>
                   </a-menu>
                 </template>
               </a-dropdown>
+              </div>
             </div>
           </a-layout-header>
         </a-row>
@@ -78,23 +114,13 @@
         </a-layout-footer>
       </a-layout>
     </a-layout>
-    <a-drawer
-      placement="right"
-      :closable="false"
-      :visible="is_open"
-      @close="close"
-    >
-      <Menu @close="() => (is_open = false)"></Menu>
-    </a-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
   import { Copyright } from '@/config/vars';
-  import CommonMixin from '@/mixins/common';
   import Menu from '@/components/menu/menu.vue';
   import { useStore } from '@/store';
-  import profile from '@/assets/comment/3.svg';
   import { useRouter } from 'vue-router';
   import {
     FullscreenOutlined,
@@ -108,13 +134,30 @@
   // 只用系统图标（public/icon.png），不再用带文字的整张 logo，省掉那一段横向空白
   const logoUrl = `${import.meta.env.BASE_URL}icon.png`;
 
-  const { is_open, close } = CommonMixin();
-
   const store = useStore();
 
   const router = useRouter();
 
   const collapsed = ref<boolean>(false);
+
+  const isDark = ref(localStorage.getItem('theme') !== 'light');
+
+  // 亮暗主题是构建期 less 变量，切换只能整页重载（与「个人中心」里的主题下拉一致）
+  const changeTheme = () => {
+    localStorage.setItem('theme', isDark.value ? 'light' : 'dark');
+    location.reload();
+  };
+
+  const changeUser = (e: { key: string | number }) => {
+    const key = e.key as string;
+    if (key === '/exist') {
+      sessionStorage.clear();
+      store.state.user.account.token = '';
+      router.push('/login');
+    } else {
+      router.push(key);
+    }
+  };
 
   const { isFullscreen, toggle } = useFullscreen();
 </script>
@@ -126,7 +169,7 @@
   align-items: center;
   padding: 10px 12px 10px 32px; /* 32px = 菜单项胶囊内缩 8 + 内边距 24，图标与菜单图标同一条竖线 */
   margin-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--frame-line);
 }
 .logo img {
   display: block;
@@ -140,11 +183,12 @@
 }
 
 
-/* 去掉分隔线后靠底色区分：框架（侧栏+顶栏）比内容区(#1F262E)暗一档，
-   原来的 #21262D 与内容区只差 1%，去掉线会糊成一片 */
+/* 去掉分隔线后靠底色区分：暗色主题下框架（侧栏+顶栏）比内容区(#1F262E)暗一档，
+   原来的 #21262D 与内容区只差 1%，去掉线会糊成一片。
+   取值走 CSS 变量，否则亮色主题下侧栏/顶栏也会是这块深色 */
 :deep(.ant-layout-sider),
 :deep(.ant-layout-header) {
-  background: #1a1f26;
+  background: var(--frame-bg);
 }
 
 /* 展开态侧栏宽度按内容自适应（收起态仍用 antd 的 80px） */
@@ -178,7 +222,7 @@
 }
 :deep(.ant-menu-light .ant-menu-item:hover),
 :deep(.ant-menu-light .ant-menu-submenu-title:hover) {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--frame-hover);
 }
 /* 去掉菜单右侧 1px 分隔线；整列统一用侧栏底色（#21262D）与内容区（#1F262E）区分。
    .ant-menu 同时覆盖展开(inline)与收起(vertical)两种模式 */
@@ -197,18 +241,23 @@
 }
 /* 展开的分组：标题加一层淡淡底色，标出当前所在分组 */
 :deep(.ant-menu-submenu-open > .ant-menu-submenu-title) {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--frame-group);
 }
 /* 子项靠字色区分层级，选中/悬停时回到高对比 */
 :deep(.ant-menu-sub .ant-menu-item) {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--menu-sub-color);
 }
 :deep(.ant-menu-sub .ant-menu-item-selected),
 :deep(.ant-menu-sub .ant-menu-item:hover) {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--menu-sub-active);
 }
 :deep(.ant-menu-submenu-arrow) {
   opacity: 0.45;
+}
+
+/* 收起态宽度为 0 时 antd 会在左上角浮出一个箭头，顶栏已经有折叠图标了，去掉避免两个入口打架 */
+:deep(.ant-layout-sider-zero-width-trigger) {
+  display: none;
 }
 
 /* 顶栏：左侧操作区 + 右侧用户区，两端对齐，不再用栅格 offset 定位 */
@@ -229,13 +278,28 @@
   cursor: pointer;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.theme-icon {
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .user-entry {
   cursor: pointer;
   padding: 0 8px;
   border-radius: 6px;
 }
 .user-entry:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--frame-hover-strong);
 }
 .user-name {
   font-weight: bold;

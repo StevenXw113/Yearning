@@ -52,22 +52,46 @@ func Paging(page interface{}, total int) (start int, end int) {
 	return
 }
 
-// workIdAlphabet 去掉了容易看混的字符（0/O、1/l/I），便于口头转述与手工输入。
-const workIdAlphabet = "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ"
+// shortIdAlphabet 去掉了容易看混的字符（0/O、1/l/I），便于口头转述与手工输入。
+const shortIdAlphabet = "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ"
 
-// GenWorkId 生成 8 位随机工单号。
-// 早先用 36 位 UUID：太长、不便于人工转述。8 位 × 56 字符表 ≈ 9.7e13 种组合，
-// 十万级工单量下碰撞概率可忽略（且 work_id 在库里是普通索引，不强制唯一）。
-func GenWorkId() string {
-	b := make([]byte, 8)
+// GenShortId 生成 n 位随机短 ID（56 字符表）。工单号、数据源 ID 这类需要人工转述的标识都用它。
+func GenShortId(n int) string {
+	b := make([]byte, n)
 	if _, err := crand.Read(b); err != nil {
-		// 几乎不可能发生；真发生时退回时间戳，保证调用方拿到一个非空 ID
+		// 几乎不可能发生；真发生时退回时间戳，保证调用方拿到非空 ID
 		return strconv.FormatInt(time.Now().UnixNano(), 36)
 	}
 	for i, v := range b {
-		b[i] = workIdAlphabet[int(v)%len(workIdAlphabet)]
+		b[i] = shortIdAlphabet[int(v)%len(shortIdAlphabet)]
 	}
 	return string(b)
+}
+
+// NextSourceId 生成不与既有数据源重复的短 ID：4 位起步，撞多了（或被用尽）自动加长。
+// 必须查重——source_id 是权限校验与工单归属的依据，重复会导致跨数据源串数据。
+func NextSourceId() string {
+	for n := 4; n <= 8; n++ {
+		for i := 0; i < 32; i++ {
+			id := GenShortId(n)
+			var cnt int64
+			model.DB().Model(model.CoreDataSource{}).Where("source_id = ?", id).Count(&cnt)
+			if cnt == 0 {
+				return id
+			}
+		}
+	}
+	return GenShortId(16) // 兜底：极端情况下不阻塞建数据源
+}
+
+// OrderNo 生成工单编号：直接取工单的自增 id，唯一且便于转述。
+// 项目级子工单在项目号后追加序号，形如 123-1、123-2；项目号本身用 seq=0。
+func OrderNo(id uint, seq int) string {
+	no := strconv.FormatUint(uint64(id), 10)
+	if seq > 0 {
+		no += "-" + strconv.Itoa(seq)
+	}
+	return no
 }
 
 func TimeDifference(t string) bool {

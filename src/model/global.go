@@ -44,6 +44,13 @@ type general struct {
 	RpcAddr   string
 	LogLevel  string
 	Lang      string
+	// GhOstPath gh-ost 可执行文件路径；留空则从 PATH 中查找 gh-ost
+	GhOstPath string
+	// OscMinRows 触发在线表结构变更(OSC)的表行数估算下限；<=0 表示关闭 OSC（全部走引擎执行）
+	OscMinRows int64
+	// GhOstArgs gh-ost 附加参数（空格分隔），用于适配环境差异。
+	// 例如数据源账号没有 performance_schema 权限时需加 "--skip-metadata-lock-check"
+	GhOstArgs string
 }
 
 type DbInfo struct {

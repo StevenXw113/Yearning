@@ -100,6 +100,47 @@ export function userPostOrder(args: OrderItem) {
   return request.post(`${COMMON_URI}/common/post`, args);
 }
 
+// 项目级工单（批量提交）：一次提交多条明细，每条明细一个子工单，共享批次号
+export interface BatchOrderItem {
+  source_id: string;
+  data_base: string;
+  file?: string;
+  sql: string;
+}
+
+export interface BatchOrderParams {
+  type: number;
+  backup: number;
+  delay: string;
+  text: string;
+  items: BatchOrderItem[];
+}
+
+export interface BatchExecuteResult {
+  work_id: string;
+  source: string;
+  data_base: string;
+  ok: boolean;
+  msg: string;
+}
+
+export function userPostBatchOrder(args: BatchOrderParams) {
+  return request.post<Res<string>>(`${COMMON_URI}/common/batch`, args);
+}
+
+export function getBatchOrders(batch_id: string) {
+  return request.get<Res<any[]>>(`${COMMON_URI}/common/batch`, {
+    params: { batch_id },
+  });
+}
+
+export function executeBatchOrder(batch_id: string) {
+  return request.post<Res<BatchExecuteResult[]>>(
+    `${COMMON_URI}/audit/order/batch`,
+    { batch_id }
+  );
+}
+
 export function getOrderList(args: OrderParams, tp: string) {
   return request.put(checkUri(tp), args);
 }

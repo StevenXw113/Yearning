@@ -90,7 +90,7 @@
 
   const search = (vl: DBExpr) => {
     tblRef.expr = vl;
-    tbl.value.manual();
+    tbl.value.manual(true);
   };
 
   const fillInfo = (vl: Source) => {

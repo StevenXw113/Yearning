@@ -9,6 +9,10 @@ import (
 	"strconv"
 )
 
+// ⚠️ 本工具只用于把「老版本（≤ v3.0.0 时期）」的库升级到当前结构：它会重建权限组的 group_id、
+// 重写权限列表、删列等。**已在当前版本运行的库不要执行它**——重复执行会把权限配置洗成空，
+// 表现为所有人「没有该数据源权限」。新增的数据修复请单独写小工具（见 tools/）。
+
 type originOther struct {
 	Limit       string   `json:"limit"`
 	IDC         []string `json:"idc"`

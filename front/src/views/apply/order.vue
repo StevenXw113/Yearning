@@ -6,6 +6,11 @@
   <a-row :gutter="24" type="flex" justify="center">
     <a-col :md="24" :xl="6">
       <a-card>
+        <!-- 左栏保持 6/24：试过收到 5/24 给编辑器让宽（1600 下编辑器 1015→1075px），
+             但两条路都不行——横排标签在 ≤1440 窗口下标签列只剩 ~50px，
+             「执行方式」「是否回滚」必被裁；竖排标签不裁字却把左卡从 507px 撑到 747px，
+             1366×768 这类屏幕下「获取表结构/上传SQL文件/提交」会掉出首屏。
+             标签余量靠 style 里收窄冒号间距补，见 .ant-form-item-label::after -->
         <a-form
           v-bind="layout"
           ref="formRef"
@@ -53,9 +58,16 @@
             >
             </a-textarea>
           </a-form-item>
-          <a-form-item :label="$t('order.profile.timing')">
+          <a-form-item :label="$t('order.profile.exec')">
+            <a-radio-group v-model:value="execMode" name="execMode">
+              <a-radio value="now">{{ $t('order.exec.now') }}</a-radio>
+              <a-radio value="schedule">{{ $t('order.exec.schedule') }}</a-radio>
+              <a-radio value="manual">{{ $t('order.exec.manual') }}</a-radio>
+            </a-radio-group>
             <a-date-picker
+              v-if="execMode === 'schedule'"
               show-time
+              style="margin-left: 12px"
               :disabled-date="disabledDate"
               :disabled-time="disabledTime"
               @ok="delayTime"
@@ -67,20 +79,48 @@
               <a-radio :value="0">{{ $t('common.no') }}</a-radio>
             </a-radio-group>
           </a-form-item>
-          <a-form-item :label="$t('common.action')">
-            <a-space>
-              <a-button :loading="loadingTblBtn" @click="fetchTableArch">{{
-                $t('order.apply.table.info')
-              }}</a-button>
-              <a-button
-                :loading="loadingPostBtn"
-                :disabled="enabled"
-                @click="postOrder"
-                >{{ $t('common.commit') }}</a-button
-              >
-            </a-space>
-          </a-form-item>
         </a-form>
+        <!-- 动作区：左栏卡片只有 ~260px，三个按钮同排会挤出卡片，
+             这里改成整宽动作栏——次要操作一排（放不下自动换行）、文件名一行、主操作整宽 -->
+        <a-space direction="vertical" :size="8" style="width: 100%">
+          <a-space wrap :size="8">
+            <a-button
+              size="small"
+              :loading="loadingTblBtn"
+              @click="fetchTableArch"
+              >{{ $t('order.apply.table.info') }}</a-button
+            >
+            <a-upload
+              :before-upload="loadSQLFile"
+              :show-upload-list="false"
+              accept=".sql,.txt"
+            >
+              <a-button size="small">{{ $t('order.apply.upload') }}</a-button>
+            </a-upload>
+          </a-space>
+          <a-typography-text
+            v-if="orderItems.file"
+            type="secondary"
+            :title="orderItems.file"
+            style="
+              display: block;
+              width: 100%;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            "
+          >
+            {{ orderItems.file }}
+          </a-typography-text>
+          <a-button
+            type="primary"
+            block
+            :loading="loadingPostBtn"
+            :disabled="enabled"
+            @click="postOrder"
+            >{{ $t('common.commit') }}</a-button
+          >
+        </a-space>
       </a-card>
     </a-col>
     <a-col :sm="24" :md="24" :xl="18">
@@ -98,36 +138,21 @@
                 </Editor>
               </div>
               <br />
-              <a-table
-                :columns="col"
-                :data-source="tData"
-                bordered
-                row-key="sql"
-              ></a-table>
+              <c-table :tbl-ref="sqlRef" row-key="sql"></c-table>
             </a-spin>
           </a-tab-pane>
           <a-tab-pane :key="2" :tab="$t('order.apply.tab.table')" force-render>
-            <a-table
-              :columns="tableArch"
-              :data-source="archData"
-              bordered
-              :scroll="{ y: 400 }"
-              row-key="field"
-            ></a-table>
+            <!-- 列宽有上限：内容超长截断显示（悬停看全文），列多则整体左右滚动 -->
+            <c-table :tbl-ref="archRef" row-key="field"></c-table>
           </a-tab-pane>
           <a-tab-pane :key="3" :tab="$t('order.apply.tab.index')">
-            <a-table
-              :columns="indexArch"
-              :data-source="indexData"
-              bordered
-              row-key="IndexName"
-            >
+            <c-table :tbl-ref="idxRef" row-key="IndexName">
               <template #bodyCell="{ column, text }">
                 <template v-if="column.dataIndex === 'NonUnique'">{{
                   text === 0 ? $t('common.yes') : $t('common.no')
                 }}</template>
               </template>
-            </a-table>
+            </c-table>
           </a-tab-pane>
         </a-tabs>
         <br />
@@ -160,7 +185,8 @@
 <script lang="ts" setup>
   import Editor from '@/components/editor/editor.vue';
   import JunoMixin from '@/mixins/juno';
-  import { onMounted, ref, onUnmounted } from 'vue';
+  import { onMounted, reactive, ref, onUnmounted, watch } from 'vue';
+  import { tableRef } from '@/components/table';
   import { useRoute, onBeforeRouteLeave } from 'vue-router';
   import { SQLTesting } from '@/types';
   import FetchMixins from '@/mixins/fetch';
@@ -180,6 +206,7 @@
     userPostOrder,
   } from '@/apis/orderPostApis';
   import CommonMixins from '@/mixins/common';
+  import { readSQLFile } from '@/lib';
   import router from '@/router';
   import { useStore } from '@/store';
   import { useI18n } from 'vue-i18n';
@@ -189,9 +216,12 @@
 
   const { t } = useI18n();
 
+  // 标签列 7/24：6/24 时在 1366 窗口下只有 ~55px，而「执行方式」+ 冒号要 ~64px，
+  // 会被 antd 裁掉（原有问题）。7/24 让 1366 下也有 ~68px；控件区仍有 165px+，
+  // 1600 窗口下 207px 够「执行方式」两行排布
   const layout = {
-    labelCol: { span: 6 },
-    wrapperCol: { span: 18 },
+    labelCol: { span: 7 },
+    wrapperCol: { span: 17 },
   };
 
   const loadingTblBtn = ref(false);
@@ -199,10 +229,6 @@
   const loadingPostBtn = ref(false);
 
   const activeKey = ref(1);
-
-  const archData = ref([]);
-
-  const indexData = ref([]);
 
   const spin = ref(false);
 
@@ -227,9 +253,37 @@
     ],
   };
 
-  const tData = ref([] as SQLTesting[]);
-
   const { col, orderItems, tableArch, indexArch } = JunoMixin();
+
+  // 三张表：SQL 检测结果 / 表结构 / 索引（工单填写页：可拖列宽、截断内容悬停看全文）
+  const sqlRef = reactive<tableRef>({
+    col: col as any,
+    data: [] as SQLTesting[],
+    pageCount: 0,
+    defaultPageSize: 10,
+    resizable: true,
+  });
+  // 表结构/索引详情：列头由接口真实返回动态生成，列宽有上限——超长内容截断显示（悬停看全文）
+  const archRef = reactive<tableRef>({
+    col: tableArch as any,
+    data: [],
+    pageCount: 0,
+    defaultPageSize: 10,
+    resizable: true,
+  });
+  const idxRef = reactive<tableRef>({
+    col: indexArch as any,
+    data: [],
+    pageCount: 0,
+    defaultPageSize: 10,
+    resizable: true,
+  });
+
+  // 前端本地数据：总条数 = 数据条数（分页在表格内完成）
+  const fillTable = (ref: any, rows: any[]) => {
+    ref.data = rows;
+    ref.pageCount = rows.length;
+  };
 
   const { orderProfileArch, editor } = FetchMixins();
 
@@ -271,6 +325,20 @@
     return result;
   };
 
+  // 执行方式（提交时决定）：now=审批通过即执行、schedule=定时执行、manual=人工执行。
+  // 后端只认 orderItems.delay：'none' / 'YYYY-MM-DD HH:mm' / 'manual'
+  const execMode = ref('now');
+
+  watch(
+    execMode,
+    (v) => {
+      if (v === 'now') orderItems.delay = 'none';
+      else if (v === 'manual') orderItems.delay = 'manual';
+      else orderItems.delay = ''; // 选完时间后再由 delayTime 填
+    },
+    { immediate: true }
+  );
+
   const delayTime = (date: Dayjs) => {
     orderItems.delay = date.format('YYYY-MM-DD HH:mm');
   };
@@ -281,6 +349,59 @@
     fetchFields();
   };
 
+  // 列头按接口真实返回的字段动态生成（SHOW FULL FIELDS / SHOW INDEX），不写死列集合；
+  // 已知键给中文标题，其余直接用键名
+  const fieldTitles: Record<string, string> = {
+    field: t('order.table.field'),
+    type: t('order.table.type'),
+    collation: '字符集',
+    null: t('order.table.isnull'),
+    key: '键',
+    default: t('order.table.default'),
+    extra: '额外信息',
+    privileges: '权限',
+    comment: t('order.table.extra'),
+  };
+  const indexTitles: Record<string, string> = {
+    Table: '所属表',
+    NonUnique: t('order.table.isunique'),
+    IndexName: t('order.table.index'),
+    Seq: '序号',
+    ColumnName: t('order.table.field'),
+    IndexType: '索引类型',
+  };
+  // 每列宽度上限：超长内容按列宽截断显示（省略号 + 悬停 title 看全文），
+  // 也避免 privileges / comment 这类长内容把表格撑到无限宽
+  const fieldWidths: Record<string, number> = {
+    field: 160,
+    type: 150,
+    collation: 160,
+    null: 90,
+    key: 80,
+    default: 130,
+    extra: 130,
+    privileges: 180,
+    comment: 220,
+  };
+  const indexWidths: Record<string, number> = {
+    Table: 140,
+    NonUnique: 90,
+    IndexName: 160,
+    Seq: 70,
+    ColumnName: 300,
+    IndexType: 120,
+  };
+  const columnsFrom = (
+    rows: any[],
+    titles: Record<string, string>,
+    widths: Record<string, number>
+  ) =>
+    Object.keys(rows[0] || {}).map((k) => ({
+      title: titles[k] || k,
+      dataIndex: k,
+      width: widths[k] || 150,
+    }));
+
   const fetchTableArch = async () => {
     loadingTblBtn.value = true;
     const { data } = await queryTableArch(orderItems)
@@ -290,8 +411,22 @@
       .finally(() => {
         loadingTblBtn.value = false;
       });
-    archData.value = data.payload.rows;
-    indexData.value = data.payload.idx;
+    if (data.payload.rows?.length) {
+      archRef.col = columnsFrom(
+        data.payload.rows,
+        fieldTitles,
+        fieldWidths
+      ) as any;
+      fillTable(archRef, data.payload.rows);
+    }
+    if (data.payload.idx?.length) {
+      idxRef.col = columnsFrom(
+        data.payload.idx,
+        indexTitles,
+        indexWidths
+      ) as any;
+      fillTable(idxRef, data.payload.idx);
+    }
     activeKey.value = 2;
     message.success(t('order.apply.table.info') + t('common.success'));
   };
@@ -308,8 +443,8 @@
       sql: sql,
     } as SQLTestParams);
     let counter = 0;
-    tData.value = data.payload;
-    tData.value.forEach((item: SQLTesting) => {
+    fillTable(sqlRef, data.payload);
+    sqlRef.data.forEach((item: SQLTesting) => {
       // 只有 level===1（错误级规则）才拦；警告(2)/观察(3) 仅供参考，不影响提交。
       if (item.level === 1) {
         counter++;
@@ -337,6 +472,23 @@
         message.error(t('order.apply.form.commit'));
       })
       .finally(() => (loadingPostBtn.value = !loadingPostBtn.value));
+  };
+
+  // 上传 SQL 文件：在浏览器端直接读入编辑器（不落服务端、不新增上传接口），
+  // 文件名随工单保存（core_sql_orders.file），便于审批时追溯 SQL 来源。
+  // 类型/大小/是否文本的校验统一在 readSQLFile 内完成
+  const loadSQLFile = async (file: File) => {
+    try {
+      const sql = await readSQLFile(file);
+      editor.value.ChangeEditorText(sql);
+      orderItems.file = file.name;
+      enabled.value = true;
+      // 载入后立即检测：选定目标库时才有检测意义，有错误级规则会直接禁用提交
+      if (orderItems.data_base) testResults(sql);
+    } catch (e) {
+      message.error((e as Error).message);
+    }
+    return false; // 阻止组件自身上传（内容已进编辑器）
   };
 
   const registerCompletionItemProvider = async (
@@ -396,9 +548,15 @@
 
   const fetchTimeline = async () => {
     const { data } = await queryTimeline(orderItems.source_id, '');
-    data.code === 5555
-      ? router.go(-1)
-      : (orderProfileArch.timeline = data.payload);
+    if (data.code === 5555) {
+      // 该数据源没配审核流程，本页提交不了工单。
+      // 原来直接 router.go(-1)：刷新/直接打开链接时没有可回退的历史，会跳到上一个站点或乱跳，
+      // 页面上也不给任何解释。改成提示原因 + 回可操作的工单申请页（用 replace 避免后退又回到这页）
+      message.error(data.text);
+      router.replace('/apply/list');
+      return;
+    }
+    orderProfileArch.timeline = data.payload;
   };
 
   onMounted(() => {
@@ -429,8 +587,10 @@
         onOk: () => {
           next();
         },
+        // 点「取消」= 不离开，直接终止这次导航（原来写的是 router.go(11)，
+        // 那是让浏览器历史前进 11 条，会跳到完全不相干的页面）
         onCancel: () => {
-          router.go(11);
+          next(false);
         },
         okCancel: true,
       });
@@ -444,3 +604,26 @@
     monaco_editor.dispose();
   });
 </script>
+
+<style scoped>
+/* 左栏是 xl=6 的窄卡（1600 下实测 340px 宽），antd 默认每个表单项 24px 的下间距
+   已经和行高(32px)差不多，整列显得很空。压到 10px，8 行省下约 110px 高度。 */
+:deep(.ant-form-item) {
+  margin-bottom: 10px;
+}
+/* 标签列 6/24 约 65px，「执行方式」+ 冒号约 64px 卡在边缘；
+   antd 给冒号留了 8px 右间距，收到 3px（并收左间距）腾出余量，避免被裁 */
+:deep(.ant-form-item-label > label)::after {
+  margin: 0 3px 0 1px;
+}
+/* 执行方式/是否回滚的单选组：控件区 187px，默认每个选项各占一行（实测 3 行 66px）。
+   去掉 antd 的 8px 右间距后，列间距 ≤8px 才能两两排下（实测 2 行 46px） */
+:deep(.ant-radio-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+:deep(.ant-radio-group .ant-radio-wrapper) {
+  margin-right: 0; /* 间距交给上面的 gap，避免和 antd 的 8px 叠加 */
+}
+</style>

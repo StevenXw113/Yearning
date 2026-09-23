@@ -68,11 +68,9 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 	if err = c.Bind(d); err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
-	workID := factory.GenWorkId()
 	other := model.GloOther.Load()
 	if !other.Query {
-		model.DB().Create(&model.CoreQueryOrder{
-			WorkId:       workID,
+		o := model.CoreQueryOrder{
 			Username:     user.Username,
 			Date:         time.Now().Format("2006-01-02 15:04"),
 			Export:       reflect(other.Export),
@@ -81,11 +79,18 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 			Text:         i18n.DefaultLang.Load(i18n.INFO_QUERY_AUDIT_DISABLED),
 			Assigned:     "admin",
 			ApprovalTime: time.Now().Format("2006-01-02 15:04"),
-		})
-		return
+		}
+		model.DB().Create(&o)
+		// 编号 = 自增 id：先落库拿到 id 再回填
+		model.DB().Model(&o).Update("work_id", factory.OrderNo(o.ID, 0))
+		// 必须有回包：原先直接 return，前端拿到空响应，表现为「点了没反应」
+		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_QUERY_AUDIT_DISABLED)))
 	}
 
-	if err := model.DB().Model(model.CoreQueryOrder{}).Where("username =? and status =?", user.Username, 2).First(&t).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+	// 去重只针对「待审核」的申请：status=1 才是待审核，status=2 是已通过的查询权限
+	// （SocketQueryResults 依据它判定该用户可查询哪个数据源）。用 status=2 去重会让
+	// 曾经查询过的用户（含审核关闭时自动生成的工单）永远无法再提交申请。
+	if err := model.DB().Model(model.CoreQueryOrder{}).Where("username =? and status =?", user.Username, 1).First(&t).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		var principal model.CoreDataSource
 		model.DB().Model(model.CoreDataSource{}).Where("source_id = ?", d.SourceId).First(&principal)
 		// 数据源未配置查询审批人时兜底给 admin：assigned 为空会让审批页按 assigned 过滤时
@@ -94,8 +99,7 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 		if assigned == "" {
 			assigned = "admin"
 		}
-		model.DB().Create(&model.CoreQueryOrder{
-			WorkId:   workID,
+		o := model.CoreQueryOrder{
 			Username: user.Username,
 			Date:     time.Now().Format("2006-01-02 15:04"),
 			Text:     d.Text,
@@ -104,8 +108,12 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 			SourceId: d.SourceId,
 			Assigned: assigned,
 			RealName: user.RealName,
-		})
-		pusher.NewMessagePusher(workID).Query().QueryBuild(pusher.SummitStatus).Push()
+		}
+		model.DB().Create(&o)
+		// 编号 = 自增 id：先落库拿到 id 再回填
+		o.WorkId = factory.OrderNo(o.ID, 0)
+		model.DB().Model(&o).Update("work_id", o.WorkId)
+		pusher.NewMessagePusher(o.WorkId).Query().QueryBuild(pusher.SummitStatus).Push()
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_CREATE)))
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_DUP)))
@@ -265,11 +273,16 @@ func SocketQueryResults(c yee.Context) (err error) {
 				}
 
 				queryTime := int(time.Since(clock).Seconds() * 1000)
-				// msg.Ref 会被下一轮循环覆写、core 会随连接关闭失效，
-				// 因此协程所需的值必须全部按参数传入，不能在闭包内延迟读取
-				go func(w string, s string, ex int, source string, schema string) {
-					model.DB().Create(&model.CoreQueryRecord{SQL: s, WorkId: w, ExTime: ex, Time: time.Now().Format("2006-01-02 15:04"), Source: source, Schema: schema})
-				}(d.WorkId, msg.Ref.Sql, queryTime, core.source, msg.Ref.Schema)
+				// 审计记录同步落库：异步（go func）时进程异常退出会丢掉这条查询日志，
+				// 而查询日志本身就是审计依据；单行插入的开销可以忽略。
+				model.DB().Create(&model.CoreQueryRecord{
+					WorkId: d.WorkId,
+					SQL:    msg.Ref.Sql,
+					ExTime: queryTime,
+					Time:   time.Now().Format("2006-01-02 15:04"),
+					Source: core.source,
+					Schema: msg.Ref.Schema,
+				})
 				if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Export: d.Export == 1, Results: queryData, QueryTime: queryTime})); err != nil {
 					c.Logger().Error(err)
 				}

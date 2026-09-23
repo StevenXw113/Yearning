@@ -4,18 +4,22 @@ import (
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
 	"encoding/json"
 	"github.com/cookieY/yee"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/net/websocket"
+	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"time"
 )
 
-const QueryField = "work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`, `source_id`,`id_c`,`data_base`,`table`,`execute_time`,assigned,current_step,relevant"
+// QueryField 审批列表字段。id 用于把项目的子工单按创建顺序排列；
+// batch_id 供前端按项目（批次）聚合展示：先看项目，展开后逐条审核。
+const QueryField = "id, work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`, `source_id`,`id_c`,`data_base`,`table`,`execute_time`,assigned,current_step,relevant,batch_id"
 
 func AuditOrderState(c yee.Context) (err error) {
 	u := new(Confirm)
@@ -28,7 +32,7 @@ func AuditOrderState(c yee.Context) (err error) {
 	switch u.Tp {
 	case "undo":
 		if !hasOrderPermission(u.WorkId, user.Username) {
-			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 		}
 		pusher.NewMessagePusher(u.WorkId).Order().OrderBuild(pusher.UndoStatus).Push()
 		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =? AND `status` =?", u.WorkId, 2).Updates(&model.CoreSqlOrder{Status: 6})
@@ -41,7 +45,7 @@ func AuditOrderState(c yee.Context) (err error) {
 		// 人工执行：仅工单相关人（申请人 / 审批链上的人）可触发；
 		// 已通过但停在「等待执行」的工单（人工执行模式或延迟执行）由此处落地执行。
 		if !hasOrderPermission(u.WorkId, user.Username) {
-			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 		}
 		return c.JSON(http.StatusOK, ExecuteOrder(u, user.Username))
 	default:
@@ -57,7 +61,7 @@ func ScheduledChange(c yee.Context) (err error) {
 	}
 	user := new(factory.Token).JwtParse(c)
 	if !hasOrderPermission(u.WorkId, user.Username) {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 	}
 	// 延迟调度在 Yearning 侧完成：'none'/空 表示立即执行，否则重排到新时间点由 cron 到点触发。
 	if u.Delay == "" || u.Delay == "none" {
@@ -87,7 +91,15 @@ func DelayKill(c yee.Context) (err error) {
 	}
 	user := new(factory.Token).JwtParse(c)
 	if !hasOrderPermission(u.WorkId, user.Username) {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
+	}
+	// 正在执行的 OSC（gh-ost）同样需要能中止：发 SIGTERM，gh-ost 会自行清理影子表，
+	// 并把工单置为执行失败（等待执行的 status=5 不会被 delayKill 覆盖）
+	msg := delayKill(u.WorkId)
+	if KillOSC(u.WorkId) {
+		model.DB().Model(&model.CoreSqlOrder{}).Where("work_id =? AND `status` =?", u.WorkId, 5).
+			Updates(map[string]interface{}{"status": 4, "execute_time": time.Now().Format("2006-01-02 15:04")})
+		msg = "已向 gh-ost 发送中止指令，工单标记为执行失败"
 	}
 	model.DB().Create(&model.CoreWorkflowDetail{
 		WorkId:   u.WorkId,
@@ -95,7 +107,7 @@ func DelayKill(c yee.Context) (err error) {
 		Time:     time.Now().Format("2006-01-02 15:04"),
 		Action:   i18n.DefaultLang.Load(i18n.ORDER_KILL_STATE),
 	})
-	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(delayKill(u.WorkId)))
+	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(msg))
 }
 
 func FetchAuditOrder(c yee.Context) (err error) {
@@ -130,15 +142,23 @@ func FetchAuditOrder(c yee.Context) (err error) {
 			if !ok {
 				break
 			}
-			u.Paging().OrderBy(common.SortClause(u.Expr.Order)).Select(QueryField).Query(common.AccordingToAllOrderState(u.Expr.Status),
+			// 项目级工单以项目为分页单位（同一批的子工单不跨页），见 common.GroupedOrderPage
+			scopes := []func(*gorm.DB) *gorm.DB{
+				common.AccordingToAllOrderState(u.Expr.Status),
 				common.AccordingToAllOrderType(u.Expr.Type),
-				common.AccordingToRelevant(user),
+			}
+			// 超级管理员拥有所有权限：可审所有工单，不按「相关人」过滤
+			if !permission.IsSuperUser(user) {
+				scopes = append(scopes, common.AccordingToRelevant(user))
+			}
+			scopes = append(scopes,
 				common.AccordingToText(u.Expr.Text),
 				common.AccordingToUsername(u.Expr.Username),
 				common.AccordingToDate(u.Expr.Picker),
 				common.AccordingToWorkId(u.Expr.WorkId),
 				common.AccordingToSource(u.Expr.Source),
 			)
+			common.GroupedOrderPage(&u, QueryField, scopes...)
 			if err = websocket.Message.Send(ws, factory.ToJson(u.ToMessage())); err != nil {
 				c.Logger().Error(err)
 				break
@@ -151,7 +171,7 @@ func FetchAuditOrder(c yee.Context) (err error) {
 func FetchOSCAPI(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !common.IsOrderRelated(workId, new(factory.Token).JwtParse(c).Username) {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 	}
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
@@ -182,6 +202,8 @@ func AuditOrderApis(c yee.Context) (err error) {
 		return DelayKill(c)
 	case "scheduled":
 		return ScheduledChange(c)
+	case "batch":
+		return BatchExecute(c)
 	default:
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}

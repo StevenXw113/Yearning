@@ -7,7 +7,6 @@ import (
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"encoding/json"
-	"github.com/google/uuid"
 	drive "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -102,7 +101,8 @@ func SuperCreateSource(source *model.CoreDataSource) common.Resp {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
 	}
 	source.Password = pwd
-	source.SourceId = uuid.New().String()
+	// 4 位短 ID（查重分配）：source_id 会在工单、权限配置里被人眼看，UUID 太长
+	source.SourceId = factory.NextSourceId()
 	model.DB().Create(source)
 	return common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.DB_SAVE_SUCCESS))
 }

@@ -54,9 +54,3 @@
     e.clearSelection();
   });
 </script>
-
-<style>
-  .paste {
-    src: '';
-  }
-</style>

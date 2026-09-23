@@ -33,6 +33,11 @@ export default {
   'order.apply.card.env': 'env: {env}',
   'order.apply.card.enter': 'Enter to apply',
   'order.apply.table.info': 'Table structure',
+  'order.apply.upload': 'Upload SQL file',
+  'order.apply.upload.failed': 'Failed to read the file',
+  'order.apply.upload.tooLarge': 'SQL file too large (max 10MB)',
+  'order.apply.upload.type': 'Only .sql / .txt files are allowed',
+  'order.apply.upload.binary': 'Not a text file (binary content detected)',
   'order.apply.tab.sql': 'SQL',
   'order.apply.tab.assistant': 'AI Assistant',
   'order.apply.tab.table': 'Table structure',
@@ -61,6 +66,20 @@ export default {
   'order.table.index': 'IndexName',
   'order.table.isunique': 'Unique',
   'order.table.delay': 'Immediately',
+  'order.profile.exec': 'Execution',
+  'order.exec.now': 'Execute now',
+  'order.exec.schedule': 'Scheduled execution',
+  'order.exec.manual': 'Manual execution',
+
+  'order.assistant.empty':
+    'Ask the assistant, e.g. "optimize this SQL" or "is this index necessary". The source/schema/tables selected above and the SQL are sent as context.',
+  'order.assistant.placeholder':
+    'Type your question. Enter to send, Shift + Enter for a new line',
+  'order.assistant.send': 'Send',
+  'order.assistant.thinking': 'Generating',
+  'order.assistant.stop': 'Stop',
+  'order.assistant.clear': 'Clear',
+  'order.assistant.failed': 'AI request failed',
 
   'order.undo.tips': 'Confirm undo of order?',
   'order.undo': 'Undo',

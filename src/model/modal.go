@@ -102,6 +102,9 @@ type CoreSqlOrder struct {
 	Relevant    JSON   `gorm:"type:json" json:"relevant"`
 	OSCInfo     string `gorm:"type:longtext;default ''" json:"osc_info"`
 	File        string `gorm:"type:varchar(200);not null;default ''" json:"file"`
+	// 项目级工单（批量提交）批次号 = 项目工单号（项目内第一条子工单的自增 id），
+	// 同一批次的子工单共享它；空字符串表示普通单工单，向后兼容
+	BatchId string `gorm:"type:varchar(50);not null;default '';index:batch_idx" json:"batch_id"`
 }
 
 type CoreRollback struct {

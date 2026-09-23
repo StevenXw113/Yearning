@@ -67,7 +67,11 @@
               order.backup ? $t('common.yes') : $t('common.no')
             }}</a-descriptions-item>
             <a-descriptions-item :label="$t('order.profile.timing')">{{
-              order.delay === 'none' ? $t('order.table.delay') : order.delay
+              order.delay === 'manual'
+                ? $t('order.exec.manual')
+                : order.delay === 'none'
+                ? $t('order.table.delay')
+                : order.delay
             }}</a-descriptions-item>
             <a-descriptions-item :label="$t('order.profile.auditor')">
               <template v-for="i in order.assigned.split(',')" :key="i">
@@ -147,8 +151,7 @@
                         container-id="orderEditor"
                         @get-values="testResults"
                       ></editor>
-                      <a-table :columns="col" size="small" :data-source="tData">
-                      </a-table>
+                      <c-table :tbl-ref="tblRef" size="small"></c-table>
                     </div>
                   </a-card>
                   <br />
@@ -198,7 +201,8 @@
   import router from '@/router';
   import OSC from './osc.vue';
   import { useStore } from '@/store';
-  import { computed, ref, onMounted } from 'vue';
+  import { computed, reactive, ref, onMounted } from 'vue';
+  import { tableRef } from '@/components/table';
   import FetchMixins from '@/mixins/fetch';
   import { checkSchema, StateUsage } from '@/lib';
   import {
@@ -234,7 +238,14 @@
 
   const store = useStore();
 
-  const tData = ref();
+  // SQL 检测结果表（列定义来自 JunoMixin）；不分页，可拖拽列宽
+  const tblRef = reactive<tableRef>({
+    col: col as any,
+    data: [],
+    pageCount: 0,
+    hidePagination: true,
+    resizable: true,
+  });
 
   // 初始禁用：审核人须先点一次「SQL检测」，且没有错误级命中（level===1）才解锁「同意」；
   // 警告/观察级命中不拦提交。
@@ -271,8 +282,8 @@
       work_id: order.value.work_id,
     } as SQLTestParams);
     let counter = 0;
-    tData.value = data.payload;
-    tData.value.forEach((item: SQLTesting) => {
+    tblRef.data = data.payload;
+    tblRef.data.forEach((item: SQLTesting) => {
       // 只有 level===1（错误级规则）才拦；警告(2)/观察(3) 仅供参考，不影响提交。
       if (item.level === 1) {
         counter++;

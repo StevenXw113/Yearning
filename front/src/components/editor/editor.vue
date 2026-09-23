@@ -1,7 +1,7 @@
 <template>
   <div
     :id="props.containerId"
-    :style="{ height: height / 7 < 250 ? `250px` : `${height} px` }"
+    :style="{ height: height / 7 < 250 ? `250px` : `${height / 7}px` }"
   ></div>
   <a-space style="margin-top: 5px">
     <a-button type="primary" @click="btnGetValue">{{ getValBtnName }}</a-button>
@@ -56,8 +56,6 @@
   const emit = defineEmits(['getValues', 'changeContent', 'getSQLGen']);
 
   let model = {} as monaco.editor.IStandaloneCodeEditor;
-
-  let completionProvider: any;
 
   const btnGetValue = () => {
     const sel = emitSelectedOrAllValues(model);
@@ -177,7 +175,6 @@
 
   onUnmounted(() => {
     model.dispose();
-    completionProvider !== undefined ? completionProvider.dispose() : null;
   });
 
   defineExpose({

@@ -40,7 +40,6 @@ type Search struct {
 	Email    string   `json:"email"`
 	IP       string   `json:"ip"`
 	IsQuery  int      `json:"is_query"`
-	Order    string   `json:"order"` // 表头排序选项，见 SortClause
 }
 
 type SQLTest struct {

@@ -5,6 +5,7 @@ import (
 	"Yearning-go/src/handler/order/audit"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
 	"encoding/json"
@@ -53,7 +54,8 @@ func FetchQueryOrder(c yee.Context) (err error) {
 			}
 
 			u.Paging().OrderBy("(status = 2) DESC, date DESC").Query(
-				common.AccordingQueryToAssigned(c.QueryParam("tp") != "record" && is_record, name),
+				// 审批人只看分派给自己的；审计员与超管看全部（原先 tp=record 时反被过滤，审计员看不到别人的记录）
+				common.AccordingQueryToAssigned(is_record, name),
 				common.AccordingToUsername(u.Expr.Username),
 				common.AccordingToRealName(u.Expr.RealName),
 				common.AccordingToDate(u.Expr.Picker),
@@ -74,14 +76,14 @@ func FetchQueryRecordProfile(c yee.Context) (err error) {
 	if err = c.Bind(u); err != nil {
 		return
 	}
-	// 查询明细含用户执行过的全部 SQL，仅工单归属人、审批人或审计员可查看
+	// 查询明细含用户执行过的全部 SQL，仅工单归属人、审批人、审计员或超级管理员可查看
 	token := new(factory.Token).JwtParse(c)
 	var order model.CoreQueryOrder
 	if err := model.DB().Model(model.CoreQueryOrder{}).Select("username,assigned").Where("work_id =?", u.WorkId).First(&order).Error; err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}
-	if order.Username != token.Username && order.Assigned != token.Username && !token.IsRecord {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION)))
+	if order.Username != token.Username && order.Assigned != token.Username && !token.IsRecord && !permission.IsSuperUser(token.Username) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 	}
 	start, end := factory.Paging(u.Page, 15)
 	l := new(common.GeneralList[[]model.CoreQueryRecord])

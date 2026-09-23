@@ -36,6 +36,9 @@ func Post(c yee.Context) (err error) {
 	switch c.Params("tp") {
 	case "post":
 		return sqlOrderPost(c)
+	case "batch":
+		// 项目级工单（批量提交）
+		return BatchOrderPost(c)
 	case "edit":
 		return editPersonalUser(c)
 	}
@@ -59,6 +62,9 @@ func sqlOrderPost(c yee.Context) (err error) {
 	}
 	order.ID = 0
 	model.DB().Create(order)
+	// 工单编号 = 自增 id：先落库拿到 id 再回填，保证唯一
+	order.WorkId = factory.OrderNo(order.ID, 0)
+	model.DB().Model(order).Update("work_id", order.WorkId)
 	model.DB().Create(&model.CoreWorkflowDetail{
 		WorkId:   order.WorkId,
 		Username: user,
@@ -97,7 +103,8 @@ func wrapperPostOrderInfo(order *model.CoreSqlOrder, y yee.Context) (length int,
 	if order.IDC == "" {
 		order.IDC = flowId.IDC
 	}
-	order.WorkId = factory.GenWorkId()
+	// 工单编号由自增 id 生成，见 factory.OrderNo；这里先留空，落库后回填
+	order.WorkId = ""
 	order.Username = user.Username
 	order.RealName = user.RealName
 	order.Date = time.Now().Format("2006-01-02 15:04")
@@ -105,7 +112,28 @@ func wrapperPostOrderInfo(order *model.CoreSqlOrder, y yee.Context) (length int,
 	order.CurrentStep = 1
 	order.Assigned = strings.Join(step[1].Auditor, ",")
 	order.Relevant = factory.JsonStringify(decodeRelation(order.SourceId))
+	order.File = sanitizeFileName(order.File)
 	return len(step), nil
+}
+
+// sanitizeFileName 收敛客户端提交的文件名：只保留文件名本体（去掉路径），
+// 清理控制字符并按 rune 截断到 file 列长度(varchar 200)。
+// 单工单与项目工单两条创建链路都经过这里。
+func sanitizeFileName(name string) string {
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, name)
+	if r := []rune(name); len(r) > 200 {
+		name = string(r[:200])
+	}
+	return name
 }
 
 func decodeRelation(sourceId string) []string {

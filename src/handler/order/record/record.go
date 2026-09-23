@@ -53,13 +53,13 @@ func RecordOrderList(c yee.Context) (err error) {
 				c.Logger().Error(err)
 				break
 			}
-			u.Paging().Select(common.QueryField).
-				Query(
-					common.AccordingToAllOrderType(u.Expr.Type),
-					common.AccordingToAllOrderState(u.Expr.Status),
-					common.AccordingToDate(u.Expr.Picker),
-					common.AccordingToText(u.Expr.Text),
-				)
+			// 项目级工单按项目聚合分页（同批子工单不跨页），见 common.GroupedOrderPage
+			common.GroupedOrderPage(&u, common.QueryField,
+				common.AccordingToAllOrderType(u.Expr.Type),
+				common.AccordingToAllOrderState(u.Expr.Status),
+				common.AccordingToDate(u.Expr.Picker),
+				common.AccordingToText(u.Expr.Text),
+			)
 			if err = websocket.Message.Send(ws, factory.ToJson(u.ToMessage())); err != nil {
 				c.Logger().Error(err)
 				break

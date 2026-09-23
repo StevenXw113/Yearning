@@ -92,13 +92,9 @@
           </a-spin>
         </a-card>
       </a-tab-pane>
-      <a-tab-pane :key="2" :tab="$t('order.apply.tab.assistant')" force-render>
-        <!-- 聊天页与主应用同源，凭据经 sessionStorage(yrn_jwt) 交接，不再放进 URL，避免 JWT 落入浏览器历史/访问日志/Referer -->
-        <iframe
-          id="chat2"
-          src="/chatbot"
-          style="width: 100%; height: 500px; border: none"
-        />
+      <a-tab-pane :key="2" :tab="$t('order.apply.tab.assistant')">
+        <!-- 直接用应用内登录态访问 /api/v2/chat（流式），无需 iframe 与一次性交换码 -->
+        <Assistant :context="assistantContext" />
       </a-tab-pane>
     </a-tabs>
   </a-card>
@@ -107,8 +103,9 @@
 <script lang="ts" setup>
   // import Board from '@/components/board/index.vue';
   import Editor from '@/components/editor/editor.vue';
+  import Assistant from '@/components/assistant/assistant.vue';
   import JunoMixin from '@/mixins/juno';
-  import { onMounted, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import { useRoute } from 'vue-router';
   import FetchMixins from '@/mixins/fetch';
   import PageHeader from '@/components/pageHeader/pageHeader.vue';
@@ -156,6 +153,17 @@
 
   const { orderProfileArch, editor } = FetchMixins();
 
+  // 智能助手的上下文：跟随上方 Tab1 的选择（数据源/库/表）与编辑器里的 SQL
+  const assistantContext = computed(() => ({
+    source:
+      (orderProfileArch.source as ISource[] | undefined)?.find(
+        (i) => i.source_id === orderItems.source_id
+      )?.source || (orderItems.source as string),
+    dataBase: orderItems.data_base as string,
+    tables: orderItems.tables as string[],
+    sql: orderItems.sql as string,
+  }));
+
   const nonFields = ref([] as any[]);
 
   const fetch = async (type: string) => {
@@ -165,7 +173,8 @@
     const previewResult = document.getElementById('previewResults');
     if (previewResult) {
       const holder = document.createElement('div');
-      Vditor.preview(holder, data.payload);
+      // Vditor.preview 为异步渲染，必须 await，否则读到的是空内容、面板永远空白
+      await Vditor.preview(holder, data.payload);
       previewResult.innerHTML = sanitizeHTML(holder.innerHTML);
     }
   };

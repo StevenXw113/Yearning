@@ -168,7 +168,7 @@ func getAccount(code string) (ac *model.CoreAccount, err error) {
 			Username: username,
 			RealName: realname,
 			// 用 16 位随机盐作初始口令：SSO 用户不走口令登录，
-			// 但不要把口令熵依赖在 GenWorkId 上（它现在是 8 位短 ID）
+			// 但初始口令仍要有足够熵，不能用可预测的短 ID 之类
 			Password:   factory.DjangoEncrypt(string(factory.GetRandom()), string(factory.GetRandom())),
 			Department: "",
 			Email:      email,

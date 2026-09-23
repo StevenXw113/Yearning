@@ -16,9 +16,9 @@ func cronTabDelayOrder() {
 	if _, err := crontab.AddFunc("* * * * *", func() {
 		var orders []model.CoreSqlOrder
 		now := time.Now().Format("2006-01-02 15:04")
-		// delay 为 'YYYY-MM-DD HH:MM' 到点即执行
+		// delay 为 'YYYY-MM-DD HH:MM' 到点即执行；delay='manual' 是人工执行，必须排除
 		model.DB().Model(model.CoreSqlOrder{}).
-			Where("`status` =? AND `delay` != 'none' AND `delay` <= ?", 5, now).
+			Where("`status` =? AND `delay` != 'none' AND `delay` != 'manual' AND `delay` <= ?", 5, now).
 			Find(&orders)
 		for _, o := range orders {
 			// 原子占位(status 5→1)，防止重复触发；仅当抢占成功才执行。

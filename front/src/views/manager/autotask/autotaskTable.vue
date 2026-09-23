@@ -13,7 +13,8 @@
             :placeholder="$t('auto.search.tips')"
             enter-button
             allow-clear
-            @search="tbl.manual()"
+            style="max-width: 320px"
+            @search="tbl.manual(true)"
           />
         </a-form-item>
       </a-form>

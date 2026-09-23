@@ -30,6 +30,7 @@ import (
 	"Yearning-go/src/handler/order/record"
 	"Yearning-go/src/handler/personal"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/model"
 	"net/http"
 
@@ -41,7 +42,7 @@ import (
 func SuperManageGroup() yee.HandlerFunc {
 	return func(c yee.Context) (err error) {
 		role := new(factory.Token).JwtParse(c)
-		if role.Username == "admin" || focalPoint(c) {
+		if permission.IsSuperUser(role.Username) || focalPoint(c) {
 			return
 		}
 		return c.ServerError(http.StatusForbidden, "非法越权操作！")
@@ -76,13 +77,17 @@ func SuperRecorderGroup() yee.HandlerFunc {
 			if !ok {
 				return c.ServerError(http.StatusForbidden, "Non-authorized operation！")
 			}
+			if name, _ := claims["name"].(string); permission.IsSuperUser(name) {
+				return nil
+			}
 			if isRecord, ok := claims["is_record"].(bool); ok && isRecord {
 				return nil
 			}
 			return c.ServerError(http.StatusForbidden, "Non-authorized operation！")
 		}
 		role := new(factory.Token).JwtParse(c)
-		if role.IsRecord {
+		// 超级管理员拥有所有权限，可访问审计/记录模块
+		if role.IsRecord || permission.IsSuperUser(role.Username) {
 			return
 		}
 		return c.ServerError(http.StatusForbidden, "Non-authorized operation！")
