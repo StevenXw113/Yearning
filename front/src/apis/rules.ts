@@ -36,10 +36,6 @@ export function deleteRules(params: { id?: number }): AxiosPromise {
   return request.post(`${COMMON_URI}/manage/roles/delete`, params);
 }
 
-export function getRuleProfile(params: CustomRule): AxiosPromise {
-  return request.post(`${COMMON_URI}/manage/roles/profile`, params);
-}
-
 export interface RuleHistory {
   id: number;
   rule_id: number;

@@ -55,7 +55,7 @@ type queryCore struct {
 	source           string
 }
 
-func reflect(flag bool) uint {
+func boolToUint(flag bool) uint {
 	if flag {
 		return 1
 	}
@@ -73,7 +73,7 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 		o := model.CoreQueryOrder{
 			Username:     user.Username,
 			Date:         time.Now().Format("2006-01-02 15:04"),
-			Export:       reflect(other.Export),
+			Export:       boolToUint(other.Export),
 			Status:       2,
 			RealName:     user.RealName,
 			Text:         i18n.DefaultLang.Load(i18n.INFO_QUERY_AUDIT_DISABLED),

@@ -2,10 +2,9 @@ package factory
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // GetFingerprint gets mysql query fingerprint.
@@ -125,7 +124,7 @@ func collapseUnion(query string) (string, error) {
 	parts = append(parts, "/*Sentinel Node*/")
 	separators := unionRegexp.FindAllString(query, -1)
 	if len(parts) != len(separators)+2 {
-		return "", errors.Errorf("find %d parts, but %d separators", len(parts)-1, len(separators))
+		return "", fmt.Errorf("find %d parts, but %d separators", len(parts)-1, len(separators))
 	}
 	start := 0
 	var buf bytes.Buffer

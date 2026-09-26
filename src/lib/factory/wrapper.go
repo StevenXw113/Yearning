@@ -3,47 +3,46 @@ package factory
 import (
 	"Yearning-go/src/model"
 	crand "crypto/rand"
+	"crypto/pbkdf2"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
-	"github.com/Jeffail/gabs/v2"
-	"golang.org/x/crypto/pbkdf2"
+	"encoding/json"
 	"strconv"
 	"strings"
 )
 
+// ArrayRemove 从 JSON 字符串数组里删掉所有等于 flag 的元素（用于 core_grained.group 这类顶层数组）
 func ArrayRemove(source []byte, flag string) ([]byte, error) {
-	p, err := gabs.ParseJSON(source)
-	if err != nil {
+	var items []string
+	if err := json.Unmarshal(source, &items); err != nil {
 		return nil, err
 	}
-	for i, c := range p.Children() {
-		if v, ok := c.Data().(string); ok && v == flag {
-			_ = p.ArrayRemove(i)
-		}
-	}
-	return p.EncodeJSON(), nil
+	return json.Marshal(dropValue(items, flag))
 }
 
+// MultiArrayRemove 对 JSON 对象里的多个字符串数组分别删掉等于 flag 的元素
+// （用于 core_role_groups.permissions 的 ddl_source / dml_source / query_source）
 func MultiArrayRemove(source []byte, sep []string, flag string) ([]byte, error) {
-	p, err := gabs.ParseJSON(source)
-	if err != nil {
+	var doc map[string][]string
+	if err := json.Unmarshal(source, &doc); err != nil {
 		return nil, err
 	}
-	// gabs 容器非并发安全，必须串行处理，否则会触发 concurrent map writes 导致进程退出
-	for _, dl := range sep {
-		var indicesToRemove []int
-		for i, c := range p.S(dl).Children() {
-			if v, ok := c.Data().(string); ok && v == flag {
-				indicesToRemove = append(indicesToRemove, i)
-			}
-		}
-		// 从后向前删除，避免索引错位
-		for i := len(indicesToRemove) - 1; i >= 0; i-- {
-			p.ArrayRemove(indicesToRemove[i], dl)
+	for _, key := range sep {
+		doc[key] = dropValue(doc[key], flag)
+	}
+	return json.Marshal(doc)
+}
+
+// dropValue 过滤掉等于 flag 的元素；结果为空时返回空数组而非 nil，避免序列化成 null
+func dropValue(items []string, flag string) []string {
+	out := make([]string, 0, len(items))
+	for _, v := range items {
+		if v != flag {
+			out = append(out, v)
 		}
 	}
-	return p.EncodeJSON(), nil
+	return out
 }
 
 // GetRandom 生成密码学安全的随机盐值。
@@ -70,11 +69,13 @@ func DjangoEncrypt(password string, sl string) string {
 }
 
 func djangoEncrypt(password string, sl string, iterations int) string {
-	pwd := []byte(password)
-	salt := []byte(sl)
-	dk := pbkdf2.Key(pwd, salt, iterations, 32, sha256.New)
+	dk, err := pbkdf2.Key(sha256.New, password, []byte(sl), iterations, 32)
+	if err != nil {
+		// 迭代次数与密钥长度都由代码给定，出错只能是参数 bug——不能静默落一个空密码
+		panic("pbkdf2: " + err.Error())
+	}
 	str := base64.StdEncoding.EncodeToString(dk)
-	return "pbkdf2_sha256" + "$" + strconv.FormatInt(int64(iterations), 10) + "$" + string(salt) + "$" + str
+	return "pbkdf2_sha256" + "$" + strconv.FormatInt(int64(iterations), 10) + "$" + sl + "$" + str
 }
 
 func DjangoCheckPassword(account *model.CoreAccount, password string) bool {

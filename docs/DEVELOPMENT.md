@@ -75,7 +75,6 @@ Copy-Item conf.toml.template conf.toml
 前端源码在本仓库 **`front/`**，构建产物由 `front` 编译产出。`src/service/yearning.go` 通过 `go:embed` 把下列目录内嵌进可执行文件：
 
 - `src/service/dist/` —— 主前端页面（`/`、`/front`）
-- `src/service/chat/server/app/index.html` —— AI 助手（SSE）页面（`/chatbot`）
 
 > **为什么产物要放到 `src/service/dist/`？** Go 的 `//go:embed` 只能引用声明它的 `.go` 文件所在目录的子目录，**不能引用 `../front/dist`**。因此前端在 `front/` 编译产出后，还需拷贝进 `src/service/dist/` 才能被后端内嵌。产物路径由 `.gitignore` 忽略，不入库。
 
@@ -93,21 +92,16 @@ Copy-Item front/dist/* src/service/dist/ -Recurse -Force
 ```
 
 > Linux/macOS 将 `Remove-Item`/`Copy-Item` 对应改为 `rm -rf src/service/dist/*` 与 `cp -r front/dist/* src/service/dist/`。
->
-> AI 助手（SSE）页面 `src/service/chat/` 若属独立前端工程，同样按其构建产物放入 `src/service/chat/server/app/index.html` 即可；当前仓库如无该工程可跳过（需相应去掉 `yearning.go` 中的 embed 声明，否则见下报错）。
 
 ### 3.2 仅开发后端（最小占位）
 
 无前端产物时，为让 `go build` 通过，可放入最小占位文件（见下方命令）。此时页面为空壳，但 HTTP API / 路由 / JWT 等后端逻辑可正常开发与自测。
 
 ```powershell
-New-Item -ItemType Directory -Force -Path src/service/dist, src/service/chat/server/app | Out-Null
+New-Item -ItemType Directory -Force -Path src/service/dist | Out-Null
 @'
 <!DOCTYPE html><html><head><title>Yearning</title></head><body><div id="app"></div></body></html>
 '@ | Set-Content -Encoding UTF8 src/service/dist/index.html
-@'
-<!DOCTYPE html><html><head><title>Yearning Chat</title></head><body><div id="app"></div></body></html>
-'@ | Set-Content -Encoding UTF8 src/service/chat/server/app/index.html
 ```
 
 > Linux/macOS 直接用仓库自带脚本（已存在的文件不会被覆盖，可安全重复执行）：

@@ -49,28 +49,3 @@ export function deleteAutoTask(id: string) {
   return request.delete(`${COMMON_URI}/manage/task?task_id=${id}`);
 }
 
-export class Request {
-  //   Post(tp: string, args: AutoTask): AxiosPromise {
-  //     tp === 'curd'
-  //       ? ((args.source_id = args.sourceLabel.value),
-  //         (args.source = args.sourceLabel.label))
-  //       : null;
-  //     return request({
-  //       method: 'post',
-  //       url: `${COMMON_URI}/manage/task`,
-  //       data: {
-  //         task: args,
-  //         tp: tp,
-  //       },
-  //     });
-  //   }
-  //   Delete(taskId: string): AxiosPromise {
-  //     return request({
-  //       method: 'delete',
-  //       url: `${COMMON_URI}/manage/task`,
-  //       params: {
-  //         task_id: taskId,
-  //       },
-  //     });
-  //   }
-}

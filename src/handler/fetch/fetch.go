@@ -22,7 +22,6 @@ import (
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/permission"
-	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
@@ -317,18 +316,6 @@ func FetchOrderDetailRollSQL(c yee.Context) (err error) {
 	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"sql": roll, "count": count}))
 }
 
-func FetchUndo(c yee.Context) (err error) {
-	u := c.QueryParam("work_id")
-	user := new(factory.Token).JwtParse(c)
-	var order model.CoreSqlOrder
-	if err := model.DB().Where(UNDO_EXPR, user.Username, u, 2).First(&order).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.UNDO_MESSAGE_ERROR)))
-	}
-	pusher.NewMessagePusher(order.WorkId).Order().OrderBuild(pusher.UndoStatus).Push()
-	model.DB().Where(UNDO_EXPR, user.Username, u, 2).Delete(&model.CoreSqlOrder{})
-	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.UNDO_MESSAGE_SUCCESS)))
-}
-
 func FetchMergeDDL(c yee.Context) error {
 	req := new(referOrder)
 	if err := c.Bind(req); err != nil {
@@ -370,12 +357,6 @@ func FetchStepsProfile(c yee.Context) (err error) {
 	var s []model.CoreWorkflowDetail
 	model.DB().Where("work_id = ?", workId).Find(&s)
 	return c.JSON(http.StatusOK, common.SuccessPayload(s))
-}
-
-func FetchBoard(c yee.Context) (err error) {
-	var board model.CoreGlobalConfiguration
-	model.DB().Select("board").First(&board)
-	return c.JSON(http.StatusOK, common.SuccessPayload(board))
 }
 
 func FetchOrderComment(c yee.Context) (err error) {

@@ -39,16 +39,10 @@ function Write-Step($msg) {
 function New-EmbedPlaceholder {
     # 无前端产物时放入最小占位，让 go:embed 可编译（页面为空壳）
     $dist = "src/service/dist"
-    $chat = "src/service/chat/server/app"
     if (-not (Test-Path "$dist/index.html")) {
         New-Item -ItemType Directory -Force -Path $dist | Out-Null
         Set-Content -Path "$dist/index.html" -Encoding UTF8 "<!DOCTYPE html><html><head><title>Yearning</title></head><body><div id=""app""></div></body></html>"
         Write-Host "  [embed] 已生成 $dist/index.html（占位，接真实前端产物后删除）"
-    }
-    if (-not (Test-Path "$chat/index.html")) {
-        New-Item -ItemType Directory -Force -Path $chat | Out-Null
-        Set-Content -Path "$chat/index.html" -Encoding UTF8 "<!DOCTYPE html><html><head><title>Yearning Chat</title></head><body><div id=""app""></div></body></html>"
-        Write-Host "  [embed] 已生成 $chat/index.html（占位，接真实前端产物后删除）"
     }
 }
 

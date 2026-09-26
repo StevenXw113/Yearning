@@ -28,12 +28,6 @@ import (
 	"os"
 )
 
-//go:embed chat/*
-var chatf embed.FS
-
-//go:embed chat/server/app/index.html
-var chatindex string
-
 //go:embed dist/*
 var f embed.FS
 
@@ -88,7 +82,6 @@ func StartYearning(port string) {
 	go cronTabDelayOrder()
 	e := yee.New()
 	e.Pack("/front", f, "dist")
-	e.Pack("/_next", chatf, "chat")
 	e.Use(middleware.Cors())
 	e.Use(middleware.Logger())
 	e.Use(middleware.Secure())
@@ -97,9 +90,6 @@ func StartYearning(port string) {
 		Level: 9,
 	}))
 	e.SetLogLevel(model.TransferLogLevel())
-	e.GET("/chatbot", func(c yee.Context) error {
-		return c.HTML(http.StatusOK, chatindex)
-	})
 	e.GET("/", func(c yee.Context) error {
 		return c.HTML(http.StatusOK, html)
 	})

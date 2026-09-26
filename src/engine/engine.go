@@ -74,17 +74,3 @@ type Record struct {
 	RollBack         string   `json:"rollback"`
 }
 
-type CheckArgs struct {
-	SQL      string
-	Schema   string
-	Kind     int
-	Lang     string
-	Rule     AuditRole
-	IP       string
-	Username string
-	Port     int
-	Password string
-	CA       string
-	Cert     string
-	Key      string
-}

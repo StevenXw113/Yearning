@@ -6,86 +6,85 @@ import (
 	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
 	"Yearning-go/src/service"
+	"flag"
 	"fmt"
-	"github.com/gookit/gcli/v3"
-	"github.com/gookit/gcli/v3/builtin"
+	"os"
 )
 
-var RunOpts = struct {
-	port       string
-	config     string
-	repair     bool
-	resetAdmin bool
-}{}
+// Command 解析子命令。原先用 gookit/gcli，但实际只用到「子命令 + 两个字符串选项」，
+// 标准库 flag 足够，且省掉 gcli 及其 gookit/color、goutil 等一串传递依赖。
+//
+//	Yearning install      [-c conf.toml]              安装及数据初始化
+//	Yearning migrate      [-c conf.toml]              破坏性版本升级修复
+//	Yearning reset_super  [-c conf.toml]              重置超级管理员密码
+//	Yearning run          [-c conf.toml] [-p 8000]    启动
+func Command() {
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(1)
+	}
+	fmt.Println(LOGO)
 
-var Migrate = &gcli.Command{
-	Name:     "install",
-	Desc:     "Yearning安装及数据初始化",
-	Examples: `{$binName} {$cmd} --config conf.toml`,
-	Config: func(c *gcli.Command) {
-		c.StrOpt(&RunOpts.config, "config", "c", "conf.toml", "配置文件路径,默认为conf.toml.如无移动配置文件则无需配置！")
-	},
-	Func: func(c *gcli.Command, args []string) error {
-		model.DBNew(RunOpts.config)
+	config := "conf.toml"
+	port := "8000"
+
+	switch os.Args[1] {
+	case "install":
+		parseConfig(os.Args[2:], &config)
+		model.DBNew(config)
 		service.Migrate()
-		return nil
-	},
-}
-
-var Fix = &gcli.Command{
-	Name: "migrate",
-	Desc: "破坏性版本升级修复",
-	Config: func(c *gcli.Command) {
-		c.StrOpt(&RunOpts.config, "config", "c", "conf.toml", "配置文件路径,默认为conf.toml.如无移动配置文件则无需配置！")
-	},
-	Func: func(c *gcli.Command, args []string) error {
-		model.DBNew(RunOpts.config)
+	case "migrate":
+		parseConfig(os.Args[2:], &config)
+		model.DBNew(config)
 		service.DelCol()
 		service.MargeRuleGroup()
-		return nil
-	},
-}
-
-var Super = &gcli.Command{
-	Name: "reset_super",
-	Desc: "重置超级管理员密码",
-	Config: func(c *gcli.Command) {
-		c.StrOpt(&RunOpts.config, "config", "c", "conf.toml", "配置文件路径,默认为conf.toml.如无移动配置文件则无需配置！")
-	},
-	Func: func(c *gcli.Command, args []string) error {
-		model.DBNew(RunOpts.config)
-		model.DB().Model(model.CoreAccount{}).Where("username =?", "admin").Updates(&model.CoreAccount{Password: factory.DjangoEncrypt("Yearning_admin", string(factory.GetRandom()))})
+	case "reset_super":
+		parseConfig(os.Args[2:], &config)
+		model.DBNew(config)
+		model.DB().Model(model.CoreAccount{}).Where("username =?", "admin").
+			Updates(&model.CoreAccount{Password: factory.DjangoEncrypt("Yearning_admin", string(factory.GetRandom()))})
 		fmt.Println(i18n.DefaultLang.Load(i18n.INFO_ADMIN_PASSWORD_RESET))
-		return nil
-	},
-}
-
-var RunServer = &gcli.Command{
-	Name: "run",
-	Desc: "启动Yearning",
-	Config: func(c *gcli.Command) {
-		c.StrOpt(&RunOpts.port, "port", "p", "8000", "Yearning启动端口")
-		c.StrOpt(&RunOpts.config, "config", "c", "conf.toml", "配置文件路径")
-	},
-	Examples: `<cyan>{$binName} {$cmd} --port 80 --push "yearning.io" --config ../config.toml</>`,
-	Func: func(c *gcli.Command, args []string) error {
-		model.DBNew(RunOpts.config)
+	case "run":
+		fs := newFlagSet("run")
+		fs.StringVar(&config, "config", "conf.toml", "配置文件路径")
+		fs.StringVar(&config, "c", "conf.toml", "配置文件路径")
+		fs.StringVar(&port, "port", "8000", "Yearning启动端口")
+		fs.StringVar(&port, "p", "8000", "Yearning启动端口")
+		_ = fs.Parse(os.Args[2:])
+		model.DBNew(config)
 		service.UpdateData()
-		service.StartYearning(RunOpts.port)
-		return nil
-	},
+		service.StartYearning(port)
+	case "version", "-v", "-version", "--version":
+		fmt.Printf("Yearning %s %s\n", vars.Version, vars.Kind)
+	default:
+		usage()
+		os.Exit(1)
+	}
 }
 
-func Command() {
-	app := gcli.NewApp()
-	app.Version = fmt.Sprintf("%s %s", vars.Version, vars.Kind)
-	app.Name = "Yearning"
-	app.Logo = &gcli.Logo{Text: LOGO, Style: "info"}
-	app.Desc = "Yearning Mysql数据审核平台"
-	app.Add(Migrate)
-	app.Add(RunServer)
-	app.Add(Fix)
-	app.Add(Super)
-	app.Add(builtin.GenAutoComplete())
-	app.Run(nil)
+// parseConfig 解析只需要配置文件路径的子命令（-c 与 --config 等价）
+func parseConfig(args []string, config *string) {
+	fs := newFlagSet("config")
+	fs.StringVar(config, "config", "conf.toml", "配置文件路径")
+	fs.StringVar(config, "c", "conf.toml", "配置文件路径")
+	_ = fs.Parse(args)
+}
+
+// newFlagSet 用法与错误都写到 stdout，避免和日志流的顺序错乱
+func newFlagSet(name string) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	fs.SetOutput(os.Stdout)
+	return fs
+}
+
+func usage() {
+	fmt.Println(LOGO)
+	fmt.Println("Yearning Mysql数据审核平台")
+	fmt.Printf("版本: %s %s\n\n", vars.Version, vars.Kind)
+	fmt.Println("用法:")
+	fmt.Println("  Yearning install      [-c conf.toml]             安装及数据初始化")
+	fmt.Println("  Yearning migrate      [-c conf.toml]             破坏性版本升级修复")
+	fmt.Println("  Yearning reset_super  [-c conf.toml]             重置超级管理员密码")
+	fmt.Println("  Yearning run          [-c conf.toml] [-p 8000]   启动")
+	fmt.Println("  Yearning version                                 显示版本")
 }

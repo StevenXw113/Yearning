@@ -18,7 +18,6 @@ import (
 	"Yearning-go/src/lib/enc"
 	"github.com/cookieY/yee/logger"
 	"sync/atomic"
-	"time"
 )
 
 var mappingLevel = map[string]uint8{
@@ -39,8 +38,6 @@ type mysql struct {
 
 type general struct {
 	SecretKey string
-	Host      string
-	Hours     time.Duration
 	RpcAddr   string
 	LogLevel  string
 	Lang      string
@@ -70,7 +67,6 @@ type oidc struct {
 	TokenUrl     string
 	UserUrl      string
 	RedirectUrL  string
-	SessionKey   string
 
 	UserNameKey string
 	RealNameKey string
@@ -87,7 +83,6 @@ var C Config
 
 var DefaultLogger logger.Logger
 
-var SecretKey = ""
 
 var GloPer CoreGlobalConfiguration
 

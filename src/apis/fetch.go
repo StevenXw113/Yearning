@@ -17,8 +17,6 @@ func FetchResourceForGet(y yee.Context) (err error) {
 		return fetch.FetchOrderDetailList(y)
 	case "roll":
 		return fetch.FetchOrderDetailRollSQL(y)
-	case "undo":
-		return fetch.FetchUndo(y)
 	case "timeline":
 		return fetch.FetchAuditSteps(y)
 	case "sql":
@@ -43,8 +41,6 @@ func FetchResourceForGet(y yee.Context) (err error) {
 		return fetch.FetchStepsProfile(y)
 	case "groups":
 		return fetch.FetchUserGroups(y)
-	case "board":
-		return fetch.FetchBoard(y)
 	case "comment":
 		return fetch.FetchOrderComment(y)
 	}

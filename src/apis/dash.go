@@ -17,20 +17,8 @@ func YearningDashGet(y yee.Context) (err error) {
 	return y.JSON(http.StatusOK, "Illegal")
 }
 
-func YearningDashPut(y yee.Context) (err error) {
-	tp := y.Params("tp")
-	switch tp {
-	case "profile":
-		return handler.DashUserInfo(y)
-	case "stmt":
-		return handler.DashStmt(y)
-	}
-	return y.JSON(http.StatusOK, "Illegal")
-}
-
 func YearningDashApis() yee.RestfulAPI {
 	return yee.RestfulAPI{
 		Get: YearningDashGet,
-		Put: YearningDashPut,
 	}
 }

@@ -3,7 +3,6 @@ package permission
 import (
 	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
-	mapset "github.com/deckarep/golang-set/v2"
 	"gorm.io/gorm"
 )
 
@@ -90,13 +89,23 @@ func (service *PermissionService) Equal(control *Control) bool {
 	// 检查权限
 	switch control.Kind {
 	case vars.DDL:
-		return mapset.NewSet[string](permissions.DDLSource...).Contains(control.SourceId)
+		return contains(permissions.DDLSource, control.SourceId)
 	case vars.DML:
-		return mapset.NewSet[string](permissions.DMLSource...).Contains(control.SourceId)
+		return contains(permissions.DMLSource, control.SourceId)
 	case vars.QUERY:
-		return mapset.NewSet[string](permissions.QuerySource...).Contains(control.SourceId)
+		return contains(permissions.QuerySource, control.SourceId)
 	}
 
+	return false
+}
+
+// contains 判断切片里是否含某个值（数据源数量在几十以内，线性查找足够）
+func contains(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
 	return false
 }
 
@@ -109,7 +118,21 @@ func appendPermissions(target, source *model.PermissionList) {
 
 // removeDuplicatePermissions 移除权限列表中的重复项
 func removeDuplicatePermissions(permissionList *model.PermissionList) {
-	permissionList.DDLSource = mapset.NewSet[string](permissionList.DDLSource...).ToSlice()
-	permissionList.DMLSource = mapset.NewSet[string](permissionList.DMLSource...).ToSlice()
-	permissionList.QuerySource = mapset.NewSet[string](permissionList.QuerySource...).ToSlice()
+	permissionList.DDLSource = unique(permissionList.DDLSource)
+	permissionList.DMLSource = unique(permissionList.DMLSource)
+	permissionList.QuerySource = unique(permissionList.QuerySource)
+}
+
+// unique 保序去重
+func unique(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }

@@ -55,22 +55,6 @@ func DashBanner(c yee.Context) (err error) {
 	return c.JSON(http.StatusOK, common.SuccessPayload(b))
 }
 
-func DashUserInfo(c yee.Context) (err error) {
-	user := new(factory.Token).JwtParse(c)
-	var (
-		p         model.CoreGrained
-		groupList []model.CoreRoleGroup
-	)
-	model.DB().Select("`group`").Where("username =?", user).First(&p)
-	model.DB().Select("`name`").Find(&groupList)
-	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"p": p.Group, "g": groupList}))
-}
-
-func DashStmt(c yee.Context) (err error) {
-	model.DB().Model(&model.CoreGlobalConfiguration{}).Where("authorization =?", "global").Update("stmt", 1)
-	return c.JSON(http.StatusOK, nil)
-}
-
 func DashTop(c yee.Context) (err error) {
 	var source []groupBy
 	model.DB().Model(model.CoreSqlOrder{}).Select("source, count(*) as c").Group("source").Order("c desc").Limit(10).Scan(&source)

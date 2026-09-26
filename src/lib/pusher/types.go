@@ -2,13 +2,6 @@ package pusher
 
 import "Yearning-go/src/model"
 
-type UserInfo struct {
-	ToUser  string
-	User    string
-	Pawd    string
-	Smtp    string
-	PubName string
-}
 
 type messageToUserList struct {
 	ToUser  []model.CoreAccount

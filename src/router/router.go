@@ -101,15 +101,10 @@ func AddRouter(e *yee.Core) {
 	e.GET("/lang", login.SystemLang)
 	e.GET("/oidc/_token-login", login.OidcLogin)
 	e.GET("/oidc/state", login.OidcState)
-	// 聊天页用一次性交换码换取 JWT：接口不带 /api/v2 前缀、不受应用 JWT 组保护，以便跨源内嵌页可达。
-	// 安全靠随机 + 单次 + 短时效（60s）交换码，而非把长期 token 放进 URL。
-	e.POST("/chatbot/session", fetch.ChatSessionExchange)
 	// 校验 key 必须与 factory.JwtAuth 的签名 key 一致：两者都用派生自 SecretKey 的
 	// JwtSigningKey()，否则登录签发的 token 会被判 signature is invalid，导致所有 /api/v2 请求 401
 	r := e.Group("/api/v2", middleware.JWTWithConfig(middleware.JwtConfig{SigningKey: model.JwtSigningKey(), TokenLookup: []string{yee.HeaderAuthorization, yee.HeaderSecWebSocketProtocol}}))
 	r.POST("/chat", fetch.AiChat)
-	// 已登录主应用调用：为内嵌聊天页签发一次性交换码（不放 JWT 进 URL）
-	r.POST("/chat/session", fetch.ChatSessionIssue)
 	r.Restful("/common/:tp", personal.PersonalRestFulAPis())
 	r.Restful("/dash/:tp", apis.YearningDashApis())
 	r.Restful("/fetch/:tp", apis.YearningFetchApis())
@@ -118,7 +113,6 @@ func AddRouter(e *yee.Core) {
 
 	audit := r.Group("/audit")
 	audit.Restful("/order/:tp", audit2.AuditRestFulAPis())
-	//audit.Restful("/osc/:work_id", osc.AuditOSCFetchStateApis())
 	audit.Restful("/query/:tp", query2.AuditQueryRestFulAPis())
 
 	re := r.Group("/record", SuperRecorderGroup())
@@ -127,7 +121,6 @@ func AddRouter(e *yee.Core) {
 
 	manager := r.Group("/manage", SuperManageGroup())
 	manager.POST("/board/post", manage.GeneralPostBoard)
-	manager.GET("/board/get", manage.GeneralGetBoard)
 
 	db := manager.Group("/db")
 	db.Restful("", db2.ManageDbApi())

@@ -28,7 +28,6 @@ import (
 type loginForm struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
-	MFACode  string `json:"mfa_code"`
 }
 
 func UserGeneralLogin(c yee.Context) (err error) {

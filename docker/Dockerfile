@@ -23,10 +23,6 @@ RUN yarn config set registry "$NPM_REGISTRY" \
 COPY front/ ./
 RUN yarn build
 
-# 供后端 go:embed 使用的 chat 占位页（chat 子工程为独立源码，未纳入本镜像）
-RUN mkdir -p /chat/server/app \
- && printf '<!DOCTYPE html><html><head><title>Y chat</title></head><body><div id="app"></div></body></html>' > /chat/server/app/index.html
-
 # ---------- 阶段二：Go 后端主程序 + 审核引擎 编译 ----------
 FROM golang:1.26 AS build
 ARG GOPROXY_URL=https://goproxy.cn,direct
@@ -46,9 +42,8 @@ COPY cmd ./cmd
 COPY src ./src
 COPY engine ./engine
 
-# 准备 go:embed 所需的两个目录
+# 准备 go:embed 所需的前端产物目录
 COPY --from=frontend /src/front/dist ./src/service/dist/
-COPY --from=frontend /chat/server/app/index.html ./src/service/chat/server/app/index.html
 
 # 编译主程序（二进制命名沿用既有约定 Yearning）
 RUN go build -trimpath -ldflags "-s -w" -o /out/Yearning .

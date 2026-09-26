@@ -209,17 +209,6 @@ func AuditOrderApis(c yee.Context) (err error) {
 	}
 }
 
-func AuditOrRecordOrderFetchApis(c yee.Context) (err error) {
-	switch c.Params("tp") {
-	//case "list":
-	//	return FetchAuditOrder(c)
-	//case "record":
-	//	return FetchRecord(c)
-	default:
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
-	}
-}
-
 func AuditFetchApis(c yee.Context) (err error) {
 	switch c.Params("tp") {
 	case "osc":

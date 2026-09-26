@@ -18,11 +18,12 @@ import (
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/gookit/gcli/v3/interact"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -167,10 +168,25 @@ func DataInit(o *engine.AuditRole, other *model.Other, message *model.Message, a
 	})
 }
 
+// confirm 交互式确认：默认拒绝——回车、EOF 或非 y/yes 输入都视为否。
+// 原先用 gcli 的 interact.Confirm，为这一个函数不值得背一整个 CLI 框架。
+func confirm(question string) bool {
+	fmt.Printf("%s [y/N]: ", question)
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
+}
+
 func Migrate() {
 	if !model.DB().Migrator().HasTable("core_accounts") {
 		if os.Getenv("IS_DOCKER") == "" {
-			if !interact.Confirm("是否已将数据库字符集设置为UTF8/UTF8MB4?") {
+			if !confirm("是否已将数据库字符集设置为UTF8/UTF8MB4?") {
 				return
 			}
 		}

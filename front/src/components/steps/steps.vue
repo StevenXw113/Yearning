@@ -26,14 +26,8 @@
 </template>
 
 <script lang="ts" setup>
-  import CommonMixins from '@/mixins/common';
-  import { StateUsage } from '@/lib';
-
   const props = defineProps<{
     current: number;
     step: any[];
-    status: number;
   }>();
-
-  const { checkStepState } = CommonMixins();
 </script>

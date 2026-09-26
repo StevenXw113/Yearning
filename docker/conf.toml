@@ -1,0 +1,44 @@
+# =====================================================================
+# Yearning 容器内兜底配置（由 docker/Dockerfile 拷贝到 /opt/conf.toml）
+#
+# 说明：
+#   - [Mysql] 段仅作占位。容器启动时只要 MYSQL_USER 非空，就会用
+#     MYSQL_USER / MYSQL_PASSWORD / MYSQL_ADDR(需带端口) / MYSQL_DB
+#     整体覆盖本段（见 src/model/db.go:73）。
+#   - [General].SecretKey 故意保留模板占位值：代码会强制拒绝该值启动
+#     （src/model/db.go:65），以此确保部署方必须通过环境变量 SECRET_KEY
+#     注入强随机密钥。生成方式：openssl rand -base64 32
+#   - RpcAddr 指向容器入口脚本后台拉起的审核引擎（docker/docker-entrypoint.sh）。
+# =====================================================================
+
+[Mysql]
+Db = "Yearning"
+Host = "127.0.0.1"
+Port = "3306"
+Password = "placeholder"
+User = "root"
+
+[General]
+SecretKey = "CHANGE_ME_PLEASE_USE_RANDOM_32_CHARS"
+RpcAddr = "127.0.0.1:13307" # 容器内审核引擎地址（docker-entrypoint.sh 后台启动）
+LogLevel = "info"          # debug,info,warn,error
+Lang = "en_US"             # en_US,zh_CN
+
+# 在线表结构变更(OSC)：表行数估算 >= OscMinRows 的大表 ALTER 改由 gh-ost 执行。
+# OscMinRows <= 0 表示关闭（走引擎原生执行）。
+OscMinRows = 0
+GhOstPath = ""
+GhOstArgs = ""
+
+[Oidc]
+Enable = false
+ClientId = "yearning"
+ClientSecret = ""
+Scope = "openid profile"
+AuthUrl = "https://keycloak.xxx.ca/auth/realms/master/protocol/openid-connect/auth"
+TokenUrl = "https://keycloak.xxx.ca/auth/realms/master/protocol/openid-connect/token"
+UserUrl = "https://keycloak.xxx.ca/auth/realms/master/protocol/openid-connect/userinfo"
+RedirectUrL = "http://127.0.0.1:8000/oidc/_token-login"
+UserNameKey = "preferred_username"
+RealNameKey = "name"
+EmailKey = "email"

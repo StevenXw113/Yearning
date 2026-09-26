@@ -26,13 +26,6 @@ export enum QueryState {
   REJECT,
 }
 
-export interface Template {
-  auditor: string[];
-  type: number;
-  desc: string;
-  source?: string;
-}
-
 export interface OrderTableData {
   work_id: string;
   username: string;

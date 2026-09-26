@@ -1,5 +1,6 @@
 # ===== 本地运行时配置 / 密钥 =====
-conf.toml
+# 只忽略仓库根目录的本地配置；docker/conf.toml 是镜像内兜底配置，必须入库
+/conf.toml
 
 # ===== Go 构建产物 =====
 Yearning
@@ -23,7 +24,6 @@ juno
 #     因此 front 构建完成后需将产物放入 src/service/dist/（见 docs/DEVELOPMENT.md 第 3 节）。
 #   - engine/ 与 front/ 为纳入版本控制的源码目录，产物不入库，交由各自子 .gitignore 处理。
 src/service/dist/
-src/service/chat/*
 
 # ===== 编辑器 / IDE =====
 .idea/

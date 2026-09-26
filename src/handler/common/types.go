@@ -17,11 +17,6 @@ type PageList[T any] struct {
 	Order    string
 }
 
-type PageChange struct {
-	Current  int    ` json:"current"`
-	PageSize int    `json:"pageSize"`
-	Expr     Search `json:"expr"`
-}
 
 type Search struct {
 	Picker   []string `json:"picker"`
@@ -92,6 +87,4 @@ type Resp struct {
 
 const (
 	Pong = "pong"
-	Ping = "ping"
-	PING = 1
 )

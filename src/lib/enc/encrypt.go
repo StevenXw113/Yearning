@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -25,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/cookieY/yee/logger"
-	"golang.org/x/crypto/hkdf"
 )
 
 // gcmPrefix 标识 AES-256-GCM 密文，格式为 v1$base64(nonce||ciphertext)。
@@ -37,9 +37,8 @@ const dbPasswordInfo = "yearning-db-password-v1"
 // DeriveKey 使用 HKDF-SHA256 从主密钥派生出指定长度的子密钥。
 // 不同用途应传入不同的 info，避免一处泄露导致全部用途失守。
 func DeriveKey(master, info string, length int) []byte {
-	k := make([]byte, length)
-	r := hkdf.New(sha256.New, []byte(master), nil, []byte(info))
-	if _, err := io.ReadFull(r, k); err != nil {
+	k, err := hkdf.Key(sha256.New, []byte(master), nil, info, length)
+	if err != nil {
 		return nil
 	}
 	return k
