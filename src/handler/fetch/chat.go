@@ -70,7 +70,7 @@ func AiChat(c yee.Context) error {
 	system := renderPrompt(model.GloAI.Load().SQLAgentPrompt, "", nil)
 	chat := append([]openai.ChatCompletionMessage{{Role: "system", Content: system}}, u.Messages...)
 
-	stream, err := cc.Messages(chat).StreamChatCompletion()
+	stream, err := cc.StreamChatCompletion(chat)
 	if err != nil {
 		c.Logger().Criticalf("ChatCompletionStream error: %v\n", err)
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
@@ -82,7 +82,7 @@ func AiChat(c yee.Context) error {
 	c.Response().Header().Set("Connection", "keep-alive")
 
 	for {
-		response, err := stream.Recv()
+		delta, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			writeSSEDone(c)
 			return nil
@@ -94,9 +94,9 @@ func AiChat(c yee.Context) error {
 			writeSSEDone(c)
 			return nil
 		}
-		if len(response.Choices) == 0 {
+		if delta == "" {
 			continue
 		}
-		writeSSEFrame(c, chatFrame{V: response.Choices[0].Delta.Content})
+		writeSSEFrame(c, chatFrame{V: delta})
 	}
 }

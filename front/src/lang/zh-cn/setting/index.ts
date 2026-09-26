@@ -39,14 +39,23 @@ export default {
   'setting.data.clear.query': '指定时间内查询工单',
   'setting.data.clear.alert':
     '1.设置最大Limit数后，所有的查询语句的查询结果都不会超过这个数值。<br><br>2.查询审核开关开启后，所有的查询都必须通过管理员同意才能进行。关闭则可自主查询<br><br>3.启用GPT进行SQL语句分析请脱敏使用,防止敏感数据上传',
+  'setting.ai.protocol': '接入协议',
+  'setting.ai.protocol.openai': 'OpenAI 兼容（OpenAI / Ollama / vLLM 等）',
+  'setting.ai.protocol.deepseek':
+    'DeepSeek（模型填 deepseek-flash 或 deepseek-v4-pro）',
+  'setting.ai.protocol.anthropic': 'Anthropic Messages（Claude）',
+  'setting.ai.protocol.responses':
+    'OpenAI Responses（官方新模型走这条，/v1/responses）',
   'setting.ai.base_url': '接口地址',
   'setting.ai.proxy_url.tips': 'HTTP 代理地址',
   'setting.ai.proxy_url': '代理地址',
-  'setting.ai.base_url.tips': '请填写接口地址，默认为:https://api.openai.com',
+  'setting.ai.base_url.tips':
+    '填完整地址（含版本段）：OpenAI/Anthropic 用 …/v1，DeepSeek 用 https://api.deepseek.com，Ollama 用 http://127.0.0.1:11434/v1。http 仅支持本机或内网地址',
   'setting.ai.api_key': 'API_KEY',
   'setting.ai.api_key.tips': '请填写API_KEY',
   'setting.ai.model': '模型',
-  'setting.ai.model.tips': '请填写模型',
+  'setting.ai.model.tips':
+    '如 gpt-5.6-terra（Responses）/ deepseek-flash（DeepSeek）/ claude-opus-5-5（Claude）',
   'setting.ai.temperature': '随机性(temperature)',
   'setting.ai.top': '核采样(top_p)',
   'setting.ai.max_tokens': '单次回复限制(max_tokens)',

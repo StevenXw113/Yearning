@@ -26,6 +26,10 @@ type AI struct {
 	SQLGenPrompt     string  `json:"sql_gen_prompt"`
 	SQLAgentPrompt   string  `json:"sql_agent_prompt"`
 	ProxyURL         string  `json:"proxy_url"`
+	// Protocol 接入协议：openai（默认，OpenAI 兼容，含 Ollama / vLLM 等）、
+	// deepseek（DeepSeek，同为 OpenAI 兼容）、anthropic（Claude Messages API）、
+	// responses（OpenAI Responses API）
+	Protocol string `json:"protocol"`
 }
 
 type Message struct {
@@ -38,7 +42,6 @@ type Message struct {
 	Mail     bool   `json:"mail"`
 	Ding     bool   `json:"ding"`
 	Ssl      bool   `json:"ssl"`
-	PushType bool   `json:"push_type"`
 	Key      string `json:"key"`
 }
 

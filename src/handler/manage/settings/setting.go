@@ -63,6 +63,17 @@ func SuperSaveSetting(c yee.Context) (err error) {
 		c.Logger().Error(err)
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
+	// 读取接口会把凭据清空（见 maskSensitive），前端保存时原样带回空值；
+	// 用库中现值回填，避免「只想改协议/地址」却把 API Key、邮箱口令清掉。
+	if u.AI.APIKey == "" {
+		u.AI.APIKey = model.GloAI.Load().APIKey
+	}
+	if u.Message.Password == "" {
+		u.Message.Password = model.GloMessage.Load().Password
+	}
+	if u.Message.Key == "" {
+		u.Message.Key = model.GloMessage.Load().Key
+	}
 	other, _ := json.Marshal(u.Other)
 	message, _ := json.Marshal(u.Message)
 	ai, _ := json.Marshal(u.AI)

@@ -44,6 +44,8 @@ export interface AI {
   sql_gen_prompt: string;
   sql_agent_prompt: string;
   proxy_url: string;
+  // 接入协议：openai（OpenAI 兼容，含 Ollama/DeepSeek 等，默认）/ anthropic（Claude Messages API）
+  protocol: string;
 }
 
 export interface Settings {
