@@ -158,6 +158,7 @@
         { text: 'DDL', value: 'DDL' },
         { text: 'DML', value: 'DML' },
         { text: 'Online-DDL', value: 'Online-DDL' },
+        { text: 'MongoDB', value: 'Mongo' },
       ],
       onFilter: (value: string, record: any) => record.type.includes(value),
     },

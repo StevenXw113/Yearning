@@ -213,6 +213,10 @@
       value: 1,
       label: 'pg',
     },
+    {
+      value: 2,
+      label: 'mongodb',
+    },
   ];
 
   const dbForm = ref({

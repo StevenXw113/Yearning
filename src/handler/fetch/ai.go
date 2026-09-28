@@ -125,7 +125,7 @@ func adviseSystemPrompt(prompt *advisorFrom, tables []string, kind string) (stri
 	if err != nil {
 		return "", err
 	}
-	return replace(sql, kind, tables), nil
+	return replace(sql, kind, tables, prompt.Mongo), nil
 }
 
 // truncate 截断上游返回的正文，避免把整段响应塞进报错信息
@@ -212,14 +212,69 @@ func renderPrompt(tpl, sql string, tables []string) string {
 	return strings.ReplaceAll(p, "{{lang}}", model.C.General.Lang)
 }
 
-func replace(sql, kind string, tables []string) string {
+func replace(sql, kind string, tables []string, mongo bool) string {
 	ai := model.GloAI.Load()
 	pp := ai.AdvisorPrompt
 	if kind == "text2sql" {
 		pp = ai.SQLGenPrompt
 	}
+	if mongo {
+		// MongoDB 命令不是 SQL：关注点不同（空 filter、全集合扫描、索引缺失），
+		// 用 Mongo 模板；设置页填过就用设置页的，否则用内置默认
+		pp = mongoPrompt(ai, kind)
+	}
 	return renderPrompt(pp, sql, tables)
 }
+
+// mongoPrompt 挑选 MongoDB 场景的提示词模板：设置页配置优先，未配置用内置默认
+func mongoPrompt(ai *model.AI, kind string) string {
+	if kind == "text2sql" {
+		if ai.MongoSQLGenPrompt != "" {
+			return ai.MongoSQLGenPrompt
+		}
+		return defaultMongoSQLGenPrompt
+	}
+	if ai.MongoAdvisorPrompt != "" {
+		return ai.MongoAdvisorPrompt
+	}
+	return defaultMongoAdvisorPrompt
+}
+
+// MongoDB 场景的内置提示词模板（设置页留空时使用）。
+// 与 SQL 模板的差别在关注点：Mongo 命令的主要风险是空 filter、全集合扫描、
+// 缺失索引与不可逆操作，而不是 JOIN / 子查询这类 SQL 议题。
+const defaultMongoAdvisorPrompt = `
+MongoDB command review assistant
+
+You are a senior MongoDB DBA. Review the MongoDB change command below and:
+- point out the risks: whole-collection writes (empty or missing filter), unbounded scans, missing index for the filter, irreversible operations
+- propose a safer version with a narrower filter, a batch size, and the index that would support it
+- keep the command as MongoDB extended JSON, e.g. {"update":"users","updates":[{"q":{...},"u":{...}}]}
+
+Collections and their fields:
+
+{{tables_info}}
+
+Command:
+
+{{sql}}
+
+Reply Language: {{lang}}
+`
+
+const defaultMongoSQLGenPrompt = `
+MongoDB command generation assistant
+
+Now you will play the role of a professional DBA and generate the corresponding MongoDB command (MongoDB extended JSON) from the user's description. Always carry an explicit non-empty filter, and state which index that filter needs.
+
+Collections and their fields: {{tables_info}}
+
+Requirement: {{sql}}
+
+Use the markdown format
+
+Reply Language: {{lang}}
+`
 
 // ---------- OpenAI 兼容协议 ----------
 

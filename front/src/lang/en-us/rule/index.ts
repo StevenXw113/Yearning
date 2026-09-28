@@ -96,4 +96,12 @@ export default {
   ruleRollbackConfirm:
     'Roll back to this version? Current rules will be overwritten (the rollback itself is recorded too).',
   ruleRollbackDone: 'Rolled back',
+  MongoForbidEmptyFilter: 'MongoDB: forbid update / delete without filter',
+  MongoForbidDangerous: 'MongoDB: forbid dropDatabase / eval / mapReduce',
+  MongoForbidWhere: 'MongoDB: forbid $where (server-side script)',
+  MongoForbidDropCollection: 'MongoDB: forbid drop / renameCollection',
+  MongoForbidSystemCollection: 'MongoDB: forbid changes on system.* collections',
+  MongoForbidAdminCommand: 'MongoDB: forbid user/role management commands (createUser, ...)',
+  MongoForbidImmutableId: 'MongoDB: forbid modifying _id (immutable field)',
+  MongoMaxAffectRows: 'MongoDB: max documents affected per change (0 = unlimited)',
 };

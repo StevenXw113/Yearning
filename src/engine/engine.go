@@ -58,6 +58,19 @@ type AuditRole struct {
 	RuleLevel map[string]string `json:"RuleLevel"`
 	// DDLForbidTruncate 为自研规则开关：true 表示禁止 TRUNCATE（默认 false，不生效）。
 	DDLForbidTruncate bool `json:"DDLForbidTruncate"`
+	// --- MongoDB 审核规则（自研，实现在 engine/internal/mongocheck）---
+	// 上游 bytebase 没有 Mongo 规则，这几项与 SQL 规则同构：开关 + RuleLevel 级别，
+	// 都存在同一份规则集 JSON 里。true = 启用该限制。
+	MongoForbidEmptyFilter      bool `json:"MongoForbidEmptyFilter"`
+	MongoForbidDangerous        bool `json:"MongoForbidDangerous"`
+	MongoForbidWhere            bool `json:"MongoForbidWhere"`
+	MongoForbidDropCollection   bool `json:"MongoForbidDropCollection"`
+	MongoForbidSystemCollection bool `json:"MongoForbidSystemCollection"`
+	MongoForbidAdminCommand     bool `json:"MongoForbidAdminCommand"`
+	MongoForbidImmutableID      bool `json:"MongoForbidImmutableId"`
+	// MongoMaxAffectRows 单次 update / delete 允许命中的文档数上限，0 = 不限制。
+	// 这是执行期限制（静态审核拿不到命中数），由执行器读取。
+	MongoMaxAffectRows int `json:"MongoMaxAffectRows"`
 }
 
 type Record struct {
@@ -73,4 +86,3 @@ type Record struct {
 	InsulateWordList []string `json:"insulate_word_list"`
 	RollBack         string   `json:"rollback"`
 }
-

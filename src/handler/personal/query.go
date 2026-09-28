@@ -124,6 +124,16 @@ func FetchQueryDatabaseInfo(c yee.Context) (err error) {
 
 	model.DB().Where("source_id =?", c.QueryParam("source_id")).First(&u)
 
+	// MongoDB 没有 SHOW DATABASES 这类元数据语句，走独立实现
+	if u.DBType == model.DBTypeMongoDB {
+		list, mongoErr := FetchMongoDatabaseInfo(&u)
+		if mongoErr != nil {
+			c.Logger().Error(mongoErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(list))
+	}
+
 	result, err := common.ScanDataRows(u, "", "SHOW DATABASES;", "Schema", true, false)
 
 	if err != nil {
@@ -143,6 +153,15 @@ func FetchQueryTableInfo(c yee.Context) (err error) {
 	var u model.CoreDataSource
 
 	model.DB().Where("source_id =?", unescape).First(&u)
+
+	if u.DBType == model.DBTypeMongoDB {
+		list, mongoErr := FetchMongoCollectionInfo(&u, t)
+		if mongoErr != nil {
+			c.Logger().Error(mongoErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"table": list}))
+	}
 
 	result, err := common.ScanDataRows(u, t, "SHOW TABLES;", "Table", true, true)
 	if err != nil {
@@ -195,6 +214,11 @@ func SocketQueryResults(c yee.Context) (err error) {
 			core := new(queryCore)
 			var u model.CoreDataSource
 			model.DB().Where("source_id =?", args.SourceId).First(&u)
+			// MongoDB 走独立执行器：连接与结果集都不经过 database/sql
+			if u.DBType == model.DBTypeMongoDB {
+				socketMongoResults(c, ws, u, user)
+				return
+			}
 			dsn, err := model.InitDSN(model.DSN{
 				Username: u.Username,
 				Password: enc.Decrypt(model.C.General.SecretKey, u.Password),
@@ -233,18 +257,11 @@ func SocketQueryResults(c yee.Context) (err error) {
 					c.Logger().Error(err)
 					break
 				}
-				var d model.CoreQueryOrder
 				msg.MultiSQLRunner = []MultiSQLRunner{}
 				clock := time.Now()
-				if err := model.DB().Where("username =? AND status =?", user, 2).Last(&d).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-					if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Status: true})); err != nil {
-						c.Logger().Error(err)
-					}
-					continue
-				}
-
-				if factory.TimeDifference(d.ApprovalTime) {
-					model.DB().Model(model.CoreQueryOrder{}).Where("username =?", user).Updates(&model.CoreQueryOrder{Status: 3})
+				// 无已通过的申请、或申请已到期：回 status，由前端提示重新申请
+				d, ok := permitQueryOrder(user)
+				if !ok {
 					if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Status: true})); err != nil {
 						c.Logger().Error(err)
 					}
@@ -273,16 +290,7 @@ func SocketQueryResults(c yee.Context) (err error) {
 				}
 
 				queryTime := int(time.Since(clock).Seconds() * 1000)
-				// 审计记录同步落库：异步（go func）时进程异常退出会丢掉这条查询日志，
-				// 而查询日志本身就是审计依据；单行插入的开销可以忽略。
-				model.DB().Create(&model.CoreQueryRecord{
-					WorkId: d.WorkId,
-					SQL:    msg.Ref.Sql,
-					ExTime: queryTime,
-					Time:   time.Now().Format("2006-01-02 15:04"),
-					Source: core.source,
-					Schema: msg.Ref.Schema,
-				})
+				saveQueryRecord(d, msg.Ref.Sql, core.source, msg.Ref.Schema, queryTime)
 				if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Export: d.Export == 1, Results: queryData, QueryTime: queryTime})); err != nil {
 					c.Logger().Error(err)
 				}
@@ -297,4 +305,31 @@ func UndoQueryOrder(c yee.Context) (err error) {
 	user := new(factory.Token).JwtParse(c)
 	model.DB().Model(model.CoreQueryOrder{}).Where("username =?", user.Username).Updates(map[string]interface{}{"status": 3})
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_IS_END)))
+}
+
+// permitQueryOrder 取当前用户已通过的查询申请（status=2）。
+// 申请超期时顺手置为已结束并返回 false；SQL 与 MongoDB 两条查询路径共用。
+func permitQueryOrder(user string) (model.CoreQueryOrder, bool) {
+	var d model.CoreQueryOrder
+	if err := model.DB().Where("username =? AND status =?", user, 2).Last(&d).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		return d, false
+	}
+	if factory.TimeDifference(d.ApprovalTime) {
+		model.DB().Model(model.CoreQueryOrder{}).Where("username =?", user).Updates(&model.CoreQueryOrder{Status: 3})
+		return d, false
+	}
+	return d, true
+}
+
+// saveQueryRecord 落一条查询审计记录。同步写：异步时进程异常退出会丢掉这条日志，
+// 而查询日志本身就是审计依据，单行插入的开销可以忽略。
+func saveQueryRecord(d model.CoreQueryOrder, sql, source, schema string, cost int) {
+	model.DB().Create(&model.CoreQueryRecord{
+		WorkId: d.WorkId,
+		SQL:    sql,
+		ExTime: cost,
+		Time:   time.Now().Format("2006-01-02 15:04"),
+		Source: source,
+		Schema: schema,
+	})
 }

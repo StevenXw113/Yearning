@@ -24,6 +24,14 @@ type forbidDrop struct{}
 
 func (forbidDrop) Name() string { return "forbid-drop" }
 
+func (forbidDrop) Switches() []string {
+	return []string{"DDLEnableDropDatabase", "DDLEnableDropTable"}
+}
+
+func (forbidDrop) Desc() string {
+	return "禁止 DROP DATABASE / DROP TABLE（受「允许删除数据库/表」两个开关控制）"
+}
+
 func (forbidDrop) Check(cfg Config, c Context) []Finding {
 	norm := reMultiSpace.ReplaceAllString(strings.ToLower(strings.TrimSpace(c.SQL)), " ")
 	switch {

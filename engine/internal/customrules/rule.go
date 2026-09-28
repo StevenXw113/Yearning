@@ -56,3 +56,15 @@ type Rule interface {
 	// Check 检查单条 SQL；未命中返回 nil。
 	Check(cfg Config, c Context) []Finding
 }
+
+// Describable 是可选接口：规则实现它即可把元数据交给 archguard，
+// 用于生成 engine/SELF_RULES.md 并核对「开关确实存在于 enginev1.AuditRole」。
+// 新规则建议实现，否则清单里看不到它的开关。
+type Describable interface {
+	// Switches 返回这条规则对应的开关名（enginev1.AuditRole 的字段名）。
+	// 一条规则可以受多个开关控制，例如 forbid-drop 同时看
+	// DDLEnableDropDatabase 与 DDLEnableDropTable。
+	Switches() []string
+	// Desc 规则的简短说明
+	Desc() string
+}

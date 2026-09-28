@@ -7,10 +7,14 @@ import (
 )
 
 // DataSourceKind 将数据源 DBType 映射为引擎方言标识。
-// Yearning 约定：0=mysql。首期仅支持 MySQL，其余返回空串由引擎拒绝。
+// Yearning 约定：0=mysql、2=mongodb。MongoDB 在引擎里走本仓库自研的 Mongo 规则
+// （上游 bytebase 不提供 Mongo advisor），其余类型返回空串由引擎拒绝。
 func DataSourceKind(dbType int) string {
-	if dbType == 0 {
+	switch dbType {
+	case 0:
 		return "mysql"
+	case model.DBTypeMongoDB:
+		return "mongodb"
 	}
 	return ""
 }

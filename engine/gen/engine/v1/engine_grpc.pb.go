@@ -30,7 +30,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// EngineService 提供与 Juno 一致的审核/执行能力，首期实现 MySQL。
+// EngineService 提供与 Juno 一致的审核/执行能力：SQL 走 MySQL 方言规则，
+// MongoDB 命令走本仓库自研的 Mongo 规则（上游 bytebase 无 Mongo 规则）。
 type EngineServiceClient interface {
 	// Check 执行 SQL 静态审核，返回逐条语句的审核结果。
 	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckReply, error)
@@ -106,7 +107,8 @@ func (c *engineServiceClient) StopDelay(ctx context.Context, in *StopDelayReques
 // All implementations must embed UnimplementedEngineServiceServer
 // for forward compatibility.
 //
-// EngineService 提供与 Juno 一致的审核/执行能力，首期实现 MySQL。
+// EngineService 提供与 Juno 一致的审核/执行能力：SQL 走 MySQL 方言规则，
+// MongoDB 命令走本仓库自研的 Mongo 规则（上游 bytebase 无 Mongo 规则）。
 type EngineServiceServer interface {
 	// Check 执行 SQL 静态审核，返回逐条语句的审核结果。
 	Check(context.Context, *CheckRequest) (*CheckReply, error)

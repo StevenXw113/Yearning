@@ -125,6 +125,7 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 		},
 		Lang: model.C.General.Lang,
 		Rule: engine.AuditRoleToProto(rule),
+		Mode: engine.CheckModeWrite,
 	})
 	if err != nil || rep == nil || !rep.Ok {
 		return false, fmt.Sprintf("引擎审核失败: %v", calls.CombineReplyErr(rep, err))

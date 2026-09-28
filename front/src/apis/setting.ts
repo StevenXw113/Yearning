@@ -43,6 +43,9 @@ export interface AI {
   advisor_prompt: string;
   sql_gen_prompt: string;
   sql_agent_prompt: string;
+  // MongoDB 数据源专用提示词，留空则用后端内置默认
+  mongo_advisor_prompt: string;
+  mongo_sql_gen_prompt: string;
   proxy_url: string;
   // 接入协议：openai（OpenAI 兼容，含 Ollama/DeepSeek 等，默认）/ anthropic（Claude Messages API）
   protocol: string;

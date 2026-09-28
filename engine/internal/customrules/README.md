@@ -27,13 +27,37 @@
 
 | # | 位置 | 改什么 |
 | --- | --- | --- |
-| 1 | `internal/customrules/<规则>.go` | 实现 `Name()` / `Check()`，在 `init()` 里 `Register(...)`；逻辑只读 `Context` 与 `Config` |
+| 1 | `internal/customrules/<规则>.go` | 实现 `Name()` / `Check()`，在 `init()` 里 `Register(...)`；逻辑只读 `Context` 与 `Config`。**同时实现 `Switches()` / `Desc()`**（`Describable` 接口，见下） |
 | 2 | `internal/customrules/rule.go` | 在 `Config` 里加开关字段（自研层不依赖上游 proto） |
 | 3 | `internal/server/check.go` | `runCustomRules` 里把 `enginev1.AuditRole.GetXxx()` 映射进 `Config` |
 | 4 | proto + 主程序 + 前端 | `engine.proto` 加字段 → `src/engine/engine.go` 与 `src/engine/convert.go` 透传 → `front/src/views/manager/rules/rules.ts` 加开关行 + `front/src/lang/{zh-cn,en-us}/rule/index.ts` 加文案 |
 
 第 4 步最容易漏：**只加前端开关、忘了 `convert.go` 的映射**，页面勾了也传不到引擎，
 且不会报错——只是规则永远不生效。开关的命名要与 Go 字段名完全一致（前端用它当 JSON key）。
+
+### 实现 `Describable` 并更新自研规则清单
+
+`Switches()` 返回这条规则对应的开关名（就是第 2、3、4 步里那个名字），`Desc()` 给一句说明：
+
+```go
+func (myRule) Switches() []string { return []string{"DDLForbidMyThing"} }
+func (myRule) Desc() string       { return "禁止 XXX" }
+```
+
+这不是可选的装饰：`engine/SELF_RULES.md` 是自研规则清单，由
+`internal/archguard/self_rules_manifest_test.go` 直接读注册表生成并核对——
+
+- 规则没实现 `Describable`、或清单没跟着更新 → 测试失败
+- `Switches()` 写的名字在 `enginev1.AuditRole` 里不存在 → 测试失败（挡住"页面配不出来、
+  `rule_levels` 的级别也无处安放"这类静默失效）
+
+改完规则后重新生成清单：
+
+```bash
+UPDATE_SELF_RULES_MANIFEST=1 go test ./internal/archguard -run TestSelfRule
+```
+
+上游规则清单是同目录上层的 `engine/RULES.md`，那份管「上游新增的有没有被漏掉」，与本清单互补。
 
 第 1 步的骨架（`forbid_truncate.go` 的简化版）：
 

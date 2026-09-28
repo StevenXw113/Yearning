@@ -26,6 +26,10 @@ type AI struct {
 	SQLGenPrompt     string  `json:"sql_gen_prompt"`
 	SQLAgentPrompt   string  `json:"sql_agent_prompt"`
 	ProxyURL         string  `json:"proxy_url"`
+	// MongoAdvisorPrompt / MongoSQLGenPrompt 是 MongoDB 数据源专用的提示词模板，
+	// 留空时由后端使用内置默认（见 handler/fetch/ai.go 的 defaultMongo*Prompt）。
+	MongoAdvisorPrompt string `json:"mongo_advisor_prompt"`
+	MongoSQLGenPrompt  string `json:"mongo_sql_gen_prompt"`
 	// Protocol 接入协议：openai（默认，OpenAI 兼容，含 Ollama / vLLM 等）、
 	// deepseek（DeepSeek，同为 OpenAI 兼容）、anthropic（Claude Messages API）、
 	// responses（OpenAI Responses API）

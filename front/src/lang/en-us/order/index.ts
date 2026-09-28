@@ -33,6 +33,7 @@ export default {
   'order.apply.card.env': 'env: {env}',
   'order.apply.card.enter': 'Enter to apply',
   'order.apply.table.info': 'Table structure',
+  'order.apply.table.empty': 'No table structure or index returned',
   'order.apply.upload': 'Upload SQL file',
   'order.apply.upload.failed': 'Failed to read the file',
   'order.apply.upload.tooLarge': 'SQL file too large (max 10MB)',
@@ -116,4 +117,6 @@ export default {
   'order.query.audit.title': 'Warning',
   'order.query.audit.tips':
     '1. You must fill in the description <br>2. Estimate the query time based on the query conditions <br>3. All submitted query statements are audited. <br>4. Only query statements are supported, not non-query statements <br>5. The maximum limit has been set. If the limit you enter is greater than the maximum limit configured for the platform, the limit configured for the platform prevails',
+  'order.apply.mongo.tips':
+    'MongoDB change: put the command JSON (db.runCommand arguments) in the editor, e.g. update / delete / insert / createIndexes',
 };

@@ -32,6 +32,7 @@ export default {
   'order.apply.card.env': '所属环境: {env}',
   'order.apply.card.enter': '进入申请页面',
   'order.apply.table.info': '获取表结构',
+  'order.apply.table.empty': '未获取到表结构或索引',
   'order.apply.upload': '上传SQL文件',
   'order.apply.upload.failed': '文件读取失败',
   'order.apply.upload.tooLarge': 'SQL 文件过大（上限 10MB）',
@@ -113,4 +114,6 @@ export default {
   'order.query.audit.title': '注意事项',
   'order.query.audit.tips':
     '1.必须填写查询说明<br>2.根据查询条件预估所需的查询时间<br>3.所有提交的查询语句均会进行审计记录<br>4.仅支持查询语句,不可使用非查询语句<br>5.已限制最大limit数，如自己输入的limit数大于平台配置的最大limit数则以平台配置的Limit数为准',
+  'order.apply.mongo.tips':
+    'MongoDB 变更：请在编辑器里填写命令 JSON（db.runCommand 的参数），例如 update / delete / insert / createIndexes',
 };

@@ -100,6 +100,20 @@
             :rows="8"
           ></a-textarea>
         </a-form-item>
+        <a-form-item :label="$t('setting.ai.mongo_advisor_prompt')">
+          <a-textarea
+            v-model:value="config.ai.mongo_advisor_prompt"
+            :rows="8"
+            :placeholder="$t('setting.ai.mongo_prompt.tips')"
+          ></a-textarea>
+        </a-form-item>
+        <a-form-item :label="$t('setting.ai.mongo_sql_gen_prompt')">
+          <a-textarea
+            v-model:value="config.ai.mongo_sql_gen_prompt"
+            :rows="8"
+            :placeholder="$t('setting.ai.mongo_prompt.tips')"
+          ></a-textarea>
+        </a-form-item>
       </a-form>
       <Btn />
     </a-col>

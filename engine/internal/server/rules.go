@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	enginev1 "engine/gen/engine/v1"
+	"engine/internal/mongocheck"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 )
@@ -241,4 +242,16 @@ func reviewRules(r *enginev1.AuditRole) reviewPlan {
 	}
 
 	return plan
+}
+
+// mongoRulesFrom 构造 MongoDB 审核规则配置。
+//
+// Mongo 规则是自研的（上游 bytebase 无 Mongo advisor），但字段与 SQL 规则同构：
+// 都存在同一份 AuditRole 里，级别也共用 rule_levels（key = 字段名）。
+// mode 来自 CheckRequest.mode：空/write = 变更命令审核，query = 查询页的只读命令审核。
+//
+// 取值由 mongocheck 按名字对应关系反射完成——这里不再逐字段映射：
+// 那种写法每条规则都要补一行，漏了不报错、只是规则永远不生效。
+func mongoRulesFrom(r *enginev1.AuditRole, mode string) mongocheck.Config {
+	return mongocheck.ConfigFromProto(r, mongocheck.Mode(mode))
 }

@@ -4,7 +4,8 @@ package engine.v1;
 
 option go_package = "engine/gen/engine/v1;enginev1";
 
-// EngineService 提供与 Juno 一致的审核/执行能力，首期实现 MySQL。
+// EngineService 提供与 Juno 一致的审核/执行能力：SQL 走 MySQL 方言规则，
+// MongoDB 命令走本仓库自研的 Mongo 规则（上游 bytebase 无 Mongo 规则）。
 service EngineService {
   // Check 执行 SQL 静态审核，返回逐条语句的审核结果。
   rpc Check(CheckRequest) returns (CheckReply);
@@ -27,7 +28,7 @@ message DataSource {
   string ca = 5;
   string cert = 6;
   string key = 7;
-  string kind = 8; // "mysql"（首期仅支持）
+  string kind = 8; // "mysql" 或 "mongodb"
 }
 
 // 审核规则，与 Yearning engine.AuditRole 对齐。
@@ -89,6 +90,26 @@ message AuditRole {
   map<string, string> rule_levels = 53;
   // 自研规则开关（internal/customrules）：true = 禁止 TRUNCATE。
   bool ddl_forbid_truncate = 54;
+
+  // ------- MongoDB 审核规则（internal/mongocheck，自研）-------
+  // 上游 bytebase 不提供 Mongo 审核规则（common.EngineSupportSQLReview(MONGODB) 为 false，
+  // advisor 目录里也没有 mongodb 方言），这几项由本仓库自研；
+  // true = 启用该限制，级别同样走 rule_levels（key 为下面的字段名）。
+  // 语义与 SQL 侧一致：开关可关，级别可调（error 拦截 / warn 提示 / observe 观察）。
+  bool mongo_forbid_empty_filter = 55;
+  bool mongo_forbid_dangerous = 56;
+  bool mongo_forbid_where = 57;
+  bool mongo_forbid_drop_collection = 58;
+  // 单次 update / delete 允许命中的文档数上限，0 = 不限制。
+  // 注意：这是**执行期**限制（静态审核拿不到命中数），引擎侧只透传配置，
+  // 真正的判定在主程序抓取前镜像时进行。
+  int32 mongo_max_affect_rows = 59;
+  // 禁止变更 system.* 集合（system.users / system.profile / system.js / system.views）
+  bool mongo_forbid_system_collection = 60;
+  // 禁止账号与权限管理命令（createUser / dropUser / grantRolesToUser / createRole 等）
+  bool mongo_forbid_admin_command = 61;
+  // 禁止修改 _id（不可变字段：$set / $unset / $rename / 替换文档）
+  bool mongo_forbid_immutable_id = 62;
 }
 
 
@@ -137,6 +158,11 @@ message CheckRequest {
   DataSource source = 3;
   string lang = 4;
   AuditRole rule = 5;
+  // 审核模式：空 / "write" = 变更命令审核（申请页检测、工单执行前复检），
+  // "query" = 只读命令审核（查询页）。
+  // 空值按 write 处理，保证旧调用方行为不变；不靠命令名自动推断模式——
+  // 申请页里填 find 必须报「不是变更命令」，而不是悄悄按查询规则放行。
+  string mode = 6;
 }
 
 message CheckReply {

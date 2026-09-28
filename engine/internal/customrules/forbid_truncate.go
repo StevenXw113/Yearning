@@ -22,6 +22,12 @@ type forbidTruncate struct{}
 
 func (forbidTruncate) Name() string { return "forbid-truncate" }
 
+func (forbidTruncate) Switches() []string { return []string{"DDLForbidTruncate"} }
+
+func (forbidTruncate) Desc() string {
+	return "禁止 TRUNCATE（不可回滚，如需清空数据请改用 DELETE 并走审批）"
+}
+
 func (forbidTruncate) Check(cfg Config, c Context) []Finding {
 	if !cfg.ForbidTruncate {
 		return nil

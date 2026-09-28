@@ -113,6 +113,8 @@ cel-go / connectrpc / LSP 等无关依赖。
 `trim-bytebase.py` / `sync-bytebase.sh` 不触碰 `internal/customrules`，
 并有 `archguard.TestSyncDoesNotTouchCustomRules` 兜底。
 新增自定义规则见 [`internal/customrules/README.md`](./internal/customrules/README.md)。
+自研规则清单见 [`SELF_RULES.md`](./SELF_RULES.md)（自动生成：`UPDATE_SELF_RULES_MANIFEST=1 go test ./internal/archguard -run TestSelfRule`）；
+上游规则清单 `RULES.md` 管「上游新增的有没有被漏掉」，`SELF_RULES.md` 管「自己写的有没有被漏掉」。
 
 ## 上游规则更新
 

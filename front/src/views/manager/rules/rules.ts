@@ -313,6 +313,56 @@ const rule: Rule[] = [
     type: 'Online-DDL',
     tp: 3,
   },
+  // --- MongoDB 变更规则 ---
+  // 与 SQL 规则同构：开关 + 级别（级别走 RuleLevel，默认 error）
+  {
+    name: 'MongoForbidEmptyFilter',
+    desc: t('MongoForbidEmptyFilter'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidDangerous',
+    desc: t('MongoForbidDangerous'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidWhere',
+    desc: t('MongoForbidWhere'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidDropCollection',
+    desc: t('MongoForbidDropCollection'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidSystemCollection',
+    desc: t('MongoForbidSystemCollection'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidAdminCommand',
+    desc: t('MongoForbidAdminCommand'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidImmutableId',
+    desc: t('MongoForbidImmutableId'),
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoMaxAffectRows',
+    desc: t('MongoMaxAffectRows'),
+    type: 'Mongo',
+    tp: 1,
+  },
 ];
 
 export { rule, Rule };

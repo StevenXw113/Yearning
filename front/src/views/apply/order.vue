@@ -128,6 +128,13 @@
         <a-tabs v-model:activeKey="activeKey">
           <a-tab-pane :key="1" :tab="$t('order.apply.tab.sql')" force-render>
             <a-spin :spinning="spin" :delay="100">
+              <a-alert
+                v-if="dbType === 2"
+                type="info"
+                show-icon
+                style="margin-bottom: 8px"
+                :message="$t('order.apply.mongo.tips')"
+              ></a-alert>
               <div class="editor_border">
                 <Editor
                   ref="editor"
@@ -287,6 +294,9 @@
 
   const { orderProfileArch, editor } = FetchMixins();
 
+  // 数据源类型（2 = MongoDB）：决定编辑器提示与是否走 SQL 审核
+  const dbType = ref(0);
+
   const nonFields = ref([] as any[]);
 
   const disabledDate = (current: Dayjs) => {
@@ -404,34 +414,38 @@
 
   const fetchTableArch = async () => {
     loadingTblBtn.value = true;
-    const { data } = await queryTableArch(orderItems)
-      .then((res) => {
-        return res;
-      })
-      .finally(() => {
-        loadingTblBtn.value = false;
-      });
-    if (data.payload.rows?.length) {
-      archRef.col = columnsFrom(
-        data.payload.rows,
-        fieldTitles,
-        fieldWidths
-      ) as any;
-      fillTable(archRef, data.payload.rows);
+    try {
+      const { data } = await queryTableArch(orderItems);
+      // 接口失败（没选库/表、没权限、连不上）时 payload 是 null：
+      // 直接读 .rows 会抛，按钮只是转一下就没反应，用户看不到任何原因
+      if (data.code !== 1200) {
+        message.error(data.text);
+        return;
+      }
+      const { rows, idx } = data.payload || {};
+      if (rows?.length) {
+        archRef.col = columnsFrom(rows, fieldTitles, fieldWidths) as any;
+        fillTable(archRef, rows);
+      }
+      if (idx?.length) {
+        idxRef.col = columnsFrom(idx, indexTitles, indexWidths) as any;
+        fillTable(idxRef, idx);
+      }
+      // 集合没有文档时 rows/idx 都是空的，这时候说「成功」会把人带偏
+      if (!rows?.length && !idx?.length) {
+        message.warning(t('order.apply.table.empty'));
+        return;
+      }
+      activeKey.value = 2;
+      message.success(t('order.apply.table.info') + t('common.success'));
+    } finally {
+      loadingTblBtn.value = false;
     }
-    if (data.payload.idx?.length) {
-      idxRef.col = columnsFrom(
-        data.payload.idx,
-        indexTitles,
-        indexWidths
-      ) as any;
-      fillTable(idxRef, data.payload.idx);
-    }
-    activeKey.value = 2;
-    message.success(t('order.apply.table.info') + t('common.success'));
   };
 
   const testResults = debounce(async (sql: string) => {
+    // SQL 与 MongoDB 都交给引擎审核：引擎按数据源的 kind 选方言，
+    // MongoDB 走的是上游没有、本仓库自研的 Mongo 规则（engine/internal/mongocheck）
     if (sql.replace(/(^s*)|(s*$)/g, '').length == 0) {
       return;
     }
@@ -443,7 +457,7 @@
       sql: sql,
     } as SQLTestParams);
     let counter = 0;
-    fillTable(sqlRef, data.payload);
+    fillTable(sqlRef, data.payload || []);
     sqlRef.data.forEach((item: SQLTesting) => {
       // 只有 level===1（错误级规则）才拦；警告(2)/观察(3) 仅供参考，不影响提交。
       if (item.level === 1) {
@@ -455,6 +469,18 @@
     spin.value = !spin.value;
   }, 200);
 
+  // 从 MongoDB 命令里取集合名（命令形如 {"update":"users",...} → users）
+  const mongoCollection = (text: string): string => {
+    try {
+      const obj = JSON.parse(text);
+      const key = Object.keys(obj)[0];
+      const v = obj[key];
+      return typeof v === 'string' ? v : '';
+    } catch {
+      return '';
+    }
+  };
+
   const postOrder = () => {
     loadingPostBtn.value = !loadingPostBtn.value;
     formRef.value
@@ -462,6 +488,10 @@
       .then(async () => {
         let wrapper = Object.assign({}, orderItems);
         wrapper.sql = editor.value.GetValue();
+        // MongoDB：工单的「表」字段用命令里的集合名，便于详情页与审计日志辨识
+        if (dbType.value === 2 && !wrapper.table) {
+          wrapper.table = mongoCollection(wrapper.sql || '');
+        }
         orderProfileArch.timeline.forEach((item) => {
           wrapper.relevant = wrapper.relevant.concat(item.auditor);
         });
@@ -564,6 +594,7 @@
     orderItems.idc = route.query.idc as string;
     orderItems.source = route.query.source as string;
     orderItems.source_id = route.query.source_id as string;
+    dbType.value = parseInt(route.query.db_type as string) || 0;
 
     fetchSchema();
     fetchTimeline();

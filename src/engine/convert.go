@@ -64,8 +64,26 @@ func AuditRoleToProto(r *AuditRole) *enginev1.AuditRole {
 		PriRollBack:                    r.PRIRollBack,
 		RuleLevels:                     r.RuleLevel,
 		DdlForbidTruncate:              r.DDLForbidTruncate,
+		MongoForbidEmptyFilter:         r.MongoForbidEmptyFilter,
+		MongoForbidDangerous:           r.MongoForbidDangerous,
+		MongoForbidWhere:               r.MongoForbidWhere,
+		MongoForbidDropCollection:      r.MongoForbidDropCollection,
+		MongoForbidSystemCollection:    r.MongoForbidSystemCollection,
+		MongoForbidAdminCommand:        r.MongoForbidAdminCommand,
+		MongoForbidImmutableId:         r.MongoForbidImmutableID,
+		MongoMaxAffectRows:             int32(r.MongoMaxAffectRows),
 	}
 }
+
+// 审核模式：引擎的 Check 服务两种入口，必须由调用方明说在审哪一种。
+// 与 engine/internal/mongocheck 的 ModeWrite / ModeQuery 常量一一对应——
+// 主程序不能 import engine 的内部包，这里是两边唯一的契约点，改一处要同步另一处。
+const (
+	// CheckModeWrite 变更命令审核：申请页检测、工单执行前复检
+	CheckModeWrite = "write"
+	// CheckModeQuery 只读命令审核：查询页
+	CheckModeQuery = "query"
+)
 
 // RecordFromProto 将引擎审核记录转为本地 engine.Record。
 func RecordFromProto(p *enginev1.Record) Record {

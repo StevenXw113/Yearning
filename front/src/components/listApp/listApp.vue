@@ -41,6 +41,7 @@
                   idc: item.idc,
                   source: item.source,
                   source_id: item.source_id,
+                  db_type: item.db_type,
                 },
               })
           "
@@ -87,6 +88,7 @@
                             idc: item.idc,
                             source: item.source,
                             source_id: item.source_id,
+                            db_type: item.db_type,
                           },
                         })
                     "

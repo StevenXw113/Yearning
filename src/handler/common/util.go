@@ -52,7 +52,8 @@ func ScanDataRows(s model.CoreDataSource, database, sql, meta string, isQuery bo
 					continue
 				}
 			}
-			res.QueryList = append(res.QueryList, map[string]interface{}{"title": j, "key": checkMeta(j, database, meta), "meta": meta, "isLeaf": isLeaf})
+			// db_type 一并下发：前端按数据源类型生成右键的默认语句（Mongo 与 SQL 语法不同）
+			res.QueryList = append(res.QueryList, map[string]interface{}{"title": j, "key": checkMeta(j, database, meta), "meta": meta, "isLeaf": isLeaf, "db_type": s.DBType})
 		} else {
 			res.Results = append(res.Results, j)
 		}
@@ -68,6 +69,11 @@ func checkMeta(s, database, flag string) string {
 }
 
 func Highlight(s *model.CoreDataSource, isField string, dbName string) []map[string]string {
+	// MongoDB 没有 SQL 的库/表/字段补全语义：直接返回空列表，
+	// 否则这里会用 MySQL 驱动去连 Mongo 端口，日志里刷一串连不上
+	if s.DBType == model.DBTypeMongoDB {
+		return nil
+	}
 	ps := enc.Decrypt(model.C.General.SecretKey, s.Password)
 	var list []map[string]string
 	db, err := model.NewDBSub(model.DSN{

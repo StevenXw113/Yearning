@@ -64,4 +64,8 @@ export default {
   'setting.ai.advisor_prompt': 'SQL optimization prompts',
   'setting.ai.sql_gen_prompt': 'SQL generate prompts',
   'setting.ai.sql_agent_prompt': 'Mysql助手提示词',
+  'setting.ai.mongo_advisor_prompt': 'MongoDB advisor prompt',
+  'setting.ai.mongo_sql_gen_prompt': 'MongoDB generation prompt',
+  'setting.ai.mongo_prompt.tips':
+    'Applies to MongoDB sources only. Leave empty to use the built-in MongoDB template (empty filter / full scan / index aware)',
 };

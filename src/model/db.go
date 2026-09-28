@@ -15,10 +15,13 @@ package model
 
 import (
 	"Yearning-go/src/i18n"
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/cookieY/yee/logger"
@@ -76,8 +79,24 @@ func DBNew(cPath string) {
 	if os.Getenv("MYSQL_USER") == "" {
 		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", C.Mysql.User, C.Mysql.Password, C.Mysql.Host, C.Mysql.Port, C.Mysql.Db)
 	}
+	// 自己开池再交给 gorm（不用 DSN 让 dialector 自己开），为的是能挂上读重试：
+	// 元数据库在远端，链路上有代理/NAT 会掐掉空闲连接（服务端 wait_timeout 有 8 小时，
+	// 掐连接的不是 MySQL 自己），被掐掉的连接下次被取出来用时会报 invalid connection。
+	pool, err := sql.Open("mysql", dsn)
+	if err != nil {
+		logger.DefaultLogger.Error(i18n.DefaultLang.Load(i18n.ER_MYSQL_CONNECTION_FAILED))
+		os.Exit(1)
+		return
+	}
+	// 空闲连接由我们自己先回收，不等对端来关；空闲 1 分钟即释放（代价是冷启动多一次握手），
+	// 寿命 3 分钟封顶，空闲连接数不需要 15 个那么多
+	pool.SetConnMaxIdleTime(time.Minute)
+	pool.SetConnMaxLifetime(time.Minute * 3)
+	pool.SetMaxOpenConns(50)
+	pool.SetMaxIdleConns(5)
+
 	db, err := gorm.Open(drive.New(drive.Config{
-		DSN:                       dsn,
+		Conn:                      retryReadPool{pool},
 		DefaultStringSize:         256,   // string 类型字段的默认长度
 		SkipInitializeWithVersion: false, // 根据当前 MySQL 版本自动配置
 	}), &gorm.Config{AllowGlobalUpdate: false}) // 禁止无 WHERE 的全表更新/删除
@@ -87,14 +106,37 @@ func DBNew(cPath string) {
 		return
 	}
 	sqlDB = db
-	conf, err := db.DB()
-	if err != nil {
-		logger.DefaultLogger.Error(err)
-		return
+}
+
+// readQuerier 只取读路径需要的方法
+type readQuerier interface {
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+}
+
+// queryWithReadRetry 读查询失败时重试一次，只认「连接已被对端关掉」这一类错误。
+//
+// go-sql-driver 对「请求已经写出去、读结果时连接已断」返回 ErrInvalidConn，
+// 而 database/sql 只会自动重试 driver.ErrBadConn —— 驱动仅在「一个字节都没写出去」时
+// 才那样标记（connection.go 的 markBadConn），所以这种错误会直接冒到业务层
+// （日志里的 packets.go:58 unexpected EOF + invalid connection 就是它）。
+// 只重试读：写重试可能把同一条 UPDATE 打两遍。
+func queryWithReadRetry(ctx context.Context, q readQuerier, query string, args ...interface{}) (*sql.Rows, error) {
+	rows, err := q.QueryContext(ctx, query, args...)
+	if errors.Is(err, mmsql.ErrInvalidConn) {
+		return q.QueryContext(ctx, query, args...)
 	}
-	conf.SetConnMaxLifetime(time.Minute * 10)
-	conf.SetMaxOpenConns(50)
-	conf.SetMaxIdleConns(15)
+	return rows, err
+}
+
+// retryReadPool 给连接池的读路径挂上上面那次重试。
+// 注意：包装后 gorm 的 db.DB() 不再返回 *sql.DB（类型断言只认 *sql.DB / *sql.Tx），
+// 所以池参数在包装前直接设在 pool 上。
+type retryReadPool struct {
+	*sql.DB
+}
+
+func (p retryReadPool) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return queryWithReadRetry(ctx, p.DB, query, args...)
 }
 
 func DB() *gorm.DB {

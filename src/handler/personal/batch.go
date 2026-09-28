@@ -51,6 +51,16 @@ func BatchOrderPost(c yee.Context) (err error) {
 		if !permission.NewPermissionService(model.DB()).Equal(&permission.Control{User: user, Kind: req.Type, SourceId: item.SourceId}) {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, item.SourceId)))
 		}
+		// MongoDB 变更：整批预检时就按规则集校验，错误定位到具体第几条明细
+		if req.Type == vars.DML || req.Type == vars.DDL {
+			var mongoSrc model.CoreDataSource
+			model.DB().Model(model.CoreDataSource{}).Where("source_id =?", item.SourceId).First(&mongoSrc)
+			if mongoSrc.DBType == model.DBTypeMongoDB {
+				if err := checkMongoOrder(item.SQL); err != nil {
+					return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
+				}
+			}
+		}
 		order := &model.CoreSqlOrder{
 			Type:     req.Type,
 			Backup:   req.Backup,

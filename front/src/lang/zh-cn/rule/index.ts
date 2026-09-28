@@ -87,4 +87,12 @@ export default {
   ruleRollback: '回滚',
   ruleRollbackConfirm: '回滚到此版本？当前规则会被覆盖（回滚同样会记入历史）。',
   ruleRollbackDone: '已回滚',
+  MongoForbidEmptyFilter: 'MongoDB：禁止空 filter 的 update / delete',
+  MongoForbidDangerous: 'MongoDB：禁止 dropDatabase / eval / mapReduce',
+  MongoForbidWhere: 'MongoDB：禁止 $where（服务端执行脚本）',
+  MongoForbidDropCollection: 'MongoDB：禁止 drop / renameCollection 集合',
+  MongoForbidSystemCollection: 'MongoDB：禁止变更 system.* 集合',
+  MongoForbidAdminCommand: 'MongoDB：禁止账号/权限管理命令（createUser 等）',
+  MongoForbidImmutableId: 'MongoDB：禁止修改 _id（不可变字段）',
+  MongoMaxAffectRows: 'MongoDB：单次变更命中文档数上限（0 不限）',
 };

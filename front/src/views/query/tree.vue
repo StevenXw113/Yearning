@@ -96,6 +96,10 @@
       if (node.dataRef.meta === 'Table') {
         return;
       }
+      // 展开某个库 = 选中它：右键「查看表数据/表结构」要把库名一起发下去，
+      // 否则 schema 一直是空串，Mongo 命令没有库执行不了（报「非法传参」），
+      // MySQL 也会因为没选库而查不到
+      schema.value = node.dataRef.title;
       spin();
       try {
         const { data } = await queryTable(
@@ -119,11 +123,17 @@
     spinning.value = !spinning.value;
   };
 
+  // 当前数据源类型（来自树根节点的 db_type）：Mongo(2) 的右键语句是命令 JSON，key 就是集合名
+  const dbType = ref(0);
+
   const showTableData = (key: string) => {
     emit('showTableRef', {
       source_id: store.state.common.queryInfo.source_id,
       schema: schema.value,
-      sql: `select * from ${key}`,
+      sql:
+        dbType.value === 2
+          ? JSON.stringify({ find: key, limit: 20 })
+          : `select * from ${key}`,
     });
   };
 
@@ -131,7 +141,10 @@
     emit('showTableRef', {
       source_id: store.state.common.queryInfo.source_id,
       schema: schema.value,
-      sql: `SHOW COLUMNS FROM ${key}`,
+      sql:
+        dbType.value === 2
+          ? JSON.stringify({ listIndexes: key })
+          : `SHOW COLUMNS FROM ${key}`,
     });
   };
 
@@ -144,6 +157,7 @@
       // 下面读 .length 也会抛。原来 spinner 只在「成功且有数据」时才关，失败会一直转圈。
       const list = data.payload || [];
       gData.value = list;
+      dbType.value = list.length > 0 ? (list[0].db_type ?? 0) : 0;
       if (list.length > 0) {
         store.commit('common/SET_SCHEMA_List', {
           schema: list.map((item: { key: string }) => item.key),

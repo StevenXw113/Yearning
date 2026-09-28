@@ -212,3 +212,29 @@ func messagesFixture() []openai.ChatCompletionMessage {
 		{Role: "assistant", Content: "hello"},
 	}
 }
+
+func TestMongoPromptSelected(t *testing.T) {
+	// 未配置 Mongo 模板：用内置的，且不落到 SQL 模板上
+	model.GloAI.Store(&model.AI{AdvisorPrompt: "SQL TEMPLATE {{sql}}", SQLGenPrompt: "GEN TEMPLATE {{sql}}"})
+	got := replace("db.runCommand({drop:1})", "advisor", []string{"users(_id, age)"}, true)
+	if !strings.Contains(got, "MongoDB command review") {
+		t.Errorf("Mongo 场景应用内置 Mongo 模板, got %q", got)
+	}
+	if !strings.Contains(got, "db.runCommand") || !strings.Contains(got, "users(_id, age)") {
+		t.Errorf("占位符应被替换, got %q", got)
+	}
+
+	// SQL 场景不受影响
+	if got := replace("select 1", "advisor", nil, false); !strings.Contains(got, "SQL TEMPLATE") {
+		t.Errorf("SQL 场景应用配置模板, got %q", got)
+	}
+
+	// 设置页填了就优先于内置
+	model.GloAI.Store(&model.AI{MongoAdvisorPrompt: "CUSTOM MONGO {{sql}}", MongoSQLGenPrompt: "CUSTOM GEN {{sql}}"})
+	if got := replace("cmd", "advisor", nil, true); !strings.Contains(got, "CUSTOM MONGO") {
+		t.Errorf("应优先用配置的 Mongo 模板, got %q", got)
+	}
+	if got := replace("cmd", "text2sql", nil, true); !strings.Contains(got, "CUSTOM GEN") {
+		t.Errorf("text2sql 应用配置的 Mongo 生成模板, got %q", got)
+	}
+}

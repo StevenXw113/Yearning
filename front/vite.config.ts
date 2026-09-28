@@ -30,6 +30,9 @@ export default defineConfig({
       },
       '/api': {
         target: 'http://127.0.0.1:8000',
+        // 查询执行、工单/审计列表、详情时间线都走 WebSocket，不开 ws 时
+        // 升级请求不会被转发，前端只会报「WebSocket连接失败」
+        ws: true,
       },
       '/ldap': {
         target: 'http://127.0.0.1:8000',

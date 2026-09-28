@@ -84,19 +84,19 @@ func FetchSource(c yee.Context) (err error) {
 	case "count":
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"ddl": len(permission.DDLSource), "dml": len(permission.DMLSource), "query": len(permission.QuerySource)}))
 	case "dml":
-		model.DB().Select("source,id_c,source_id").Where("source_id IN (?)", permission.DMLSource).Find(&source)
+		model.DB().Select("source,id_c,source_id,db_type").Where("source_id IN (?)", permission.DMLSource).Find(&source)
 	case "ddl":
-		model.DB().Select("source,id_c,source_id").Where("source_id IN (?)", permission.DDLSource).Find(&source)
+		model.DB().Select("source,id_c,source_id,db_type").Where("source_id IN (?)", permission.DDLSource).Find(&source)
 	case "query":
 		var ord model.CoreQueryOrder
 		// 如果打开查询审核,判断该用户是否存在查询中的工单.如果存在则直接返回该查询工单允许的数据源
 		if model.GloOther.Load().Query && !errors.Is(model.DB().Model(model.CoreQueryOrder{}).Where("username =? and `status` =2", user).Last(&ord).Error, gorm.ErrRecordNotFound) {
-			model.DB().Select("source,id_c,source_id").Where("source_id =?", ord.SourceId).Find(&source)
+			model.DB().Select("source,id_c,source_id,db_type").Where("source_id =?", ord.SourceId).Find(&source)
 		} else {
-			model.DB().Select("source,id_c,source_id").Where("source_id IN (?)", permission.QuerySource).Find(&source)
+			model.DB().Select("source,id_c,source_id,db_type").Where("source_id IN (?)", permission.QuerySource).Find(&source)
 		}
 	case "all":
-		model.DB().Select("source,id_c,source_id").Find(&source)
+		model.DB().Select("source,id_c,source_id,db_type").Find(&source)
 	case "idc":
 		model.DB().Select("source,source_id").Where("id_c = ?", u.IDC).Find(&source)
 	}
@@ -175,6 +175,16 @@ func FetchBase(c yee.Context) (err error) {
 
 	model.DB().Where("source_id =?", unescape).First(&s)
 
+	// MongoDB 没有 SHOW DATABASES，走 mongo 驱动列举
+	if s.DBType == model.DBTypeMongoDB {
+		names, mongoErr := s.MongoDatabases()
+		if mongoErr != nil {
+			c.Logger().Error(mongoErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(names))
+	}
+
 	result, err := common.ScanDataRows(s, "", "SHOW DATABASES;", "Schema", false, false)
 	if err != nil {
 		c.Logger().Error(err.Error())
@@ -207,6 +217,16 @@ func FetchTable(c yee.Context) (err error) {
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", unescape).First(&s)
 
+	// MongoDB 的"表"是集合
+	if s.DBType == model.DBTypeMongoDB {
+		names, mongoErr := s.MongoCollections(u.DataBase)
+		if mongoErr != nil {
+			c.Logger().Error(mongoErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(names))
+	}
+
 	result, err := common.ScanDataRows(s, u.DataBase, "SHOW TABLES;", "Table", false, false)
 
 	if err != nil {
@@ -227,8 +247,11 @@ func FetchTableInfo(c yee.Context) (err error) {
 		return deny(c, u.SourceId)
 	}
 	if u.DataBase != "" && u.Table != "" {
+		// 不能吞掉错误：返回空 rows/idx 时前端只会显示「成功但没有数据」，
+		// 分不清是没权限、连不上还是集合本身没有文档
 		if err := u.FetchTableFieldsOrIndexes(); err != nil {
 			c.Logger().Critical(err.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"rows": u.Rows, "idx": u.Idx}))
 	}
@@ -278,6 +301,8 @@ func FetchSQLTest(c yee.Context) (err error) {
 		},
 		Lang: model.C.General.Lang,
 		Rule: engine.AuditRoleToProto(rule),
+		// 申请页检测：显式声明按变更命令审核，Mongo 数据源填 find 会报「不是变更命令」
+		Mode: engine.CheckModeWrite,
 	})
 	if rep == nil || !rep.Ok {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(calls.CombineReplyErr(rep, err)))

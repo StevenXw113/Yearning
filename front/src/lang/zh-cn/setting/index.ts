@@ -64,4 +64,8 @@ export default {
   'setting.ai.advisor_prompt': 'SQL语句优化提示词',
   'setting.ai.sql_gen_prompt': 'SQL语句生成提示词',
   'setting.ai.sql_agent_prompt': 'Mysql助手提示词',
+  'setting.ai.mongo_advisor_prompt': 'MongoDB 优化提示词',
+  'setting.ai.mongo_sql_gen_prompt': 'MongoDB 生成提示词',
+  'setting.ai.mongo_prompt.tips':
+    '仅对 MongoDB 数据源生效。留空则使用内置的 MongoDB 模板（提示它关注空 filter、全集合扫描与索引）',
 };

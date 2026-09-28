@@ -71,6 +71,11 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 		return errors.New(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
+	// MongoDB 数据源：不走向引擎的 Exec 链路（那是 SQL 语义），由主程序用 mongo 驱动执行命令；
+	// 校验是两层——硬保底 mongodb.Validate，加上执行前用规则集复检（Client.Check, mode=write）
+	if source.DBType == model.DBTypeMongoDB {
+		return executeMongoOrder(order, &source, actor)
+	}
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil || rule == nil {
 		return err
