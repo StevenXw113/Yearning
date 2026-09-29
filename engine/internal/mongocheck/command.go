@@ -222,6 +222,77 @@ func IsEmptyDoc(v interface{}) bool {
 	return false
 }
 
+// AsInt 把解析出来的 JSON 数字转成 int（UseNumber 解出的是 json.Number）
+func AsInt(v interface{}) (int, bool) {
+	switch n := v.(type) {
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return int(i), true
+		}
+		if f, err := n.Float64(); err == nil {
+			return int(f), true
+		}
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	}
+	return 0, false
+}
+
+// KeyCount 文档的键数（用于索引键数上限这类判定）
+func KeyCount(v interface{}) int {
+	if m, ok := v.(map[string]interface{}); ok {
+		return len(m)
+	}
+	return 0
+}
+
+// Indexes 取 createIndexes 的索引定义列表
+func (c *Command) Indexes() []map[string]interface{} {
+	v, ok := c.Lookup("indexes")
+	if !ok {
+		return nil
+	}
+	arr, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(arr))
+	for _, item := range arr {
+		if m, ok := item.(map[string]interface{}); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// Walk 递归遍历文档里的所有键值（含数组元素），fn 返回 true 时停止并返回 true。
+// 只判键名用 Has 就够；要按「值」判定的规则（$regex 的值、$in 的数组长度）用这个。
+func (c *Command) Walk(fn func(key string, val interface{}) bool) bool {
+	return walk(c.Doc, fn)
+}
+
+func walk(v interface{}, fn func(string, interface{}) bool) bool {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		for k, val := range t {
+			if fn(k, val) || walk(val, fn) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range t {
+			if walk(item, fn) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // hasKey 递归查找某个字段
 func hasKey(v interface{}, key string) bool {
 	switch t := v.(type) {

@@ -68,6 +68,21 @@ type AuditRole struct {
 	MongoForbidSystemCollection bool `json:"MongoForbidSystemCollection"`
 	MongoForbidAdminCommand     bool `json:"MongoForbidAdminCommand"`
 	MongoForbidImmutableID      bool `json:"MongoForbidImmutableId"`
+	// 结构类：命名规范与索引形态（默认只提示，convertToCapped 默认拦截）
+	MongoForbidCappedConvert  bool   `json:"MongoForbidCappedConvert"`
+	MongoForbidCollMod        bool   `json:"MongoForbidCollMod"`
+	MongoIndexKeyLimit        int    `json:"MongoIndexKeyLimit"`
+	MongoIndexNameSpec        string `json:"MongoIndexNameSpec"`
+	MongoCollectionPrefix     string `json:"MongoCollectionPrefix"`
+	MongoMaxCollectionNameLen int    `json:"MongoMaxCollectionNameLen"`
+	// 性能类：只提示不拦（正则未锚定、否定操作符、$or、$in 过大、全集合扫描等）
+	MongoRegexUnanchored     bool `json:"MongoRegexUnanchored"`
+	MongoNegationOperator    bool `json:"MongoNegationOperator"`
+	MongoOrClause            bool `json:"MongoOrClause"`
+	MongoLargeInList         int  `json:"MongoLargeInList"`
+	MongoQueryForbidNoFilter bool `json:"MongoQueryForbidNoFilter"`
+	MongoQueryForbidLookup   bool `json:"MongoQueryForbidLookup"`
+	MongoQueryForbidNoLimit  bool `json:"MongoQueryForbidNoLimit"`
 	// MongoMaxAffectRows 单次 update / delete 允许命中的文档数上限，0 = 不限制。
 	// 这是执行期限制（静态审核拿不到命中数），由执行器读取。
 	MongoMaxAffectRows int `json:"MongoMaxAffectRows"`

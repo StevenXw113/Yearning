@@ -23,6 +23,23 @@ type Config struct {
 	ForbidAdminCommand     bool
 	ForbidImmutableID      bool
 
+	// ---- 结构类（批次 4）：命名规范与结构类默认只提示，convertToCapped 除外 ----
+	ForbidCappedConvert  bool
+	ForbidCollMod        bool
+	IndexKeyLimit        int
+	IndexNameSpec        string
+	CollectionPrefix     string
+	MaxCollectionNameLen int
+
+	// ---- 性能类（批次 5）：只提示不拦 ----
+	RegexUnanchored     bool
+	NegationOperator    bool
+	OrClause            bool
+	LargeInList         int
+	QueryForbidNoFilter bool
+	QueryForbidLookup   bool
+	QueryForbidNoLimit  bool
+
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。
 	Levels map[string]string

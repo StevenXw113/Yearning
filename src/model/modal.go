@@ -169,6 +169,13 @@ type CoreQueryRecord struct {
 	Time   string `gorm:"type:varchar(50);not null" json:"time"`
 	Source string `gorm:"type:varchar(50);not null" json:"source"`
 	Schema string `gorm:"type:varchar(50);not null" json:"schema"`
+	// Audit 查询侧规则审核的命中说明（MongoDB 查询才有；引擎不可用/无命中时为空或说明原因）。
+	// 列的自动迁移由启动时的 AutoMigrate 完成，不需要手写迁移脚本。
+	//
+	// 注意部署顺序：这一列由新版本启动时加上（NOT NULL、无默认值），
+	// 若此时仍有**旧版本实例**在跑，它的 INSERT 不带该列会报 1364
+	// （错误被忽略，表现为那段窗口内查询日志缺失）。滚动发布时先换完实例即可。
+	Audit string `gorm:"type:longtext;not null" json:"audit"`
 }
 
 type CoreAutoTask struct {

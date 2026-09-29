@@ -8,11 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"Yearning-go/src/engine"
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
+	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/mongodb"
 	"Yearning-go/src/model"
+
+	enginev1 "engine/gen/engine/v1"
 
 	"github.com/cookieY/yee"
 	"github.com/vmihailenco/msgpack/v5"
@@ -94,6 +98,13 @@ func socketMongoResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Status: true}))
 			continue
 		}
+		// 查询侧规则审核（引擎，可配置）：拦截级命中就不执行，提示级照常执行但留痕。
+		audit, blocked := checkMongoQuery(&u, msg.Ref.Schema, msg.Ref.Sql)
+		if blocked != nil {
+			saveQueryRecord(d, msg.Ref.Sql, u.Source, msg.Ref.Schema, 0, blocked.Error())
+			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: blocked.Error()}))
+			continue
+		}
 		clock := time.Now()
 		result, err := runMongoCommand(client, msg.Ref.Schema, msg.Ref.Sql, u.InsulateWordList)
 		if err != nil {
@@ -101,7 +112,7 @@ func socketMongoResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			continue
 		}
 		cost := int(time.Since(clock).Seconds() * 1000)
-		saveQueryRecord(d, msg.Ref.Sql, u.Source, msg.Ref.Schema, cost)
+		saveQueryRecord(d, msg.Ref.Sql, u.Source, msg.Ref.Schema, cost, audit)
 		if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{
 			Export: d.Export == 1, Results: []*Query{result}, QueryTime: cost,
 		})); err != nil {
@@ -109,6 +120,58 @@ func socketMongoResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			return
 		}
 	}
+}
+
+// mongoQueryCheckTimeout 查询侧规则审核的超时（与申请页检测一致）
+const mongoQueryCheckTimeout = 30 * time.Second
+
+// checkMongoQuery 把只读命令送引擎做查询侧规则审核（mode=query）。
+//
+// 返回要写进查询记录的命中说明，以及拦截级错误（非 nil 时不要执行）。
+//
+// 引擎不可用**不拦查询**：查询是只读的，本地已有只读白名单硬保底
+// （mongodb.ValidateQuery），没必要因为引擎离线把整个查询功能拿掉；
+// 这种情况会在审计记录里写清「未做规则审核」。
+func checkMongoQuery(source *model.CoreDataSource, schema, command string) (string, error) {
+	rule, rerr := factory.CheckDataSourceRule(source.RuleId)
+	if rerr != nil {
+		return "规则集加载失败，未做查询侧规则审核：" + rerr.Error(), nil
+	}
+	client, conn, err := calls.NewClient()
+	if err != nil {
+		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), mongoQueryCheckTimeout)
+	defer cancel()
+	rep, err := client.Check(ctx, &enginev1.CheckRequest{
+		Sql:    command,
+		Schema: schema,
+		Source: &enginev1.DataSource{Kind: calls.DataSourceKind(source.DBType)},
+		Lang:   model.C.General.Lang,
+		Rule:   engine.AuditRoleToProto(rule),
+		Mode:   engine.CheckModeQuery,
+	})
+	if err != nil {
+		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
+	}
+	if rep == nil || !rep.Ok {
+		msg := "查询侧审核不通过"
+		if rep != nil && rep.GetError() != "" {
+			msg = rep.GetError()
+		}
+		return "", errors.New(msg)
+	}
+	var notes []string
+	for _, r := range rep.Records {
+		if r.GetLevel() == 1 {
+			return "", errors.New("查询侧规则拦截：" + r.GetError())
+		}
+		if r.GetError() != "" {
+			notes = append(notes, r.GetError())
+		}
+	}
+	return strings.Join(notes, "；"), nil
 }
 
 // runMongoCommand 执行一条 MongoDB 命令并转成前端表格契约。

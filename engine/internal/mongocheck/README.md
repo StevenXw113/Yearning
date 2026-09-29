@@ -50,10 +50,12 @@ type Rule interface {
 }
 ```
 
-- 每条规则一个文件，`init()` 里 `Register(...)`：重名、名称为空、级别非法、
-  安全类默认不拦截，都直接 panic（与 `customrules.Register` 一致，让配置错误立刻暴露）。
+- 规则按族分文件（`rules_<族>.go`，如安全类、结构类、性能/查询类），每条规则在 `init()` 里
+  `Register(...)`：重名、名称为空、级别非法、安全类默认不拦截，都直接 panic
+  （与 `customrules.Register` 一致，让配置错误立刻暴露）。
 - `Command` 是共享解析层：命令名（JSON 首键）、目标集合、分类、子句数组
-  （`updates[]` / `deletes[]`）、`EmptyFilter()`、递归操作符查找。规则只读它，不各自解析。
+  （`updates[]` / `deletes[]`）、`EmptyFilter()`、`Has()`（按键名递归）、`Walk()`（按值递归，
+  给 `$regex` / `$in` 这类要取值判定的规则用）。规则只读它，不各自解析。
 - `All()` 返回注册表里的全部规则，供 `SELF_RULES.md` 生成与 archguard 核对。
 
 ### 配置读取（反射只用在边界上）

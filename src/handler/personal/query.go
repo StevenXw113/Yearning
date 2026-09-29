@@ -290,7 +290,8 @@ func SocketQueryResults(c yee.Context) (err error) {
 				}
 
 				queryTime := int(time.Since(clock).Seconds() * 1000)
-				saveQueryRecord(d, msg.Ref.Sql, core.source, msg.Ref.Schema, queryTime)
+				// SQL 查询侧没有规则审核（引擎 QueryRequest 不带规则集），留痕为空
+				saveQueryRecord(d, msg.Ref.Sql, core.source, msg.Ref.Schema, queryTime, "")
 				if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Export: d.Export == 1, Results: queryData, QueryTime: queryTime})); err != nil {
 					c.Logger().Error(err)
 				}
@@ -323,7 +324,8 @@ func permitQueryOrder(user string) (model.CoreQueryOrder, bool) {
 
 // saveQueryRecord 落一条查询审计记录。同步写：异步时进程异常退出会丢掉这条日志，
 // 而查询日志本身就是审计依据，单行插入的开销可以忽略。
-func saveQueryRecord(d model.CoreQueryOrder, sql, source, schema string, cost int) {
+// audit 是查询侧规则审核的命中说明（SQL 路径传空串）。
+func saveQueryRecord(d model.CoreQueryOrder, sql, source, schema string, cost int, audit string) {
 	model.DB().Create(&model.CoreQueryRecord{
 		WorkId: d.WorkId,
 		SQL:    sql,
@@ -331,5 +333,6 @@ func saveQueryRecord(d model.CoreQueryOrder, sql, source, schema string, cost in
 		Time:   time.Now().Format("2006-01-02 15:04"),
 		Source: source,
 		Schema: schema,
+		Audit:  audit,
 	})
 }

@@ -110,6 +110,31 @@ message AuditRole {
   bool mongo_forbid_admin_command = 61;
   // 禁止修改 _id（不可变字段：$set / $unset / $rename / 替换文档）
   bool mongo_forbid_immutable_id = 62;
+
+  // ------- MongoDB 结构类规则（默认 warn，避免误报影响提交）-------
+  // convertToCapped 会重建集合（不可逆），默认拦截
+  bool mongo_forbid_capped_convert = 63;
+  bool mongo_forbid_coll_mod = 64;
+  // 单索引键数上限，0 = 不限制（Mongo 自身上限 32）
+  int32 mongo_index_key_limit = 65;
+  // 索引命名规范（正则，空 = 规则不生效）
+  string mongo_index_name_spec = 66;
+  // 集合名前缀规范（空 = 规则不生效）
+  string mongo_collection_prefix = 67;
+  // 集合名长度上限，0 = 不限制
+  int32 mongo_max_collection_name_len = 68;
+
+  // ------- MongoDB 性能类规则（默认 warn，只提示不拦）-------
+  // 以下 4 条同时适用于变更与查询两种模式
+  bool mongo_regex_unanchored = 69;
+  bool mongo_negation_operator = 70;
+  bool mongo_or_clause = 71;
+  // $in 元素个数上限，0 = 不限制
+  int32 mongo_large_in_list = 72;
+  // 以下 3 条只适用于查询模式
+  bool mongo_query_forbid_no_filter = 73;
+  bool mongo_query_forbid_lookup = 74;
+  bool mongo_query_forbid_no_limit = 75;
 }
 
 
