@@ -45,9 +45,9 @@
         <a-select
           size="small"
           style="width: 100%"
-          :value="levels[record.name] || 'error'"
+          :value="levels[record.name] || ''"
           :options="levelOptions"
-          @change="(v: string) => (levels[record.name] = v)"
+          @change="(v: string) => setLevel(record.name, v)"
         />
       </template>
       <template v-if="column.dataIndex === 'action'">
@@ -180,6 +180,7 @@
   ];
 
   const levelOptions = [
+    { value: '', label: t('ruleLevelDefault') },
     { value: 'error', label: t('ruleLevelError') },
     { value: 'warn', label: t('ruleLevelWarn') },
     { value: 'observe', label: t('ruleLevelObserve') },
@@ -204,6 +205,17 @@
     levels.value =
       ((r as unknown as { RuleLevel?: Record<string, string> }).RuleLevel ||
         {}) as Record<string, string>;
+  };
+
+  // 级别下拉：未配置就是「默认」——引擎按规则自带的默认级别处理
+  // （安全类 error、结构与性能类 warn）。这里必须把键删掉而不是写空串，
+  // 否则页面会把「没人配过」显示成「配了某个值」。
+  const setLevel = (name: string, v: string) => {
+    if (v === '') {
+      delete levels.value[name];
+      return;
+    }
+    levels.value[name] = v;
   };
 
   const onRules = (r: Rules, ids: number) => {

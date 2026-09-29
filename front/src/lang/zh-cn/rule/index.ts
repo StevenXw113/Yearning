@@ -84,6 +84,7 @@ export default {
   ruleLevelError: '拦截(错误)',
   ruleLevelWarn: '提示(警告)',
   ruleLevelObserve: '观察(不拦)',
+  ruleLevelDefault: '默认(按规则类型)',
   ruleRollback: '回滚',
   ruleRollbackConfirm: '回滚到此版本？当前规则会被覆盖（回滚同样会记入历史）。',
   ruleRollbackDone: '已回滚',
