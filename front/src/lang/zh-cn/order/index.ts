@@ -105,6 +105,7 @@ export default {
   'order.query.table.real_name': '真实姓名',
   'order.query.table.time': '提交时间',
   'order.query.table.export': '是否导出',
+  'order.query.table.audit': '规则提示',
   'order.query.table.status': '状态',
   'order.query.audit.state.process': '查询中',
   'order.query.audit.state.done': '查询结束',

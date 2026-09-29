@@ -142,6 +142,8 @@
           : (results.value = []);
         executeTime.value = resp.query_time;
         activeKey.value = 0;
+        // 查询侧规则命中（如未锚定的 $regex）：只提示，结果照常展示
+        resp.audit ? message.warning(resp.audit) : null;
       }
     }
     store.commit('common/SET_DISABLED_SPINNING');

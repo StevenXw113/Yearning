@@ -114,7 +114,7 @@ func socketMongoResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 		cost := int(time.Since(clock).Seconds() * 1000)
 		saveQueryRecord(d, msg.Ref.Sql, u.Source, msg.Ref.Schema, cost, audit)
 		if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{
-			Export: d.Export == 1, Results: []*Query{result}, QueryTime: cost,
+			Export: d.Export == 1, Results: []*Query{result}, QueryTime: cost, Audit: audit,
 		})); err != nil {
 			c.Logger().Error(err)
 			return

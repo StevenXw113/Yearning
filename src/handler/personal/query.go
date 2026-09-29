@@ -43,6 +43,9 @@ type queryResults struct {
 	Status    bool     `msgpack:"status"`
 	HeartBeat string   `msgpack:"heartbeat"`
 	IsOnly    bool     `msgpack:"is_only"`
+	// Audit 查询侧规则命中的提示（只有 MongoDB 查询有）：不影响结果，前端以提示形式展示。
+	// 命中拦截级规则时走 Error，这里只承载 warn / observe。
+	Audit string `msgpack:"audit"`
 }
 
 type queryArgs struct {

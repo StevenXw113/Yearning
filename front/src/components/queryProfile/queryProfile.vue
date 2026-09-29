@@ -130,6 +130,11 @@
       title: t('common.table.ex_time'),
       dataIndex: 'ex_time',
     },
+    {
+      // 查询侧规则命中的说明（MongoDB 查询才有），便于事后审计
+      title: t('order.query.table.audit'),
+      dataIndex: 'audit',
+    },
   ];
 
   const tData = ref<QueryRef[]>([]);
