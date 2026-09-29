@@ -46,7 +46,7 @@
           size="small"
           style="width: 100%"
           :value="levels[record.name] || ''"
-          :options="levelOptions"
+          :options="levelOptions(record)"
           @change="(v: string) => setLevel(record.name, v)"
         />
       </template>
@@ -179,8 +179,21 @@
     },
   ];
 
-  const levelOptions = [
-    { value: '', label: t('ruleLevelDefault') },
+  // 未配置时显示「默认(拦截)」这种直白写法：括号里是这条规则自带的默认级别
+  // （rules.ts 的 level，由 archguard 核对与引擎 DefaultLevel 一致；SQL 规则缺省一律 error）。
+  const shortLevel = (v?: string) => {
+    switch (v) {
+      case 'warn':
+        return t('ruleLevelShortWarn');
+      case 'observe':
+        return t('ruleLevelShortObserve');
+      default:
+        return t('ruleLevelShortError');
+    }
+  };
+
+  const levelOptions = (r: Rule) => [
+    { value: '', label: `${t('ruleLevelDefault')}(${shortLevel(r.level)})` },
     { value: 'error', label: t('ruleLevelError') },
     { value: 'warn', label: t('ruleLevelWarn') },
     { value: 'observe', label: t('ruleLevelObserve') },

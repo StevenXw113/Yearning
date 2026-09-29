@@ -5,6 +5,9 @@ interface Rule {
   name: string;
   type: string;
   tp: number;
+  // level 规则自带的默认级别（引擎缺少配置时用的那一档），只用于把级别下拉显示成
+  // 「默认(拦截/提示/观察)」。必须与引擎的 DefaultLevel 一致，由 archguard 护栏核对。
+  level?: 'error' | 'warn' | 'observe';
 }
 
 const { t } = i18n.global;
@@ -318,126 +321,147 @@ const rule: Rule[] = [
   {
     name: 'MongoForbidEmptyFilter',
     desc: t('MongoForbidEmptyFilter'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidDangerous',
     desc: t('MongoForbidDangerous'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidWhere',
     desc: t('MongoForbidWhere'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidDropCollection',
     desc: t('MongoForbidDropCollection'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidSystemCollection',
     desc: t('MongoForbidSystemCollection'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidAdminCommand',
     desc: t('MongoForbidAdminCommand'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidImmutableId',
     desc: t('MongoForbidImmutableId'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidCappedConvert',
     desc: t('MongoForbidCappedConvert'),
+    level: 'error',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoForbidCollMod',
     desc: t('MongoForbidCollMod'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoIndexKeyLimit',
     desc: t('MongoIndexKeyLimit'),
+    level: 'warn',
     type: 'Mongo',
     tp: 1,
   },
   {
     name: 'MongoIndexNameSpec',
     desc: t('MongoIndexNameSpec'),
+    level: 'warn',
     type: 'Mongo',
     tp: 2,
   },
   {
     name: 'MongoCollectionPrefix',
     desc: t('MongoCollectionPrefix'),
+    level: 'warn',
     type: 'Mongo',
     tp: 2,
   },
   {
     name: 'MongoMaxCollectionNameLen',
     desc: t('MongoMaxCollectionNameLen'),
+    level: 'warn',
     type: 'Mongo',
     tp: 1,
   },
   {
     name: 'MongoRegexUnanchored',
     desc: t('MongoRegexUnanchored'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoNegationOperator',
     desc: t('MongoNegationOperator'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoOrClause',
     desc: t('MongoOrClause'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoLargeInList',
     desc: t('MongoLargeInList'),
+    level: 'warn',
     type: 'Mongo',
     tp: 1,
   },
   {
     name: 'MongoQueryForbidNoFilter',
     desc: t('MongoQueryForbidNoFilter'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoQueryForbidLookup',
     desc: t('MongoQueryForbidLookup'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoQueryForbidNoLimit',
     desc: t('MongoQueryForbidNoLimit'),
+    level: 'warn',
     type: 'Mongo',
     tp: 0,
   },
   {
     name: 'MongoMaxAffectRows',
     desc: t('MongoMaxAffectRows'),
+    level: 'error',
     type: 'Mongo',
     tp: 1,
   },

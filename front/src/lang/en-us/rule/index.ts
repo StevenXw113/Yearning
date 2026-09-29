@@ -93,7 +93,10 @@ export default {
   ruleLevelWarn: 'Notify (warning)',
   ruleLevelObserve: 'Observe (no block)',
   ruleRollback: 'Rollback',
-  ruleLevelDefault: 'Default (by category)',
+  ruleLevelDefault: 'Default',
+  ruleLevelShortError: 'Block',
+  ruleLevelShortWarn: 'Notify',
+  ruleLevelShortObserve: 'Observe',
   ruleRollbackConfirm:
     'Roll back to this version? Current rules will be overwritten (the rollback itself is recorded too).',
   ruleRollbackDone: 'Rolled back',
