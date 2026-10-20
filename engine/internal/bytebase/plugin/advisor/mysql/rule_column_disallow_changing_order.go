@@ -6,10 +6,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -40,7 +40,7 @@ func (*ColumnDisallowChangingOrderAdvisor) Check(_ context.Context, checkCtx adv
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type columnDisallowChangingOrderOmniRule struct {
@@ -70,7 +70,7 @@ func (r *columnDisallowChangingOrderOmniRule) OnStatement(node ast.Node) {
 					Code:          code.ChangeColumnOrder.Int32(),
 					Title:         r.Title,
 					Content:       fmt.Sprintf("\"%s\" changes column order", r.QueryText()),
-					StartPosition: common.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
+					StartPosition: base.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
 				})
 			}
 		default:

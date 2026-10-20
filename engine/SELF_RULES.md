@@ -45,6 +45,24 @@
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 
+## Redis 侧 · internal/redischeck（15 条）
+
+- `RedisForbidAdmin` — 开关：`RedisForbidAdmin`；禁止 CONFIG / DEBUG / MODULE / MONITOR / CLIENT 等运维管理命令
+- `RedisForbidBlocking` — 开关：`RedisForbidBlocking`；禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE 等）
+- `RedisForbidDangerous` — 开关：`RedisForbidDangerous`；禁止 FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE 等影响整个实例的命令
+- `RedisForbidKeysCommand` — 开关：`RedisForbidKeysCommand`；禁止 KEYS：它会遍历整个键空间并阻塞实例，请改用 SCAN
+- `RedisForbidMove` — 开关：`RedisForbidMove`；禁止 MOVE / SELECT：跨库操作会让键的归属难以追踪
+- `RedisForbidPersist` — 开关：`RedisForbidPersist`；禁止 PERSIST：会把键的过期时间去掉，变成常驻内存
+- `RedisForbidRename` — 开关：`RedisForbidRename`；禁止 RENAME / RENAMENX：会静默覆盖目标键，旧值无法找回
+- `RedisForbidReplica` — 开关：`RedisForbidReplica`；禁止 REPLICAOF / SLAVEOF（改变主从关系）
+- `RedisForbidScript` — 开关：`RedisForbidScript`；禁止 EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL（服务端执行脚本）
+- `RedisKeyPrefix` — 开关：`RedisKeyPrefix`；键名必须以指定前缀开头（如 app:），空表示不检查
+- `RedisMaxAffectKeys` — 开关：`RedisMaxAffectKeys`；单条命令允许影响的键数上限，0 表示不限制
+- `RedisMaxKeyLen` — 开关：`RedisMaxKeyLen`；键名长度上限（字节），0 表示不限制
+- `RedisMaxValueLen` — 开关：`RedisMaxValueLen`；单次写入值的大小上限（字节），0 表示不限制
+- `RedisRequireTTL` — 开关：`RedisRequireTTL`；SET 必须带过期时间（EX / PX / EXAT），避免键无上限增长
+- `RedisScanRequireMatch` — 开关：`RedisScanRequireMatch`；SCAN 应带 MATCH 限定范围，否则等同于全量遍历
+
 ## 执行期限制 · 非静态审核（1 条）
 
 - `MongoMaxAffectRows` — 开关：`MongoMaxAffectRows`；单次 update / delete 允许命中的文档数上限（0 = 不限），由主程序抓取前镜像时判定

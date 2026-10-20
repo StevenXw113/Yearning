@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -41,7 +41,7 @@ func (*WhereRequirementForSelectAdvisor) Check(_ context.Context, checkCtx advis
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type whereRequirementForSelectOmniRule struct {
@@ -95,7 +95,7 @@ func (r *whereRequirementForSelectOmniRule) checkSelectStmt(sel *ast.SelectStmt,
 			Code:          code.StatementNoWhere.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("\"%s\" requires WHERE clause", text),
-			StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(sel.Loc))),
+			StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(sel.Loc))),
 		})
 	}
 

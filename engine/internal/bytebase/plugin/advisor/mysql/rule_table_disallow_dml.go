@@ -6,10 +6,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -39,7 +39,7 @@ func (*TableDisallowDMLAdvisor) Check(_ context.Context, checkCtx advisor.Contex
 		disallowList: stringArrayPayload.List,
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type tableDisallowDMLOmniRule struct {
@@ -82,7 +82,7 @@ func (r *tableDisallowDMLOmniRule) checkTableName(tableName string, lineNumber i
 				Code:          code.TableDisallowDML.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("DML is disallowed on table %s.", tableName),
-				StartPosition: common.ConvertANTLRLineToPosition(absoluteLine),
+				StartPosition: base.ConvertANTLRLineToPosition(absoluteLine),
 			})
 			return
 		}

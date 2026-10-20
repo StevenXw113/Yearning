@@ -8,10 +8,10 @@ import (
 	"github.com/bytebase/omni/mysql/ast"
 	"github.com/pkg/errors"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -59,7 +59,7 @@ func (*NamingTableConventionAdvisor) Check(_ context.Context, checkCtx advisor.C
 		maxLength: maxLength,
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type namingTableOmniRule struct {
@@ -102,7 +102,7 @@ func (r *namingTableOmniRule) handleTableName(tableName string, lineNumber int32
 			Code:          code.NamingTableConventionMismatch.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("`%s` mismatches table naming convention, naming format should be %q", tableName, r.format),
-			StartPosition: common.ConvertANTLRLineToPosition(absoluteLine),
+			StartPosition: base.ConvertANTLRLineToPosition(absoluteLine),
 		})
 	}
 	if r.maxLength > 0 && len(tableName) > r.maxLength {
@@ -111,7 +111,7 @@ func (r *namingTableOmniRule) handleTableName(tableName string, lineNumber int32
 			Code:          code.NamingTableConventionMismatch.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("`%s` mismatches table naming convention, its length should be within %d characters", tableName, r.maxLength),
-			StartPosition: common.ConvertANTLRLineToPosition(absoluteLine),
+			StartPosition: base.ConvertANTLRLineToPosition(absoluteLine),
 		})
 	}
 }

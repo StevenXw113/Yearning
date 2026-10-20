@@ -159,7 +159,7 @@ func TestReviewRulesLevelGroups(t *testing.T) {
 			"DDLEnablePrimaryKey": "observe",
 		},
 	}
-	plan := reviewRules(role)
+	plan := reviewRules(role, storepb.Engine_MYSQL)
 	has := func(rules []*storepb.SQLReviewRule, want storepb.SQLReviewRule_Type) bool {
 		for _, r := range rules {
 			if r.GetType() == want {

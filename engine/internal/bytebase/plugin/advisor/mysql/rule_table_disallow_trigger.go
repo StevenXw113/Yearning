@@ -6,10 +6,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	advisorcode "engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -38,7 +38,7 @@ func (*TableDisallowTriggerAdvisor) Check(_ context.Context, checkCtx advisor.Co
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type tableDisallowTriggerOmniRule struct {
@@ -60,7 +60,7 @@ func (r *tableDisallowTriggerOmniRule) OnStatement(node ast.Node) {
 			Code:          advisorcode.CreateTableTrigger.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("Trigger is forbidden, but \"%s\" creates", r.QueryText()),
-			StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(n.Loc))),
+			StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(n.Loc))),
 		})
 	}
 }

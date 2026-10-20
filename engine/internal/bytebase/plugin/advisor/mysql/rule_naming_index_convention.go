@@ -8,10 +8,10 @@ import (
 	"github.com/bytebase/omni/mysql/ast"
 	"github.com/pkg/errors"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 	"engine/internal/bytebase/store/model"
 )
 
@@ -74,7 +74,7 @@ func (*NamingIndexConventionAdvisor) Check(_ context.Context, checkCtx advisor.C
 		originalMetadata: checkCtx.OriginalMetadata,
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type namingIndexOmniRule struct {
@@ -206,7 +206,7 @@ func (r *namingIndexOmniRule) handleIndexList(indexDataList []*indexMetaData) {
 				Code:          code.NamingIndexConventionMismatch.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("Index in table `%s` mismatches the naming convention, expect %q but found `%s`", indexData.tableName, regex, indexData.indexName),
-				StartPosition: common.ConvertANTLRLineToPosition(indexData.line),
+				StartPosition: base.ConvertANTLRLineToPosition(indexData.line),
 			})
 		}
 		if r.maxLength > 0 && len(indexData.indexName) > r.maxLength {
@@ -215,7 +215,7 @@ func (r *namingIndexOmniRule) handleIndexList(indexDataList []*indexMetaData) {
 				Code:          code.NamingIndexConventionMismatch.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("Index `%s` in table `%s` mismatches the naming convention, its length should be within %d characters", indexData.indexName, indexData.tableName, r.maxLength),
-				StartPosition: common.ConvertANTLRLineToPosition(indexData.line),
+				StartPosition: base.ConvertANTLRLineToPosition(indexData.line),
 			})
 		}
 	}

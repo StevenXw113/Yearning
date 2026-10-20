@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -37,7 +37,7 @@ func (*StatementWhereNoEqualNullAdvisor) Check(_ context.Context, checkCtx advis
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type whereNoEqualNullOmniRule struct {
@@ -65,7 +65,7 @@ func (r *whereNoEqualNullOmniRule) OnStatement(node ast.Node) {
 							Code:          code.StatementWhereNoEqualNull.Int32(),
 							Title:         r.Title,
 							Content:       fmt.Sprintf("WHERE clause contains equal null: %s", text),
-							StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(bin.Loc))),
+							StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(bin.Loc))),
 						})
 					}
 				}

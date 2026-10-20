@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -41,7 +41,7 @@ func (*NoLeadingWildcardLikeAdvisor) Check(_ context.Context, checkCtx advisor.C
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type noLeadingWildcardLikeOmniRule struct {
@@ -73,7 +73,7 @@ func (r *noLeadingWildcardLikeOmniRule) checkLikeExpr(like *ast.LikeExpr, text s
 				Code:          code.StatementLeadingWildcardLike.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("\"%s\" uses leading wildcard LIKE", text),
-				StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(like.Loc))),
+				StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(like.Loc))),
 			})
 		}
 	}

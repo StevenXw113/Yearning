@@ -12,6 +12,7 @@ import (
 	enginev1 "engine/gen/engine/v1"
 	"engine/internal/customrules"
 	"engine/internal/mongocheck"
+	"engine/internal/redischeck"
 )
 
 // selfRulesManifestName 是自研规则的清单文件（engine/SELF_RULES.md），
@@ -22,6 +23,7 @@ const selfRulesManifestName = "SELF_RULES.md"
 var selfRuleGroups = []string{
 	"SQL 侧 · internal/customrules",
 	"MongoDB 侧 · internal/mongocheck",
+	"Redis 侧 · internal/redischeck",
 	"执行期限制 · 非静态审核",
 }
 
@@ -197,6 +199,27 @@ func TestMongoRulesHaveFrontendEntries(t *testing.T) {
 	}
 }
 
+// TestRedisRulesHaveFrontendEntries 核对每条 Redis 规则在规则页里都有开关与文案。
+// 少了文案或开关，规则页就配不出这一条——引擎侧再正确也用不上。
+func TestRedisRulesHaveFrontendEntries(t *testing.T) {
+	root := filepath.Join(moduleRoot(t), "..")
+	rulesTS := readFile(t, filepath.Join(root, "front/src/views/manager/rules/rules.ts"))
+	langs := map[string]string{
+		"zh-cn": readFile(t, filepath.Join(root, "front/src/lang/zh-cn/rule/index.ts")),
+		"en-us": readFile(t, filepath.Join(root, "front/src/lang/en-us/rule/index.ts")),
+	}
+	for _, r := range redischeck.All() {
+		if !strings.Contains(rulesTS, "'"+r.Name()+"'") {
+			t.Errorf("规则 %q 不在 front/src/views/manager/rules/rules.ts 里：规则页配不出这个开关", r.Name())
+		}
+		for lang, content := range langs {
+			if !strings.Contains(content, r.Name()+":") {
+				t.Errorf("规则 %q 缺少 %s 文案（front/src/lang/%s/rule/index.ts）", r.Name(), lang, lang)
+			}
+		}
+	}
+}
+
 // mongoExecOnlyByName 归一化匹配 mongoExecOnly 里的开关名
 func mongoExecOnlyByName(name string) (string, bool) {
 	for k := range mongoExecOnly {
@@ -215,6 +238,34 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("读取 %s 失败: %v", path, err)
 	}
 	return string(b)
+}
+
+// TestRedisSwitchesAreImplemented 反向核对：AuditRole 里每个 Redis* 开关都必须有实现。
+//
+// 与 Mongo 侧不同的是，Redis 的 15 个开关全都是静态审核规则（没有执行期例外），
+// 所以这里的判据更直接：proto 字段名归一化后应当等于某条规则的 Name。
+func TestRedisSwitchesAreImplemented(t *testing.T) {
+	covered := map[string]bool{}
+	for _, r := range redischeck.All() {
+		covered[normSwitch(r.Name())] = true
+	}
+	found := 0
+	for _, name := range auditRoleFields(t) {
+		if !strings.HasPrefix(strings.ToLower(name), "redis") {
+			continue
+		}
+		found++
+		if !covered[normSwitch(name)] {
+			t.Errorf("enginev1.AuditRole 有 %q，但 redischeck 里没有同名规则：规则页勾了不会生效", name)
+		}
+	}
+	if found == 0 {
+		t.Error("未在 AuditRole 里找到任何 Redis* 开关，proto 生成物可能有问题")
+	}
+	if found != len(redischeck.All()) {
+		t.Errorf("AuditRole 的 Redis 开关有 %d 个，redischeck 注册了 %d 条规则，两者应一一对应",
+			found, len(redischeck.All()))
+	}
 }
 
 // auditRoleFields 返回 enginev1.AuditRole 的全部字段名（proto 名，snake_case）。
@@ -287,9 +338,23 @@ func scanSelfRules(t *testing.T) []selfRule {
 		})
 	}
 
-	for name, desc := range mongoExecOnly {
+	redisRules := redischeck.All()
+	if len(redisRules) == 0 {
+		t.Fatal("未扫描到任何 redischeck 规则：init 注册是否被移除了？")
+	}
+	for _, r := range redisRules {
+		// Redis 规则的规则名同样是 AuditRole 字段名（也是 rule_levels 的 key）
 		out = append(out, selfRule{
 			Group:    selfRuleGroups[2],
+			Name:     r.Name(),
+			Switches: []string{r.Name()},
+			Desc:     r.Desc(),
+		})
+	}
+
+	for name, desc := range mongoExecOnly {
+		out = append(out, selfRule{
+			Group:    selfRuleGroups[3],
 			Name:     name,
 			Switches: []string{name},
 			Desc:     desc,

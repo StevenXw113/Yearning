@@ -6,10 +6,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -38,7 +38,7 @@ func (*ColumnDisallowDropAdvisor) Check(_ context.Context, checkCtx advisor.Cont
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type columnDisallowDropOmniRule struct {
@@ -65,7 +65,7 @@ func (r *columnDisallowDropOmniRule) OnStatement(node ast.Node) {
 			Code:          code.DropColumn.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("drops column \"%s\" of table \"%s\"", cmd.Name, tableName),
-			StartPosition: common.ConvertANTLRLineToPosition(int(r.LocToLine(cmd.Loc))),
+			StartPosition: base.ConvertANTLRLineToPosition(int(r.LocToLine(cmd.Loc))),
 		})
 	}
 }

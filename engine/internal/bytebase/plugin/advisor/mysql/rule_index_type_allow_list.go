@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -41,7 +41,7 @@ func (*IndexTypeAllowListAdvisor) Check(_ context.Context, checkCtx advisor.Cont
 		allowList: stringArrayPayload.List,
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type indexTypeAllowListOmniRule struct {
@@ -143,6 +143,6 @@ func (r *indexTypeAllowListOmniRule) validateIndexType(indexType string, line in
 		Code:          code.IndexTypeNotAllowed.Int32(),
 		Title:         r.Title,
 		Content:       fmt.Sprintf("Index type `%s` is not allowed", indexType),
-		StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(line)),
+		StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(line)),
 	})
 }

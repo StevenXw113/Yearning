@@ -6,10 +6,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	advisorcode "engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -40,7 +40,7 @@ func (*TableDisallowPartitionAdvisor) Check(_ context.Context, checkCtx advisor.
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type tableDisallowPartitionOmniRule struct {
@@ -68,7 +68,7 @@ func (r *tableDisallowPartitionOmniRule) checkCreateTable(n *ast.CreateTableStmt
 			Code:          advisorcode.CreateTablePartition.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("Table partition is forbidden, but \"%s\" creates", r.QueryText()),
-			StartPosition: common.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
+			StartPosition: base.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
 		})
 	}
 }
@@ -84,7 +84,7 @@ func (r *tableDisallowPartitionOmniRule) checkAlterTable(n *ast.AlterTableStmt) 
 				Code:          advisorcode.CreateTablePartition.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("Table partition is forbidden, but \"%s\" creates", r.QueryText()),
-				StartPosition: common.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
+				StartPosition: base.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
 			})
 			return
 		}

@@ -7,8 +7,8 @@
 #   ./scripts/sync-bytebase.sh 3.23.0       # 指定 tag / 分支 / commit
 #   ./scripts/sync-bytebase.sh 3.23.0 <repo-url>
 #
-# 流程：稀疏拉取上游 → 复制子集 → 改写 import 前缀 → 重放裁剪 → go build / go test
-#       → 同步主程序里的内化版本号。
+# 流程：稀疏拉取上游 → 复制子集 → 改写 import 前缀 → 重放裁剪
+#       → go build / go test → 同步主程序里的内化版本号。
 # 同步后务必先审阅 git diff，再提交。
 set -euo pipefail
 
@@ -53,7 +53,9 @@ git -C "$WORK/src" sparse-checkout set \
 	backend/plugin/parser \
 	backend/common \
 	backend/store/model \
-	backend/generated-go/store
+	backend/generated-go/store \
+	backend/plugin/db/transaction \
+	backend/plugin/db/mysql
 git -C "$WORK/src" checkout --quiet "$REF"
 SRC="$WORK/src/backend"
 COMMIT="$(git -C "$WORK/src" rev-parse --short HEAD)"
@@ -72,18 +74,30 @@ done
 if [ -d "$DST" ]; then
 	mv "$DST" "$WORK/old"
 fi
-mkdir -p "$DST/plugin/parser" "$DST/store" "$DST/generated-go"
+mkdir -p "$DST/plugin/parser" "$DST/store" "$DST/generated-go" "$DST/plugin/db/transaction"
 
 echo "==> 复制子集（排除测试、测试数据与非 MySQL 方言）"
 rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' --exclude='test-data/' \
 	--exclude='utils_for_tests.go' \
-	--exclude='mssql/' --exclude='oceanbase/' --exclude='oracle/' --exclude='pg/' \
+	--exclude='mssql/' --exclude='oceanbase/' --exclude='oracle/' \
 	--exclude='redshift/' --exclude='snowflake/' --exclude='tidb/' \
 	"$SRC/plugin/advisor/" "$DST/plugin/advisor/"
-for d in base mysql tokenizer; do
+for d in base mysql tokenizer pg; do
 	rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' --exclude='test-data/' \
 		"$SRC/plugin/parser/$d/" "$DST/plugin/parser/$d/"
 done
+# plugin/db/transaction：3.23.0 起 plugin/parser/base 依赖它（仅 1 个文件、只用到 database/sql）。
+# 只取这一个子包 —— backend/plugin/db 下还有各语言驱动的完整实现（含 AWS SDK 等重依赖）。
+rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' \
+	"$SRC/plugin/db/transaction/" "$DST/plugin/db/transaction/"
+
+# plugin/db/mysql：3.23.0 起有两条审核规则（INSERT / STATEMENT 影响行数上限）用它的
+# ExplainJSON 与 EstimateAffectedRows 做 EXPLAIN 估算。只拷 stats.go 这一个文件：
+# 它接收标准库 *sql.DB，依赖（omni/mysql/ast、mysqlparser、storepb、common/log）都在
+# 内化范围内；该包其余文件是完整的 MySQL 驱动实现（连接、SSL、AWS RDS IAM、dump/restore），
+# 会连带 aws-sdk-go-v2、golang.org/x/crypto/ssh 等重依赖。
+mkdir -p "$DST/plugin/db/mysql"
+cp "$SRC/plugin/db/mysql/stats.go" "$DST/plugin/db/mysql/stats.go"
 rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' \
 	"$SRC/store/model/" "$DST/store/model/"
 rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' \
@@ -96,13 +110,14 @@ rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' \
 echo "==> 改写 import 前缀"
 # 用 perl 而非 sed -i：macOS(BSD) 与 CI(Ubuntu/GNU) 的 sed -i 语义不一致。
 find "$DST" -name '*.go' ! -name '._*' -exec perl -pi -e "s{\Q$SRC_IMPORT_PREFIX\E}{engine/internal/bytebase/}g" {} +
-if grep -rq "$SRC_IMPORT_PREFIX" "$DST"; then
+if grep -rq "$SRC_IMPORT_PREFIX" --include='*.go' "$DST"; then
 	echo "错误: 仍存在未改写的 import: $SRC_IMPORT_PREFIX" >&2
 	exit 1
 fi
 
 echo "==> 重放裁剪"
 python3 "$ROOT/scripts/trim-bytebase.py" "$DST"
+
 
 echo "==> gofmt"
 gofmt -w "$DST"

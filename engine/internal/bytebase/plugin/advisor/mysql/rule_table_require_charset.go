@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 )
 
 var (
@@ -38,7 +38,7 @@ func (*TableRequireCharsetAdvisor) Check(_ context.Context, checkCtx advisor.Con
 		},
 	}
 
-	return RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
+	return RunRules(checkCtx.ParsedStatements, []OmniRule{rule}), nil
 }
 
 type tableRequireCharsetOmniRule struct {
@@ -79,7 +79,7 @@ func (r *tableRequireCharsetOmniRule) checkCreateTable(n *ast.CreateTableStmt) {
 			Code:          code.NoCharset.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("Table %s does not have a character set specified", tableName),
-			StartPosition: common.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
+			StartPosition: base.ConvertANTLRLineToPosition(int(r.ContentStartLine())),
 		})
 	}
 }

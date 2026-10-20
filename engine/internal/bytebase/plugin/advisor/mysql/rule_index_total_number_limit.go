@@ -8,10 +8,10 @@ import (
 	"github.com/bytebase/omni/mysql/ast"
 	"github.com/pkg/errors"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 	"engine/internal/bytebase/store/model"
 )
 
@@ -50,7 +50,7 @@ func (*IndexTotalNumberLimitAdvisor) Check(_ context.Context, checkCtx advisor.C
 		finalMetadata: checkCtx.FinalMetadata,
 	}
 
-	RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule})
+	RunRules(checkCtx.ParsedStatements, []OmniRule{rule})
 	return rule.generateAdvice(), nil
 }
 
@@ -112,7 +112,7 @@ func (r *indexTotalNumberLimitOmniRule) generateAdvice() []*storepb.Advice {
 				Code:          code.IndexCountExceedsLimit.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("The count of index in table `%s` should be no more than %d, but found %d", table.name, r.max, len(tableInfo.GetProto().Indexes)),
-				StartPosition: common.ConvertANTLRLineToPosition(table.line),
+				StartPosition: base.ConvertANTLRLineToPosition(table.line),
 			})
 		}
 	}

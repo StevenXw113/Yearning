@@ -8,10 +8,10 @@ import (
 	"github.com/bytebase/omni/mysql/ast"
 	"github.com/pkg/errors"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 	mysqlparser "engine/internal/bytebase/plugin/parser/mysql"
 )
 
@@ -122,7 +122,7 @@ func (r *maxLogicalOperatorOmniRule) checkExpr(expr ast.ExprNode, text string) {
 			Code:          code.StatementWhereMaximumLogicalOperatorCount.Int32(),
 			Title:         r.Title,
 			Content:       fmt.Sprintf("Number of tokens (%d) in the OR predicate operation exceeds limit (%d) in statement %q.", orCount, r.maximum, text),
-			StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(line)),
+			StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(line)),
 		})
 	}
 	// Check IN lists.
@@ -180,7 +180,7 @@ func (r *maxLogicalOperatorOmniRule) walkExprForIn(expr ast.ExprNode, text strin
 				Code:          code.StatementWhereMaximumLogicalOperatorCount.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("Number of tokens (%d) in IN predicate operation exceeds limit (%d) in statement %q.", count, r.maximum, text),
-				StartPosition: common.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(e.Loc))),
+				StartPosition: base.ConvertANTLRLineToPosition(r.BaseLine + int(r.LocToLine(e.Loc))),
 			})
 		}
 		return false

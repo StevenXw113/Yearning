@@ -28,7 +28,7 @@ message DataSource {
   string ca = 5;
   string cert = 6;
   string key = 7;
-  string kind = 8; // "mysql" 或 "mongodb"
+  string kind = 8; // "mysql" / "mongodb" / "redis"
 }
 
 // 审核规则，与 Yearning engine.AuditRole 对齐。
@@ -135,6 +135,36 @@ message AuditRole {
   bool mongo_query_forbid_no_filter = 73;
   bool mongo_query_forbid_lookup = 74;
   bool mongo_query_forbid_no_limit = 75;
+
+  // ------- Redis 审核规则（internal/redischeck，自研）-------
+  // 上游 bytebase 不提供 Redis 审核规则（common.EngineSupportSQLReview(REDIS) 返回 false，
+  // advisor 目录里也没有 redis 方言），这几项由本仓库自研。
+  // true = 启用该限制；级别同样走 rule_levels（key 为下面的字段名）。
+  // --- 安全类：默认 error（Register 时强制校验）---
+  bool redis_forbid_dangerous = 76;
+  bool redis_forbid_admin = 77;
+  bool redis_forbid_script = 78;
+  bool redis_forbid_replica = 79;
+  bool redis_forbid_keys_command = 80;
+  // --- 结构类 ---
+  bool redis_forbid_rename = 81;
+  // key 命名前缀规范，空 = 不检查（如填 "app:"）
+  string redis_key_prefix = 82;
+  // key 名长度上限，0 = 不限制
+  int32 redis_max_key_len = 83;
+  bool redis_forbid_move = 84;
+  // --- 性能 / 风险类：默认只提示不拦 ---
+  // 单条命令允许影响的键数上限，0 = 不限制
+  int32 redis_max_affect_keys = 85;
+  // 单次写入 value 的字节数上限，0 = 不限制
+  int32 redis_max_value_len = 86;
+  // SET 必须带过期时间（防内存无上限增长）
+  bool redis_require_ttl = 87;
+  bool redis_forbid_persist = 88;
+  // SCAN 必须带 MATCH（否则等同于全量遍历）
+  bool redis_scan_require_match = 89;
+  // 禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT 等）
+  bool redis_forbid_blocking = 90;
 }
 
 

@@ -10,10 +10,12 @@ import (
 	"engine/internal/mysqlparse"
 
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib" // 注册 database/sql 的 postgres 驱动
 )
 
-// dsnOf 依据 DataSource 构造 MySQL DSN。
+// dsnOf 依据 DataSource 构造 SQL 方言的 DSN（MySQL 或 PostgreSQL）。
 // 首期支持明文 TCP 连接；若配置了 CA/Cert/Key 则启用 TLS（校验服务端证书链）。
+// pg 的「库」是 schema：连接固定落在 postgres 库，schema 由 SET search_path 切换。
 func dsnOf(s *enginev1.DataSource, db string) (string, error) {
 	if s == nil || s.Ip == "" {
 		return "", fmt.Errorf("数据源 IP 为空")
@@ -21,6 +23,10 @@ func dsnOf(s *enginev1.DataSource, db string) (string, error) {
 	user := s.Username
 	if user == "" {
 		user = "root"
+	}
+	if strings.EqualFold(s.GetKind(), "postgres") {
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable",
+			s.Ip, s.Port, user, s.Password), nil
 	}
 	tlsParam := ""
 	if s.Ca != "" || s.Cert != "" || s.Key != "" {
@@ -49,7 +55,12 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 	if err != nil {
 		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
-	db, err := sql.Open("mysql", dsn)
+	isPg := strings.EqualFold(req.Source.GetKind(), "postgres")
+	driverName := "mysql"
+	if isPg {
+		driverName = "pgx"
+	}
+	db, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return &enginev1.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
 	}
@@ -58,7 +69,13 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 		return &enginev1.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
 	}
 	if req.Order.DataBase != "" {
-		if _, err := db.ExecContext(ctx, "USE `"+escapeSQLIdent(req.Order.DataBase)+"`"); err != nil {
+		// 切库：MySQL 用 USE，pg 用 SET search_path（pg 的「库」是 schema）
+		if isPg {
+			_, err = db.ExecContext(ctx, `SET search_path TO "`+escapePgIdent(req.Order.DataBase)+`"`)
+		} else {
+			_, err = db.ExecContext(ctx, "USE `"+escapeSQLIdent(req.Order.DataBase)+"`")
+		}
+		if err != nil {
 			return &enginev1.ExecReply{Ok: false, Error: "切换 schema 失败: " + err.Error()}, nil
 		}
 	}
@@ -85,7 +102,9 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 		rb  *rollbackBuilder
 		blc *binlogCapture
 	)
-	if req.Order.Backup == 1 {
+	// 回滚只对 MySQL 实现（binlog 与前镜像都基于 MySQL 的 information_schema/binlog）；
+	// pg 工单暂不生成回滚语句，后续需要时再按 pg 的 pg_catalog 重写前镜像。
+	if req.Order.Backup == 1 && !isPg {
 		meta := newTableMeta(db, req.Order.DataBase)
 		if c, ok := newBinlogCapture(ctx, req.Source, db, meta, req.Order.DataBase, stmts); ok {
 			blc = c
@@ -167,4 +186,9 @@ func orderType(t int32) string {
 
 func escapeSQLIdent(s string) string {
 	return strings.ReplaceAll(s, "`", "``")
+}
+
+// escapePgIdent 在标识符进入双引号前把双引号双写（pg 用双引号引用标识符）。
+func escapePgIdent(s string) string {
+	return strings.ReplaceAll(s, `"`, `""`)
 }

@@ -65,7 +65,7 @@ func TestReviewRulesAreRegisteredForMySQL(t *testing.T) {
 	seen := map[storepb.SQLReviewRule_Type]bool{}
 	for name, role := range cases {
 		caseSeen := map[storepb.SQLReviewRule_Type]bool{}
-		for _, r := range reviewRules(role).all() {
+		for _, r := range reviewRules(role, storepb.Engine_MYSQL).all() {
 			// 同一份配置内不允许重复；不同配置之间取并集统计覆盖。
 			if caseSeen[r.GetType()] {
 				t.Errorf("[%s] 规则 %v 重复生成", name, r.GetType())

@@ -6,6 +6,7 @@ import (
 
 	enginev1 "engine/gen/engine/v1"
 	"engine/internal/mongocheck"
+	"engine/internal/redischeck"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 )
@@ -51,7 +52,11 @@ func ruleLevel(r *enginev1.AuditRole, key string) string {
 	}
 }
 
-// reviewRules 将 Yearning 的 AuditRole 开关映射为 Bytebase MySQL 审核规则，并按配置级别分组。
+// reviewRules 将 Yearning 的 AuditRole 开关映射为 Bytebase SQL 审核规则，并按配置级别分组。
+//
+// 规则 Type 枚举是 MySQL 与 pg 共用的，所以同一套开关映射可以同时服务两个方言：
+// engine 参数决定规则挂到哪个方言上。pg 没有实现的 Type（如自增/无符号/LIMIT）
+// 会在 review() 执行时被跳过，见 check.go 里对 "unknown advisor" 的处理。
 //
 // 语义约定（与前端规则说明保持一致）：
 //   - “强制/检查 X”类开关：开启即启用对应规则；
@@ -62,7 +67,7 @@ func ruleLevel(r *enginev1.AuditRole, key string) string {
 //
 // 规则类型即 Bytebase 的 storepb.SQLReviewRule_Type 枚举；升级 Bytebase 后
 // 枚举增删会在编译期暴露，需同步调整本映射。
-func reviewRules(r *enginev1.AuditRole) reviewPlan {
+func reviewRules(r *enginev1.AuditRole, engine storepb.Engine) reviewPlan {
 	var plan reviewPlan
 	if r == nil {
 		return plan
@@ -86,7 +91,7 @@ func reviewRules(r *enginev1.AuditRole) reviewPlan {
 		}
 	}
 	base := func(t storepb.SQLReviewRule_Type) *storepb.SQLReviewRule {
-		return &storepb.SQLReviewRule{Type: t, Engine: storepb.Engine_MYSQL}
+		return &storepb.SQLReviewRule{Type: t, Engine: engine}
 	}
 	add := func(t storepb.SQLReviewRule_Type, key string) {
 		put(base(t), key)
@@ -254,4 +259,11 @@ func reviewRules(r *enginev1.AuditRole) reviewPlan {
 // 那种写法每条规则都要补一行，漏了不报错、只是规则永远不生效。
 func mongoRulesFrom(r *enginev1.AuditRole, mode string) mongocheck.Config {
 	return mongocheck.ConfigFromProto(r, mongocheck.Mode(mode))
+}
+
+// redisRulesFrom 构造 Redis 审核规则配置。
+// Redis 规则与 Mongo 一样是自研的（上游 bytebase 无 Redis advisor），
+// 但字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
+func redisRulesFrom(r *enginev1.AuditRole, mode string) redischeck.Config {
+	return redischeck.ConfigFromProto(r, redischeck.Mode(mode))
 }

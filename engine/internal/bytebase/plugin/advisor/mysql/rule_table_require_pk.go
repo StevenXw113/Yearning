@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytebase/omni/mysql/ast"
 
-	"engine/internal/bytebase/common"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
+	"engine/internal/bytebase/plugin/parser/base"
 	"engine/internal/bytebase/store/model"
 )
 
@@ -50,7 +50,7 @@ func (*TableRequirePKAdvisor) Check(_ context.Context, checkCtx advisor.Context)
 	}
 
 	// Walk all statements.
-	RunOmniRules(checkCtx.ParsedStatements, []OmniRule{rule})
+	RunRules(checkCtx.ParsedStatements, []OmniRule{rule})
 
 	// Generate advice after walking all statements.
 	rule.generateAdviceList()
@@ -194,7 +194,7 @@ func (r *tableRequirePKOmniRule) generateAdviceList() {
 				Code:          code.TableNoPK.Int32(),
 				Title:         r.Title,
 				Content:       fmt.Sprintf("Table `%s` requires PRIMARY KEY", tableName),
-				StartPosition: common.ConvertANTLRLineToPosition(r.line[tableName]),
+				StartPosition: base.ConvertANTLRLineToPosition(r.line[tableName]),
 			})
 		}
 	}
