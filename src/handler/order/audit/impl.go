@@ -76,6 +76,10 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 	if source.DBType == model.DBTypeMongoDB {
 		return executeMongoOrder(order, &source, actor)
 	}
+	// Redis 数据源：同样不走引擎执行，由主程序用 go-redis 执行
+	if source.DBType == model.DBTypeRedis {
+		return executeRedisOrder(order, &source, actor)
+	}
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil || rule == nil {
 		return err

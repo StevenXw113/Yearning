@@ -56,6 +56,7 @@ type queryCore struct {
 	db               *sqlx.DB
 	insulateWordList string
 	source           string
+	dbType           int
 }
 
 func boolToUint(flag bool) uint {
@@ -137,6 +138,26 @@ func FetchQueryDatabaseInfo(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.SuccessPayload(list))
 	}
 
+	// Redis 同理：没有 SHOW DATABASES，「库」是 db0..dbN 的编号选择器
+	if u.DBType == model.DBTypeRedis {
+		list, redisErr := FetchRedisDatabaseInfo(&u)
+		if redisErr != nil {
+			c.Logger().Error(redisErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(redisErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(list))
+	}
+
+	// pg 没有 SHOW DATABASES，「库」映射为 schema
+	if u.DBType == model.DBTypePostgreSQL {
+		list, pgErr := FetchPgSchemaInfo(&u)
+		if pgErr != nil {
+			c.Logger().Error(pgErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(list))
+	}
+
 	result, err := common.ScanDataRows(u, "", "SHOW DATABASES;", "Schema", true, false)
 
 	if err != nil {
@@ -162,6 +183,26 @@ func FetchQueryTableInfo(c yee.Context) (err error) {
 		if mongoErr != nil {
 			c.Logger().Error(mongoErr.Error())
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"table": list}))
+	}
+
+	// Redis 的「表」是键名（SCAN 抽样，不遍历整个键空间）
+	if u.DBType == model.DBTypeRedis {
+		list, redisErr := FetchRedisKeyInfo(&u, t)
+		if redisErr != nil {
+			c.Logger().Error(redisErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(redisErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"table": list}))
+	}
+
+	// pg 的「表」是 schema 下的表
+	if u.DBType == model.DBTypePostgreSQL {
+		list, pgErr := FetchPgTableInfo(&u, t)
+		if pgErr != nil {
+			c.Logger().Error(pgErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"table": list}))
 	}
@@ -222,6 +263,11 @@ func SocketQueryResults(c yee.Context) (err error) {
 				socketMongoResults(c, ws, u, user)
 				return
 			}
+			// Redis 走独立执行器：命令是文本、连接不经 database/sql
+			if u.DBType == model.DBTypeRedis {
+				socketRedisResults(c, ws, u, user)
+				return
+			}
 			dsn, err := model.InitDSN(model.DSN{
 				Username: u.Username,
 				Password: enc.Decrypt(model.C.General.SecretKey, u.Password),
@@ -230,13 +276,18 @@ func SocketQueryResults(c yee.Context) (err error) {
 				CA:       u.CAFile,
 				Cert:     u.Cert,
 				Key:      u.KeyFile,
+				DBType:   u.DBType,
 			})
 			if err != nil {
 				c.Logger().Error(err)
 				_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()}))
 				return
 			}
-			core.db, err = sqlx.Connect("mysql", dsn)
+			driverName := "mysql"
+			if u.DBType == model.DBTypePostgreSQL {
+				driverName = "pgx"
+			}
+			core.db, err = sqlx.Connect(driverName, dsn)
 			if err != nil {
 				c.Logger().Error(err)
 				_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()}))
@@ -244,6 +295,7 @@ func SocketQueryResults(c yee.Context) (err error) {
 			}
 			core.insulateWordList = u.InsulateWordList
 			core.source = u.Source
+			core.dbType = u.DBType
 			defer core.db.Close()
 			for {
 				if err := websocket.Message.Receive(ws, &b); err != nil {
@@ -281,7 +333,7 @@ func SocketQueryResults(c yee.Context) (err error) {
 				}
 
 				for _, i := range msg.MultiSQLRunner {
-					result, err := i.Run(core.db, msg.Ref.Schema)
+					result, err := i.Run(core.db, msg.Ref.Schema, core.dbType)
 					if err != nil {
 						if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()})); err != nil {
 							c.Logger().Error(err)

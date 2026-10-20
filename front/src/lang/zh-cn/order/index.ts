@@ -117,4 +117,6 @@ export default {
     '1.必须填写查询说明<br>2.根据查询条件预估所需的查询时间<br>3.所有提交的查询语句均会进行审计记录<br>4.仅支持查询语句,不可使用非查询语句<br>5.已限制最大limit数，如自己输入的limit数大于平台配置的最大limit数则以平台配置的Limit数为准',
   'order.apply.mongo.tips':
     'MongoDB 变更：请在编辑器里填写命令 JSON（db.runCommand 的参数），例如 update / delete / insert / createIndexes',
+  'order.apply.redis.tips':
+    'Redis 变更请填写一条命令（如 SET k v EX 60 / DEL k）。命令会经审核后执行，执行前会记录键的原值与 TTL 以便回滚',
 };

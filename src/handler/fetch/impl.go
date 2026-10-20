@@ -113,6 +113,27 @@ func (a *advisorFrom) Go() (tables []string, err error) {
 		return dataSource.MongoCollectionSchema(a.Schema, names)
 	}
 
+	// pg 没有 SHOW CREATE TABLE：改为 information_schema 汇总字段名（只取字段名不取值）
+	if dataSource.DBType == model.DBTypePostgreSQL {
+		names := a.Tables
+		if len(names) == 0 {
+			all, listErr := dataSource.PgTables(a.Schema)
+			if listErr != nil {
+				return nil, listErr
+			}
+			names = all
+		}
+		out := make([]string, 0, len(names))
+		for _, t := range names {
+			cols, err := dataSource.PgTableColumns(a.Schema, t)
+			if err != nil {
+				continue
+			}
+			out = append(out, fmt.Sprintf("%s(%s)", t, strings.Join(cols, ", ")))
+		}
+		return out, nil
+	}
+
 	db, err := dataSource.ConnectDB(a.Schema)
 	if err != nil {
 		return nil, err
@@ -153,7 +174,69 @@ func (u *_FetchBind) FetchTableFieldsOrIndexes() error {
 	if s.DBType == model.DBTypeMongoDB {
 		return u.fetchMongoFieldsOrIndexes(&s)
 	}
+	if s.DBType == model.DBTypePostgreSQL {
+		return u.fetchPgFieldsOrIndexes(&s)
+	}
 	return u.fetchSQLFieldsOrIndexes(&s)
+}
+
+// fetchPgFieldsOrIndexes PostgreSQL：information_schema.columns / pg_indexes。
+// 映射到与 MySQL 一致的 common.FieldInfo / common.IndexInfo 契约，前端无需改动。
+func (u *_FetchBind) fetchPgFieldsOrIndexes(s *model.CoreDataSource) error {
+	if u.DataBase == "" || u.Table == "" {
+		return errors.New(i18n.DefaultLang.Load(i18n.INFO_LIBRARY_NAME_TABLE_NAME))
+	}
+	db, err := s.ConnectDB(model.PgDefaultDatabase)
+	if err != nil {
+		return err
+	}
+	defer model.Close(db)
+
+	u.Rows = []common.FieldInfo{}
+	u.Idx = []common.IndexInfo{}
+
+	// 主键列集合：MySQL 的 Field.Key 里标 PRI，这里同样标出主键
+	if err := db.Raw(`SELECT column_name AS "Field", data_type AS "Type", is_nullable AS "Null", COALESCE(column_default, '') AS "Default"
+		FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`,
+		u.DataBase, u.Table).Scan(&u.Rows).Error; err != nil {
+		return err
+	}
+	pk := map[string]bool{}
+	if rows, err := db.Raw(`SELECT kcu.column_name FROM information_schema.key_column_usage kcu
+		JOIN information_schema.table_constraints tc ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+		WHERE tc.constraint_type = 'PRIMARY KEY' AND kcu.table_schema = ? AND kcu.table_name = ?`,
+		u.DataBase, u.Table).Rows(); err == nil {
+		for rows.Next() {
+			var c string
+			if rows.Scan(&c) == nil {
+				pk[c] = true
+			}
+		}
+		rows.Close()
+	}
+	for i := range u.Rows {
+		if pk[u.Rows[i].Field] {
+			u.Rows[i].Key = "PRI"
+		}
+	}
+
+	type pgIndex struct {
+		Name string `gorm:"Column:indexname"`
+	}
+	var idxs []pgIndex
+	if err := db.Raw(`SELECT indexname FROM pg_indexes WHERE schemaname = ? AND tablename = ? ORDER BY indexname`,
+		u.DataBase, u.Table).Scan(&idxs).Error; err != nil {
+		return err
+	}
+	for i, ix := range idxs {
+		u.Idx = append(u.Idx, common.IndexInfo{
+			Table:     u.Table,
+			IndexName: ix.Name,
+			Seq:       i + 1,
+			IndexType: "pg",
+		})
+	}
+	return nil
 }
 
 // fetchSQLFieldsOrIndexes MySQL：SHOW FULL FIELDS / SHOW INDEX

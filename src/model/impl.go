@@ -21,5 +21,6 @@ func (s *CoreDataSource) ConnectDB(schema string) (*gorm.DB, error) {
 		CA:       s.CAFile,
 		Cert:     s.Cert,
 		Key:      s.KeyFile,
+		DBType:   s.DBType,
 	})
 }

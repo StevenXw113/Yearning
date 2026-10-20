@@ -26,7 +26,9 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/cookieY/yee/logger"
 	mmsql "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib" // 注册 database/sql 的 postgres 驱动（查询链路 sqlx 用）
 	drive "gorm.io/driver/mysql"
+	pgdrive "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"os"
 	"time"
@@ -43,6 +45,8 @@ type DSN struct {
 	CA       string
 	Cert     string
 	Key      string
+	// DBType 决定走哪个方言的 DSN / gorm 驱动：0 mysql（默认）、1 postgres。
+	DBType int
 }
 
 // defaultSecretKeys 是模板中随包分发的示例密钥，使用它们等同于把签名密钥公开
@@ -148,6 +152,9 @@ func NewDBSub(dsn DSN) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	if dsn.DBType == DBTypePostgreSQL {
+		return gorm.Open(pgdrive.Open(d), &gorm.Config{})
+	}
 	db, err := gorm.Open(drive.New(drive.Config{
 		DSN:                       d,
 		DefaultStringSize:         256,   // string 类型字段的默认长度
@@ -168,6 +175,9 @@ func Close(db *gorm.DB) error {
 }
 
 func InitDSN(dsn DSN) (string, error) {
+	if dsn.DBType == DBTypePostgreSQL {
+		return initPgDSN(dsn), nil
+	}
 	var tlsName string
 	if dsn.CA != "" && dsn.Cert != "" && dsn.Key != "" {
 		certPool := x509.NewCertPool()
@@ -204,4 +214,11 @@ func InitDSN(dsn DSN) (string, error) {
 		cfg.TLSConfig = tlsName
 	}
 	return cfg.FormatDSN(), nil
+}
+
+// initPgDSN 生成 PostgreSQL 的 libpq 连接串（key=value 格式）。
+// ponytail: 先固定 sslmode=disable（测试库无需 TLS）；生产要 TLS 时再按 CA/Cert/Key 扩展。
+func initPgDSN(dsn DSN) string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		dsn.Host, dsn.Port, dsn.Username, dsn.Password, dsn.DBName)
 }

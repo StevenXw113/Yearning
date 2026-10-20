@@ -7,14 +7,19 @@ import (
 )
 
 // DataSourceKind 将数据源 DBType 映射为引擎方言标识。
-// Yearning 约定：0=mysql、2=mongodb。MongoDB 在引擎里走本仓库自研的 Mongo 规则
-// （上游 bytebase 不提供 Mongo advisor），其余类型返回空串由引擎拒绝。
+// Yearning 约定：0=mysql、1=postgres、2=mongodb、3=redis。
+// pg 与 mysql 同是 SQL 方言、同走 Bytebase 上游规则；MongoDB 与 Redis 在引擎里
+// 走本仓库自研的规则（上游 bytebase 不提供这两种 advisor），其余类型返回空串由引擎拒绝。
 func DataSourceKind(dbType int) string {
 	switch dbType {
 	case 0:
 		return "mysql"
+	case model.DBTypePostgreSQL:
+		return "postgres"
 	case model.DBTypeMongoDB:
 		return "mongodb"
+	case model.DBTypeRedis:
+		return "redis"
 	}
 	return ""
 }

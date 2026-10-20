@@ -135,6 +135,13 @@
                 style="margin-bottom: 8px"
                 :message="$t('order.apply.mongo.tips')"
               ></a-alert>
+              <a-alert
+                v-else-if="dbType === 3"
+                type="info"
+                show-icon
+                style="margin-bottom: 8px"
+                :message="$t('order.apply.redis.tips')"
+              ></a-alert>
               <div class="editor_border">
                 <Editor
                   ref="editor"
@@ -294,7 +301,7 @@
 
   const { orderProfileArch, editor } = FetchMixins();
 
-  // 数据源类型（2 = MongoDB）：决定编辑器提示与是否走 SQL 审核
+  // 数据源类型（2 = MongoDB、3 = Redis）：决定编辑器提示与审核方言
   const dbType = ref(0);
 
   const nonFields = ref([] as any[]);
@@ -444,8 +451,9 @@
   };
 
   const testResults = debounce(async (sql: string) => {
-    // SQL 与 MongoDB 都交给引擎审核：引擎按数据源的 kind 选方言，
-    // MongoDB 走的是上游没有、本仓库自研的 Mongo 规则（engine/internal/mongocheck）
+    // SQL、MongoDB、Redis 都交给引擎审核：引擎按数据源的 kind 选方言，
+    // MongoDB / Redis 走的是上游没有、本仓库自研的规则
+    // （engine/internal/mongocheck、engine/internal/redischeck）
     if (sql.replace(/(^s*)|(s*$)/g, '').length == 0) {
       return;
     }
@@ -481,6 +489,13 @@
     }
   };
 
+  // 从 Redis 命令里取键名（命令形如 SET user:1 alice → user:1）。
+  // 只取第 2 段并剥掉引号：带空格的键需要完整解析引号，这里不值得为它写一个词法分析器。
+  const redisKey = (text: string): string => {
+    const m = text.trim().match(/^\S+\s+(\S+)/);
+    return m ? m[1].replace(/^["']|["']$/g, '') : '';
+  };
+
   const postOrder = () => {
     loadingPostBtn.value = !loadingPostBtn.value;
     formRef.value
@@ -488,9 +503,12 @@
       .then(async () => {
         let wrapper = Object.assign({}, orderItems);
         wrapper.sql = editor.value.GetValue();
-        // MongoDB：工单的「表」字段用命令里的集合名，便于详情页与审计日志辨识
+        // 命令式数据源：工单的「表」字段用命令里的集合名 / 键名，
+        // 便于详情页与审计日志辨识（Redis 取的是键名，不是真实的表）
         if (dbType.value === 2 && !wrapper.table) {
           wrapper.table = mongoCollection(wrapper.sql || '');
+        } else if (dbType.value === 3 && !wrapper.table) {
+          wrapper.table = redisKey(wrapper.sql || '');
         }
         orderProfileArch.timeline.forEach((item) => {
           wrapper.relevant = wrapper.relevant.concat(item.auditor);

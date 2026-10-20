@@ -74,6 +74,16 @@ func Highlight(s *model.CoreDataSource, isField string, dbName string) []map[str
 	if s.DBType == model.DBTypeMongoDB {
 		return nil
 	}
+	// Redis 也没有库/表/字段的补全语义，同上：不能拿 MySQL 驱动去连它
+	if s.DBType == model.DBTypeRedis {
+		return nil
+	}
+	// pg 虽是 SQL 方言，但这里的字段补全依赖 MySQL 的 SHOW COLUMNS；
+	// 暂返回空列表，避免 MySQL 专属语句在 pg 上刷错误。需要时再按 pg 的
+	// information_schema.columns 重写。
+	if s.DBType == model.DBTypePostgreSQL {
+		return nil
+	}
 	ps := enc.Decrypt(model.C.General.SecretKey, s.Password)
 	var list []map[string]string
 	db, err := model.NewDBSub(model.DSN{

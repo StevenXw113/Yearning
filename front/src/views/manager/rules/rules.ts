@@ -465,6 +465,98 @@ const rule: Rule[] = [
     type: 'Mongo',
     tp: 1,
   },
+  // --- Redis 命令规则 ---
+  // 安全类默认 error；结构/性能类默认只提示（可在级别列调成 error 来强制）
+  {
+    name: 'RedisForbidDangerous',
+    desc: t('RedisForbidDangerous'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidAdmin',
+    desc: t('RedisForbidAdmin'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidScript',
+    desc: t('RedisForbidScript'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidReplica',
+    desc: t('RedisForbidReplica'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidKeysCommand',
+    desc: t('RedisForbidKeysCommand'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidRename',
+    desc: t('RedisForbidRename'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisKeyPrefix',
+    desc: t('RedisKeyPrefix'),
+    type: 'Redis',
+    tp: 2,
+  },
+  {
+    name: 'RedisMaxKeyLen',
+    desc: t('RedisMaxKeyLen'),
+    type: 'Redis',
+    tp: 1,
+  },
+  {
+    name: 'RedisForbidMove',
+    desc: t('RedisForbidMove'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisMaxAffectKeys',
+    desc: t('RedisMaxAffectKeys'),
+    type: 'Redis',
+    tp: 1,
+  },
+  {
+    name: 'RedisMaxValueLen',
+    desc: t('RedisMaxValueLen'),
+    type: 'Redis',
+    tp: 1,
+  },
+  {
+    name: 'RedisRequireTTL',
+    desc: t('RedisRequireTTL'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidPersist',
+    desc: t('RedisForbidPersist'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisScanRequireMatch',
+    desc: t('RedisScanRequireMatch'),
+    type: 'Redis',
+    tp: 0,
+  },
+  {
+    name: 'RedisForbidBlocking',
+    desc: t('RedisForbidBlocking'),
+    type: 'Redis',
+    tp: 0,
+  },
 ];
 
 export { rule, Rule };

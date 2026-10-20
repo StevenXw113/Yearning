@@ -120,4 +120,6 @@ export default {
     '1. You must fill in the description <br>2. Estimate the query time based on the query conditions <br>3. All submitted query statements are audited. <br>4. Only query statements are supported, not non-query statements <br>5. The maximum limit has been set. If the limit you enter is greater than the maximum limit configured for the platform, the limit configured for the platform prevails',
   'order.apply.mongo.tips':
     'MongoDB change: put the command JSON (db.runCommand arguments) in the editor, e.g. update / delete / insert / createIndexes',
+  'order.apply.redis.tips':
+    'Write one Redis command (e.g. SET k v EX 60 / DEL k). The key values and TTL are snapshotted before execution so the change can be rolled back',
 };

@@ -20,7 +20,7 @@
             <a-input v-model:value="dbForm.source"></a-input>
           </a-form-item>
           <a-form-item :label="$t('common.table.db_type')">
-            {{ dbForm.db_type == 0 ? 'mysql' : dbForm.db_type == 1 ? 'pg' : 'mongodb' }}
+            {{ dbForm.db_type == 0 ? 'mysql' : dbForm.db_type == 1 ? 'pg' : dbForm.db_type == 2 ? 'mongodb' : 'redis' }}
           </a-form-item>
           <a-form-item :label="$t('db.addr')" name="ip">
             <a-input v-model:value="dbForm.ip"></a-input>

@@ -14,7 +14,6 @@
           v-for="i in db_type"
           :key="i.value"
           :value="i.value"
-          :disabled="i.value === 1"
           >{{ i.label }}</a-select-option
         >
       </a-select>
@@ -216,6 +215,10 @@
     {
       value: 2,
       label: 'mongodb',
+    },
+    {
+      value: 3,
+      label: 'redis',
     },
   ];
 

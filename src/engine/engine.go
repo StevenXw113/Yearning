@@ -86,6 +86,28 @@ type AuditRole struct {
 	// MongoMaxAffectRows 单次 update / delete 允许命中的文档数上限，0 = 不限制。
 	// 这是执行期限制（静态审核拿不到命中数），由执行器读取。
 	MongoMaxAffectRows int `json:"MongoMaxAffectRows"`
+
+	// --- Redis 审核规则（自研，实现在 engine/internal/redischeck）---
+	// 上游 bytebase 同样没有 Redis 规则，这几项与 SQL/Mongo 规则同构：
+	// 开关 + RuleLevel 级别，都存在同一份规则集 JSON 里。
+	// 安全类（默认 error）
+	RedisForbidDangerous   bool `json:"RedisForbidDangerous"`
+	RedisForbidAdmin       bool `json:"RedisForbidAdmin"`
+	RedisForbidScript      bool `json:"RedisForbidScript"`
+	RedisForbidReplica     bool `json:"RedisForbidReplica"`
+	RedisForbidKeysCommand bool `json:"RedisForbidKeysCommand"`
+	// 结构类
+	RedisForbidRename bool   `json:"RedisForbidRename"`
+	RedisKeyPrefix    string `json:"RedisKeyPrefix"`
+	RedisMaxKeyLen    int    `json:"RedisMaxKeyLen"`
+	RedisForbidMove   bool   `json:"RedisForbidMove"`
+	// 性能 / 风险类（默认只提示）
+	RedisMaxAffectKeys    int  `json:"RedisMaxAffectKeys"`
+	RedisMaxValueLen      int  `json:"RedisMaxValueLen"`
+	RedisRequireTTL       bool `json:"RedisRequireTTL"`
+	RedisForbidPersist    bool `json:"RedisForbidPersist"`
+	RedisScanRequireMatch bool `json:"RedisScanRequireMatch"`
+	RedisForbidBlocking   bool `json:"RedisForbidBlocking"`
 }
 
 type Record struct {

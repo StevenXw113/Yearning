@@ -185,6 +185,26 @@ func FetchBase(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.SuccessPayload(names))
 	}
 
+	// Redis 的「库」是 db0..dbN 的编号，「表」是键名
+	if s.DBType == model.DBTypeRedis {
+		names, redisErr := s.RedisDatabases()
+		if redisErr != nil {
+			c.Logger().Error(redisErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(redisErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(names))
+	}
+
+	// pg 的「库」是 schema
+	if s.DBType == model.DBTypePostgreSQL {
+		names, pgErr := s.PgSchemas()
+		if pgErr != nil {
+			c.Logger().Error(pgErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(names))
+	}
+
 	result, err := common.ScanDataRows(s, "", "SHOW DATABASES;", "Schema", false, false)
 	if err != nil {
 		c.Logger().Error(err.Error())
@@ -223,6 +243,26 @@ func FetchTable(c yee.Context) (err error) {
 		if mongoErr != nil {
 			c.Logger().Error(mongoErr.Error())
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(names))
+	}
+
+	// Redis 的「表」是键名：只抽样前若干条，键空间可能上百万
+	if s.DBType == model.DBTypeRedis {
+		keys, redisErr := s.RedisScanKeys(model.RedisParseDB(u.DataBase), "", model.RedisScanLimit)
+		if redisErr != nil {
+			c.Logger().Error(redisErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(redisErr))
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(keys))
+	}
+
+	// pg 的「表」是 schema 下的表
+	if s.DBType == model.DBTypePostgreSQL {
+		names, pgErr := s.PgTables(u.DataBase)
+		if pgErr != nil {
+			c.Logger().Error(pgErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(names))
 	}

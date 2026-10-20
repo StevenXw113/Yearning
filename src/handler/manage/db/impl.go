@@ -30,6 +30,14 @@ func ConnTest(u *model.CoreDataSource) error {
 		}
 		return client.Disconnect(context.Background())
 	}
+	// Redis 数据源用 go-redis 探活，同样不经过 gorm / mysql 方言
+	if u.DBType == model.DBTypeRedis {
+		client, err := u.ConnectRedisWith(u.Password)
+		if err != nil {
+			return err
+		}
+		return client.Close()
+	}
 	dsn, err := model.InitDSN(model.DSN{
 		Username: u.Username,
 		Password: u.Password,

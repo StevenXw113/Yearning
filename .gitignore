@@ -45,3 +45,8 @@ __MACOSX/
 .env
 .venv/
 .cache/
+
+# ===== 本地探针 / 一次性脚本（源码写死口令，不入库）=====
+engine/qprobe/
+tmp_probe/
+/tmp_probe/

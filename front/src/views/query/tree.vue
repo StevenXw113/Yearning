@@ -123,7 +123,8 @@
     spinning.value = !spinning.value;
   };
 
-  // 当前数据源类型（来自树根节点的 db_type）：Mongo(2) 的右键语句是命令 JSON，key 就是集合名
+  // 当前数据源类型（来自树根节点的 db_type）：Mongo(2) 的右键语句是命令 JSON，key 就是集合名；
+  // Redis(3) 的右键语句是命令行文本，key 就是键名
   const dbType = ref(0);
 
   const showTableData = (key: string) => {
@@ -133,7 +134,14 @@
       sql:
         dbType.value === 2
           ? JSON.stringify({ find: key, limit: 20 })
-          : `select * from ${key}`,
+          : dbType.value === 3
+            // Redis 没有通用的「看这个键的数据」命令：GET 对 string 直接给值，
+            // 其它类型会回 WRONGTYPE 错误——提示用户这个键不是 string，再自行换命令
+            ? `GET ${key}`
+            : dbType.value === 1
+              // pg：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
+              ? `SELECT * FROM "${key}"`
+              : `select * from ${key}`,
     });
   };
 
@@ -144,7 +152,13 @@
       sql:
         dbType.value === 2
           ? JSON.stringify({ listIndexes: key })
-          : `SHOW COLUMNS FROM ${key}`,
+          : dbType.value === 3
+            // Redis 的键没有字段结构，类型是最接近「结构」的信息
+            ? `TYPE ${key}`
+            : dbType.value === 1
+              // pg：没有 SHOW COLUMNS，用 information_schema.columns
+              ? `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
+              : `SHOW COLUMNS FROM ${key}`,
     });
   };
 

@@ -31,24 +31,24 @@ const mongoRecheckTimeout = 30 * time.Second
 func executeMongoOrder(order *model.CoreSqlOrder, source *model.CoreDataSource, actor string) error {
 	var cmd bson.D
 	if err := bson.UnmarshalExtJSON([]byte(order.SQL), false, &cmd); err != nil {
-		recordMongo(order.WorkId, order.SQL, "执行失败", 0, "工单内容不是合法的 MongoDB 命令 JSON："+err.Error())
+		recordExec(order.WorkId, order.SQL, "执行失败", 0, "工单内容不是合法的 MongoDB 命令 JSON："+err.Error())
 		return errors.New("工单内容不是合法的 MongoDB 命令 JSON：" + err.Error())
 	}
 	// 执行前再校验一次：提交到审批这段时间里命令可能被改过，不能只信提交时的结论。
 	// 两步都要过：先是不受配置影响的硬保底，再是规则集复检（与检测/审批同一份规则集）。
 	if _, err := mongodb.Validate(cmd); err != nil {
-		recordMongo(order.WorkId, order.SQL, "执行失败", 0, err.Error())
+		recordExec(order.WorkId, order.SQL, "执行失败", 0, err.Error())
 		return err
 	}
 	// 命中上限来自规则集：它是执行期限制（静态审核拿不到命中数），
 	// 与引擎侧的审核规则共用同一份 AuditRole。
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil {
-		recordMongo(order.WorkId, order.SQL, "执行失败", 0, "规则集加载失败："+err.Error())
+		recordExec(order.WorkId, order.SQL, "执行失败", 0, "规则集加载失败："+err.Error())
 		return errors.New("规则集加载失败：" + err.Error())
 	}
 	if err := recheckMongoRules(order, source, rule); err != nil {
-		recordMongo(order.WorkId, order.SQL, "执行失败", 0, err.Error())
+		recordExec(order.WorkId, order.SQL, "执行失败", 0, err.Error())
 		return err
 	}
 	maxAffectRows := 0
@@ -58,7 +58,7 @@ func executeMongoOrder(order *model.CoreSqlOrder, source *model.CoreDataSource, 
 
 	client, err := source.ConnectMongo()
 	if err != nil {
-		recordMongo(order.WorkId, order.SQL, "执行失败", 0, err.Error())
+		recordExec(order.WorkId, order.SQL, "执行失败", 0, err.Error())
 		return err
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
@@ -77,7 +77,7 @@ func executeMongoOrder(order *model.CoreSqlOrder, source *model.CoreDataSource, 
 
 	out, err := mongodb.Execute(ctx, client, order.DataBase, cmd, maxAffectRows)
 	if err != nil {
-		recordMongo(order.WorkId, order.SQL, "执行失败", 0, err.Error())
+		recordExec(order.WorkId, order.SQL, "执行失败", 0, err.Error())
 		return err
 	}
 
@@ -85,7 +85,7 @@ func executeMongoOrder(order *model.CoreSqlOrder, source *model.CoreDataSource, 
 	if out.Warning != "" {
 		note = "提示：" + out.Warning
 	}
-	recordMongo(order.WorkId, order.SQL, "已执行", out.Affected, note)
+	recordExec(order.WorkId, order.SQL, "已执行", out.Affected, note)
 	for _, s := range out.Rollback {
 		model.DB().Create(&model.CoreRollback{WorkId: order.WorkId, SQL: s})
 	}
@@ -153,8 +153,9 @@ func recheckMongoRules(order *model.CoreSqlOrder, source *model.CoreDataSource, 
 	return nil
 }
 
-// recordMongo 写一条执行明细（与 SQL 侧共用 core_sql_records，详情页无需区分）
-func recordMongo(workId, sql, state string, affected int64, note string) {
+// recordExec 写一条执行明细。SQL / Mongo / Redis 共用 core_sql_records，
+// 详情页与审计日志因此不需要按数据源类型分支。
+func recordExec(workId, sql, state string, affected int64, note string) {
 	rows := affected
 	if rows < 0 {
 		rows = 0

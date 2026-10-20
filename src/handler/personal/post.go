@@ -21,6 +21,7 @@ import (
 	"Yearning-go/src/lib/mongodb"
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
+	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
 
@@ -61,11 +62,18 @@ func sqlOrderPost(c yee.Context) (err error) {
 	}
 	// MongoDB 变更：提交时先做硬保底校验（不读规则集、不依赖引擎在线），
 	// 别等审批完才发现命令不合规；规则集审核在申请页「检测」与执行前复检两处做
+	// 命令式数据源（MongoDB / Redis）：提交时就做一次硬保底校验，
+	// 别等审批完才发现内容不合规。完整规则集审核在申请页检测与执行前由引擎完成。
 	if order.Type == vars.DML || order.Type == vars.DDL {
-		var mongoSrc model.CoreDataSource
-		model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&mongoSrc)
-		if mongoSrc.DBType == model.DBTypeMongoDB {
+		var src model.CoreDataSource
+		model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&src)
+		switch src.DBType {
+		case model.DBTypeMongoDB:
 			if err := checkMongoOrder(order.SQL); err != nil {
+				return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+			}
+		case model.DBTypeRedis:
+			if err := checkRedisOrder(order.SQL); err != nil {
 				return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 			}
 		}
@@ -161,6 +169,15 @@ func decodeRelation(sourceId string) []string {
 		relevant = append(relevant, i.Auditor...)
 	}
 	return relevant
+}
+
+// checkRedisOrder 提交时的快速校验：只做硬保底（危险命令 / 运维命令 / 服务端脚本 / KEYS），
+// 不依赖引擎在线，避免引擎没起就提交不了工单。
+// 完整的规则集审核（开关 + 级别）由引擎完成：申请页「检测」走 /api/v2/fetch/test，
+// 审批通过后的执行前也会再复检一次。
+func checkRedisOrder(line string) error {
+	_, _, err := rediscmd.Validate(line)
+	return err
 }
 
 // checkMongoOrder 提交时的快速校验：只做硬保底（空 filter / 危险命令 / $where），

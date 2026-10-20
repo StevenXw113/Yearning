@@ -56,7 +56,7 @@ func TestRunMasksEveryType(t *testing.T) {
 		SQL:              "SELECT id, email, CAST(1.5 AS DOUBLE) AS amount, NULL AS nothing FROM users LIMIT 1",
 		InsulateWordList: factory.MapOn(lowerList([]string{"Email", "AMOUNT", "nothing"})),
 	}
-	got, err := runner.Run(db, "demo")
+	got, err := runner.Run(db, "demo", 0)
 	if err != nil {
 		t.Fatalf("执行查询失败: %v", err)
 	}

@@ -85,6 +85,21 @@ func AuditRoleToProto(r *AuditRole) *enginev1.AuditRole {
 		MongoQueryForbidLookup:         r.MongoQueryForbidLookup,
 		MongoQueryForbidNoLimit:        r.MongoQueryForbidNoLimit,
 		MongoMaxAffectRows:             int32(r.MongoMaxAffectRows),
+		RedisForbidDangerous:           r.RedisForbidDangerous,
+		RedisForbidAdmin:               r.RedisForbidAdmin,
+		RedisForbidScript:              r.RedisForbidScript,
+		RedisForbidReplica:             r.RedisForbidReplica,
+		RedisForbidKeysCommand:         r.RedisForbidKeysCommand,
+		RedisForbidRename:              r.RedisForbidRename,
+		RedisKeyPrefix:                 r.RedisKeyPrefix,
+		RedisMaxKeyLen:                 int32(r.RedisMaxKeyLen),
+		RedisForbidMove:                r.RedisForbidMove,
+		RedisMaxAffectKeys:             int32(r.RedisMaxAffectKeys),
+		RedisMaxValueLen:               int32(r.RedisMaxValueLen),
+		RedisRequireTtl:                r.RedisRequireTTL,
+		RedisForbidPersist:             r.RedisForbidPersist,
+		RedisScanRequireMatch:          r.RedisScanRequireMatch,
+		RedisForbidBlocking:            r.RedisForbidBlocking,
 	}
 }
 

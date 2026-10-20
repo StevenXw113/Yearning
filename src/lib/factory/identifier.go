@@ -18,3 +18,8 @@ func IsValidIdentifier(s string) bool {
 func EscapeIdentifier(s string) string {
 	return strings.ReplaceAll(s, "`", "``")
 }
+
+// EscapePgIdentifier 在标识符进入双引号前把双引号双写（pg 用双引号引用标识符）。
+func EscapePgIdentifier(s string) string {
+	return strings.ReplaceAll(s, `"`, `""`)
+}

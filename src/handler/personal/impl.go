@@ -73,7 +73,7 @@ func (q *QueryDeal) PreCheck(insulateWordList string) error {
 	return nil
 }
 
-func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
+func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string, dbType int) (*Query, error) {
 	query := new(Query)
 	if db == nil {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_DATABASE_CONNECTION_FAILED))
@@ -82,7 +82,13 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string) (*Query, error) {
 	if !factory.IsValidIdentifier(schema) {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
 	}
-	_, err := db.Exec(fmt.Sprintf("use `%s`", factory.EscapeIdentifier(schema)))
+	// 切库：MySQL 用 use，pg 用 SET search_path（pg 的「库」映射为 schema）
+	var err error
+	if dbType == model.DBTypePostgreSQL {
+		_, err = db.Exec(fmt.Sprintf(`SET search_path TO "%s"`, factory.EscapePgIdentifier(schema)))
+	} else {
+		_, err = db.Exec(fmt.Sprintf("use `%s`", factory.EscapeIdentifier(schema)))
+	}
 	if err != nil {
 		logger.LogCreator().Error(err)
 	}

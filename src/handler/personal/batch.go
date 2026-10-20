@@ -52,11 +52,17 @@ func BatchOrderPost(c yee.Context) (err error) {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, item.SourceId)))
 		}
 		// MongoDB 变更：整批预检时就按规则集校验，错误定位到具体第几条明细
+		// 命令式数据源（MongoDB / Redis）：整批预检时就做硬保底校验，定位到第几条明细
 		if req.Type == vars.DML || req.Type == vars.DDL {
-			var mongoSrc model.CoreDataSource
-			model.DB().Model(model.CoreDataSource{}).Where("source_id =?", item.SourceId).First(&mongoSrc)
-			if mongoSrc.DBType == model.DBTypeMongoDB {
+			var src model.CoreDataSource
+			model.DB().Model(model.CoreDataSource{}).Where("source_id =?", item.SourceId).First(&src)
+			switch src.DBType {
+			case model.DBTypeMongoDB:
 				if err := checkMongoOrder(item.SQL); err != nil {
+					return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
+				}
+			case model.DBTypeRedis:
+				if err := checkRedisOrder(item.SQL); err != nil {
 					return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
 				}
 			}
