@@ -2,159 +2,41 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
 	enginev1 "engine/gen/engine/v1"
 	"engine/internal/customrules"
-	"engine/internal/mongocheck"
-	"engine/internal/mysqlparse"
-	"engine/internal/redischeck"
-
-	"github.com/bytebase/omni/mysql/ast"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 	bbadvisor "engine/internal/bytebase/plugin/advisor"
 	_ "engine/internal/bytebase/plugin/advisor/mysql" // 注册 MySQL 审核规则实现（80+ 条）
 	_ "engine/internal/bytebase/plugin/advisor/pg"    // 注册 PostgreSQL 审核规则实现（54 条）
 	"engine/internal/bytebase/plugin/parser/base"
-	mysqlparser "engine/internal/bytebase/plugin/parser/mysql"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
-// Check 执行 SQL 静态审核：先用 Bytebase MySQL 解析器拆分语句，
-// 再逐条交给 Bytebase MySQL advisor 按审核规则检查。
+// Check 按数据源方言分派审核。四个引擎各自独立实现、互不混用：
+//   - mongodb  → checkMongo（check_mongo.go）
+//   - redis    → checkRedis（check_redis.go）
+//   - postgres → checkPG（check_pg.go）
+//   - 其余     → checkSQL（check_sql.go，MySQL）
 func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*enginev1.CheckReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
 		return &enginev1.CheckReply{Ok: false, Error: "SQL 不能为空"}, nil
 	}
-	// MongoDB 数据源：命令是一段 extended JSON，没有 SQL 语法树可解析，
-	// 走上游没有、本仓库自研的 Mongo 规则（见 internal/mongocheck）
-	if isMongoSource(req.Source) {
+	switch {
+	case isMongoSource(req.Source):
 		return checkMongo(req), nil
-	}
-	// Redis 数据源：命令是一行文本，同样没有 AST 可解析，
-	// 走上游没有、本仓库自研的 Redis 规则（见 internal/redischeck）
-	if isRedisSource(req.Source) {
+	case isRedisSource(req.Source):
 		return checkRedis(req), nil
+	case isPgSource(req.Source):
+		return checkPG(ctx, req), nil
+	default:
+		return checkSQL(ctx, req), nil
 	}
-	// SQL 方言（MySQL 默认，PostgreSQL 按 kind）：同走 Bytebase 解析器与 advisor，
-	// 只是 engine 参数不同。上游 pg 与 mysql 的规则 Type 共享同一套枚举。
-	engine := sqlEngine(req.Source)
-	stmts, err := mysqlparse.SplitEngine(engine, req.Sql)
-	if err != nil {
-		return &enginev1.CheckReply{Ok: false, Error: "SQL 拆分失败: " + err.Error()}, nil
-	}
-	if len(stmts) == 0 {
-		if perr := mysqlparse.CheckEngine(engine, req.Sql); perr != nil {
-			return &enginev1.CheckReply{Ok: false, Error: "SQL 语法错误: " + perr.Error()}, nil
-		}
-		return &enginev1.CheckReply{Ok: true}, nil
-	}
-
-	plan := reviewRules(req.Rule, engine)
-	recs := make([]*enginev1.Record, 0, len(stmts))
-	var db *sql.DB // 懒连接：仅 MySQL UPDATE/DELETE 估算影响行数时使用
-	defer func() {
-		if db != nil {
-			db.Close()
-		}
-	}()
-	for _, text := range stmts {
-		rec := &enginev1.Record{Sql: text, Schema: req.Schema, Status: "审核通过", Level: 0}
-		if f, ok := runCustomRules(req.Rule, text, req.Schema); ok {
-			rec.Error = fmt.Sprintf("[%s] %s", f.Title, f.Content)
-			// 状态跟随级别：自研规则的 Level 与上游规则同义（1 拦截 / 2 警告 / 3 观察），
-			// 原先一律写「审核不通过」会让观察级规则在结果里自相矛盾。
-			rec.Status, rec.Level = customStatus(f.Level), uint32(f.Level)
-			recs = append(recs, rec)
-			continue
-		}
-		parsed, perr := base.ParseStatements(engine, text)
-		switch {
-		case perr != nil || len(parsed) == 0:
-			rec.Error, rec.Status, rec.Level = "SQL 语法错误: "+errText(perr), "语法错误", 1
-		default:
-			advice, rerr := review(ctx, engine, parsed, req.Schema, plan.error)
-			switch {
-			case rerr != nil:
-				rec.Error, rec.Status, rec.Level = "SQL 语法错误: "+rerr.Error(), "语法错误", 1
-			case advice != nil:
-				rec.Error, rec.Status, rec.Level = adviceText(advice), "审核不通过", 1
-			default:
-				// 错误级没命中，再看警告/观察：这两档都不拦提交，只体现在检测结果里。
-				rec.Error, rec.Status, rec.Level = downgraded(ctx, engine, parsed, req.Schema, plan)
-			}
-			// 影响行数估算只对 MySQL 实现（pg 的 AST 类型不同，暂不估，留 0）
-			if engine == storepb.Engine_MYSQL {
-				if node, ok := mysqlparser.GetOmniNode(parsed[0].AST); ok {
-					rec.AffectRows = estimateRows(ctx, &db, req.Source, req.Schema, node, text)
-				}
-			}
-		}
-		recs = append(recs, rec)
-	}
-	return &enginev1.CheckReply{Ok: true, Records: recs}, nil
 }
 
-// sqlEngine 返回 SQL 方言：PostgreSQL 数据源（kind=postgres）走 pg，其余按 MySQL。
-func sqlEngine(src *enginev1.DataSource) storepb.Engine {
-	if src != nil && strings.EqualFold(src.GetKind(), "postgres") {
-		return storepb.Engine_POSTGRES
-	}
-	return storepb.Engine_MYSQL
-}
-
-// estimateRows 估算单条语句影响行数，best-effort：连不上库或无法判断时记 0，不影响审核结果。
-// INSERT/REPLACE 按 VALUES 元组数；UPDATE/DELETE 用 EXPLAIN FORMAT=JSON 估算（与 Bytebase 同策略）。
-func estimateRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, schema string, node ast.Node, stmtText string) uint32 {
-	switch s := node.(type) {
-	case *ast.InsertStmt:
-		if s.Select == nil { // INSERT ... SELECT 行数取决于数据，无法静态估算
-			return uint32(len(s.Values))
-		}
-	case *ast.UpdateStmt, *ast.DeleteStmt:
-		return explainRows(ctx, dbp, src, schema, node, stmtText)
-	}
-	return 0
-}
-
-// explainRows 对单条 UPDATE/DELETE 执行 EXPLAIN FORMAT=JSON 估算影响行数。
-// node 是该语句的 AST：上游 3.23.0 起解析函数需要它来判断 DML 目标表
-// （旧版只吃 plan 字符串）。
-func explainRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, schema string, node ast.Node, stmtText string) uint32 {
-	db := *dbp
-	if db == nil {
-		if src == nil || src.Ip == "" {
-			return 0
-		}
-		dsn, err := mysqlDSN(src, schema)
-		if err != nil {
-			return 0
-		}
-		d, err := sql.Open("mysql", dsn)
-		if err != nil {
-			return 0
-		}
-		if err := d.PingContext(ctx); err != nil {
-			d.Close()
-			return 0
-		}
-		*dbp, db = d, d
-	}
-	var plan string
-	q := "EXPLAIN FORMAT=JSON " + strings.TrimRight(strings.TrimSpace(stmtText), ";")
-	if err := db.QueryRowContext(ctx, q).Scan(&plan); err != nil {
-		return 0
-	}
-	n, err := mysqlparser.EstimateAffectedRowsFromExplainJSON(node, plan)
-	if err != nil || n < 0 {
-		return 0
-	}
-	return uint32(n)
-}
+// ---- 以下为 SQL 审核（MySQL / pg 共用）的辅助 ----
 
 // errText 把解析错误安全转成文案。
 func errText(err error) string {
@@ -268,83 +150,4 @@ func runCustomRules(role *enginev1.AuditRole, sql, schema string) (customrules.F
 		}
 	}
 	return best, true
-}
-
-// ---------- MongoDB ----------
-
-// isMongoSource 判断审核目标是否为 MongoDB 数据源（kind 由主程序按 db_type 映射）
-func isMongoSource(src *enginev1.DataSource) bool {
-	return src != nil && strings.EqualFold(src.GetKind(), "mongodb")
-}
-
-// checkMongo 审核 MongoDB 命令。
-// 上游 bytebase 有 SQL 方言规则但没有 Mongo 规则，所以走 internal/mongocheck：
-// 按「命令名 + 关键字段」判定，不做 AST 解析。
-// req.Mode 决定审哪一种：空/write = 变更命令（申请页、工单执行前），
-// query = 只读命令（查询页，写命令直接拒绝）。
-// 记录字段与 SQL 侧对齐：Level 1 拦截 / 2 警告 / 3 观察，前端只拦 1。
-func checkMongo(req *enginev1.CheckRequest) *enginev1.CheckReply {
-	_, findings, err := mongocheck.Check(req.Sql, mongoRulesFrom(req.Rule, req.GetMode()))
-	if err != nil {
-		return &enginev1.CheckReply{Ok: false, Error: err.Error()}
-	}
-	rec := &enginev1.Record{
-		Sql:    strings.TrimSpace(req.Sql),
-		Schema: req.Schema,
-		Status: "审核通过",
-		Level:  0,
-	}
-	if len(findings) > 0 {
-		rec.Error = mongocheck.Messages(findings)
-		rec.Level = uint32(mongocheck.Severity(findings))
-		rec.Status = "审核不通过"
-		if mongocheck.Blocked(findings) == nil {
-			// warn / observe 只提示、不拦提交（与 SQL 侧的降级语义一致）
-			if rec.Level == 2 {
-				rec.Status = "警告"
-			} else {
-				rec.Status = "观察"
-			}
-		}
-	}
-	return &enginev1.CheckReply{Ok: true, Records: []*enginev1.Record{rec}}
-}
-
-// isRedisSource 判断审核目标是否为 Redis 数据源（kind 由主程序按 db_type 映射）
-func isRedisSource(src *enginev1.DataSource) bool {
-	return src != nil && strings.EqualFold(src.GetKind(), "redis")
-}
-
-// checkRedis 审核 Redis 命令。
-//
-// 上游 bytebase 有 SQL 方言规则但没有 Redis 规则
-// （common.EngineSupportSQLReview(REDIS) 返回 false，advisor 目录里也没有 redis 方言），
-// 所以走 internal/redischeck：按 RESP 参数规则切词后用「命令名 + 参数形态」判定。
-// req.Mode 决定审哪一种：空/write = 变更命令，query = 只读命令（写命令直接拒绝）。
-// 记录字段与 SQL 侧对齐：Level 1 拦截 / 2 警告 / 3 观察，前端只拦 1。
-func checkRedis(req *enginev1.CheckRequest) *enginev1.CheckReply {
-	_, findings, err := redischeck.Check(req.Sql, redisRulesFrom(req.Rule, req.GetMode()))
-	if err != nil {
-		return &enginev1.CheckReply{Ok: false, Error: err.Error()}
-	}
-	rec := &enginev1.Record{
-		Sql:    strings.TrimSpace(req.Sql),
-		Schema: req.Schema,
-		Status: "审核通过",
-		Level:  0,
-	}
-	if len(findings) > 0 {
-		rec.Error = redischeck.Messages(findings)
-		rec.Level = uint32(redischeck.Severity(findings))
-		rec.Status = "审核不通过"
-		if redischeck.Blocked(findings) == nil {
-			// warn / observe 只提示、不拦提交（与 SQL 侧的降级语义一致）
-			if rec.Level == 2 {
-				rec.Status = "警告"
-			} else {
-				rec.Status = "观察"
-			}
-		}
-	}
-	return &enginev1.CheckReply{Ok: true, Records: []*enginev1.Record{rec}}
 }
