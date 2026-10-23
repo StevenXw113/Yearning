@@ -130,7 +130,7 @@ func explainRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, sc
 		if src == nil || src.Ip == "" {
 			return 0
 		}
-		dsn, err := dsnOf(src, schema)
+		dsn, err := mysqlDSN(src, schema)
 		if err != nil {
 			return 0
 		}

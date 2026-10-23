@@ -3,7 +3,17 @@ package mongodb
 import (
 	"strings"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
+
+// cmd 把 relaxed 扩展 JSON 解析成 bson.D（测试用）。
+// 原定义在 command_test.go，随执行函数一起搬去了引擎；这里只留 ValidateQuery 的测试。
+func cmd(s string) bson.D {
+	var d bson.D
+	_ = bson.UnmarshalExtJSON([]byte(s), false, &d)
+	return d
+}
 
 // TestValidateQueryAllowsReadOnly 查询页只读白名单：正常的查询命令都要放行
 func TestValidateQueryAllowsReadOnly(t *testing.T) {

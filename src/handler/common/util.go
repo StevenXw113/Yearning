@@ -1,7 +1,7 @@
 package common
 
 import (
-	"Yearning-go/src/lib/enc"
+	"Yearning-go/src/lib/dbengine"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"errors"
@@ -68,83 +68,11 @@ func checkMeta(s, database, flag string) string {
 	return s
 }
 
+// Highlight 返回补全建议。各引擎的取法已收敛到 lib/dbengine。
 func Highlight(s *model.CoreDataSource, isField string, dbName string) []map[string]string {
-	// MongoDB 没有 SQL 的库/表/字段补全语义：直接返回空列表，
-	// 否则这里会用 MySQL 驱动去连 Mongo 端口，日志里刷一串连不上
-	if s.DBType == model.DBTypeMongoDB {
-		return nil
-	}
-	// Redis 也没有库/表/字段的补全语义，同上：不能拿 MySQL 驱动去连它
-	if s.DBType == model.DBTypeRedis {
-		return nil
-	}
-	// pg 虽是 SQL 方言，但这里的字段补全依赖 MySQL 的 SHOW COLUMNS；
-	// 暂返回空列表，避免 MySQL 专属语句在 pg 上刷错误。需要时再按 pg 的
-	// information_schema.columns 重写。
-	if s.DBType == model.DBTypePostgreSQL {
-		return nil
-	}
-	ps := enc.Decrypt(model.C.General.SecretKey, s.Password)
-	var list []map[string]string
-	db, err := model.NewDBSub(model.DSN{
-		Username: s.Username,
-		Password: ps,
-		Host:     s.IP,
-		Port:     s.Port,
-		DBName:   "",
-		CA:       s.CAFile,
-		Cert:     s.Cert,
-		Key:      s.KeyFile,
-	})
-	if err != nil {
-		logger.DefaultLogger.Error(err)
-		return nil
-	}
-
-	defer func() {
-		_ = model.Close(db)
-	}()
-
-	var highlight string
-
-	excludeDbList := strings.Split(s.ExcludeDbList, ",")
-
-	if isField == "true" {
-		tbl, err := db.Table("information_schema.tables").Select("table_name").Scopes(AccordingToSchemaIn(dbName)).Group("table_name").Rows()
-		if err != nil {
-			model.DefaultLogger.Errorf("fetch table error: %v", err)
-		} else {
-			defer tbl.Close()
-			for tbl.Next() {
-				_ = tbl.Scan(&highlight)
-				list = append(list, map[string]string{"vl": highlight, "meta": "Table"})
-			}
-		}
-		fields, err := db.Table("information_schema.Columns").Select("COLUMN_NAME").Scopes(AccordingToSchemaIn(dbName)).Group("COLUMN_NAME").Rows()
-		if err != nil {
-			model.DefaultLogger.Errorf("fetch fields error: %v", err)
-		} else {
-			defer fields.Close()
-			for fields.Next() {
-				_ = fields.Scan(&highlight)
-				list = append(list, map[string]string{"vl": highlight, "meta": "Fields"})
-			}
-		}
-	} else {
-		schema, err := db.Table("information_schema.SCHEMATA").Select("SCHEMA_NAME").Scopes(AccordingToSchemaNotIn(true, excludeDbList)).Group("SCHEMA_NAME").Rows()
-		if err != nil {
-			model.DefaultLogger.Errorf("fetch schema error: %v", err)
-		} else {
-			defer schema.Close()
-			for schema.Next() {
-				_ = schema.Scan(&highlight)
-				list = append(list, map[string]string{"vl": highlight, "meta": "Schema"})
-			}
-		}
-	}
-
-	return list
+	return dbengine.For(s.DBType).Highlight(s, isField == "true", dbName)
 }
+
 func SuccessPayload(payload interface{}) Resp {
 	return Resp{
 		Payload: payload,

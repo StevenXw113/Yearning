@@ -106,6 +106,8 @@ export interface BatchOrderItem {
   data_base: string;
   file?: string;
   sql: string;
+  // 目标表/集合：MongoDB 由前端从命令里提取集合名，其余引擎可留空
+  table?: string;
 }
 
 export interface BatchOrderParams {

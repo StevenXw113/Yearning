@@ -254,6 +254,9 @@ message QueryRequest {
   string sql = 1;
   uint64 limit = 2;
   string insulate_word_list = 3;
+  // 数据源方言（mysql / postgres / mongodb / redis）。查询预检据此选解析器；
+  // 空值按 mysql 处理，保证旧调用方行为不变。
+  string kind = 4;
 }
 
 message QueryReply {

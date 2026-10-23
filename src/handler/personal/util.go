@@ -2,6 +2,7 @@ package personal
 
 import (
 	"Yearning-go/src/engine"
+	"Yearning-go/src/handler/order/audit"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/enc"
@@ -15,6 +16,9 @@ import (
 	"time"
 )
 
+// autoTaskActor 自动任务写在流程明细里的操作者（与人工执行区分开）
+const autoTaskActor = "AutoTask Robot"
+
 func autoTask(order *model.CoreSqlOrder, length int) {
 	// todo 以下代码为autoTask代码
 	var autoTask model.CoreAutoTask
@@ -25,6 +29,22 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 		return
 	}
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
+
+	// MongoDB 不走引擎 Exec（引擎只处理 SQL 语义），复用工单执行链路：
+	// 硬保底、执行前规则复检、前镜像、执行明细与回滚语句都在 audit.ExecuteWorkOrder 里，
+	// 与「审批后执行」完全同构，避免在自动任务里再维护一份执行逻辑。
+	// 行数上限取规则集的 MongoMaxAffectRows（自动任务自己的 Affectrow 只对 SQL 生效）。
+	if source.DBType == model.DBTypeMongoDB {
+		if err := audit.ExecuteWorkOrder(order, autoTaskActor); err != nil {
+			logger.DefaultLogger.Error(err)
+			return
+		}
+		// ExecuteWorkOrder 已经写过流程明细，这里只把工单推进到执行完成，不再重复写
+		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", order.WorkId).
+			Updates(&model.CoreSqlOrder{CurrentStep: length})
+		return
+	}
+
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil || rule == nil {
 		logger.DefaultLogger.Error(err)
@@ -67,7 +87,7 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	if isCall {
 		model.DB().Create(&model.CoreWorkflowDetail{
 			WorkId:   order.WorkId,
-			Username: "AutoTask Robot",
+			Username: autoTaskActor,
 			Time:     time.Now().Format("2006-01-02 15:04"),
 			Action:   i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE),
 		})

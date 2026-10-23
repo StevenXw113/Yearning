@@ -3,6 +3,7 @@ package personal
 import (
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
+	"Yearning-go/src/lib/dbengine"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
@@ -19,6 +20,9 @@ type batchItem struct {
 	DataBase string `json:"data_base"`
 	File     string `json:"file"`
 	SQL      string `json:"sql"`
+	// Table 目标表/集合：SQL 侧按需填写；MongoDB 由前端从命令里提取集合名，
+	// 落进子工单的 table 字段，便于详情页与审计日志辨识（此前所有引擎都留空）。
+	Table string `json:"table"`
 }
 
 type batchOrderReq struct {
@@ -51,20 +55,12 @@ func BatchOrderPost(c yee.Context) (err error) {
 		if !permission.NewPermissionService(model.DB()).Equal(&permission.Control{User: user, Kind: req.Type, SourceId: item.SourceId}) {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, item.SourceId)))
 		}
-		// MongoDB 变更：整批预检时就按规则集校验，错误定位到具体第几条明细
-		// 命令式数据源（MongoDB / Redis）：整批预检时就做硬保底校验，定位到第几条明细
+		// 命令式数据源（MongoDB / Redis）整批预检时就做硬保底校验，定位到第几条明细
 		if req.Type == vars.DML || req.Type == vars.DDL {
 			var src model.CoreDataSource
 			model.DB().Model(model.CoreDataSource{}).Where("source_id =?", item.SourceId).First(&src)
-			switch src.DBType {
-			case model.DBTypeMongoDB:
-				if err := checkMongoOrder(item.SQL); err != nil {
-					return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
-				}
-			case model.DBTypeRedis:
-				if err := checkRedisOrder(item.SQL); err != nil {
-					return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
-				}
+			if err := dbengine.For(src.DBType).ValidateChange(&src, item.SQL); err != nil {
+				return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
 			}
 		}
 		order := &model.CoreSqlOrder{
@@ -74,6 +70,7 @@ func BatchOrderPost(c yee.Context) (err error) {
 			Text:     req.Text,
 			SourceId: item.SourceId,
 			DataBase: item.DataBase,
+			Table:    item.Table,
 			File:     item.File,
 			SQL:      item.SQL,
 		}

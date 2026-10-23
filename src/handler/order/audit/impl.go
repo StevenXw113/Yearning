@@ -71,15 +71,9 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 		return errors.New(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
-	// MongoDB 数据源：不走向引擎的 Exec 链路（那是 SQL 语义），由主程序用 mongo 驱动执行命令；
-	// 校验是两层——硬保底 mongodb.Validate，加上执行前用规则集复检（Client.Check, mode=write）
-	if source.DBType == model.DBTypeMongoDB {
-		return executeMongoOrder(order, &source, actor)
-	}
-	// Redis 数据源：同样不走引擎执行，由主程序用 go-redis 执行
-	if source.DBType == model.DBTypeRedis {
-		return executeRedisOrder(order, &source, actor)
-	}
+	// 所有数据源统一走引擎 Exec：MongoDB / Redis 由引擎的 execCommand 分支执行
+	// （硬保底 → 连接 → 前镜像 → 命令执行），SQL 由引擎的拆分执行路径处理；
+	// 落库（core_sql_records / core_rollbacks / 流程明细）由本函数按 Records/Rollback 统一写。
 	rule, err := factory.CheckDataSourceRule(source.RuleId)
 	if err != nil || rule == nil {
 		return err

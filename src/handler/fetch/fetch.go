@@ -19,6 +19,7 @@ import (
 	"Yearning-go/src/handler/manage/flow"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/calls"
+	"Yearning-go/src/lib/dbengine"
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/permission"
@@ -175,32 +176,13 @@ func FetchBase(c yee.Context) (err error) {
 
 	model.DB().Where("source_id =?", unescape).First(&s)
 
-	// MongoDB 没有 SHOW DATABASES，走 mongo 驱动列举
-	if s.DBType == model.DBTypeMongoDB {
-		names, mongoErr := s.MongoDatabases()
-		if mongoErr != nil {
-			c.Logger().Error(mongoErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
-		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(names))
-	}
-
-	// Redis 的「库」是 db0..dbN 的编号，「表」是键名
-	if s.DBType == model.DBTypeRedis {
-		names, redisErr := s.RedisDatabases()
-		if redisErr != nil {
-			c.Logger().Error(redisErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(redisErr))
-		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(names))
-	}
-
-	// pg 的「库」是 schema
-	if s.DBType == model.DBTypePostgreSQL {
-		names, pgErr := s.PgSchemas()
-		if pgErr != nil {
-			c.Logger().Error(pgErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
+	// 非 MySQL 方言（pg / mongo / redis）的「库」列表已收敛到 dbengine；
+	// MySQL 的 SHOW DATABASES + ExcludeDbList（Hide）语义保留在下面的内联路径。
+	if s.DBType != 0 {
+		names, e := dbengine.For(s.DBType).ListDatabases(context.Background(), &s)
+		if e != nil {
+			c.Logger().Error(e.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(e))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(names))
 	}
@@ -237,32 +219,12 @@ func FetchTable(c yee.Context) (err error) {
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", unescape).First(&s)
 
-	// MongoDB 的"表"是集合
-	if s.DBType == model.DBTypeMongoDB {
-		names, mongoErr := s.MongoCollections(u.DataBase)
-		if mongoErr != nil {
-			c.Logger().Error(mongoErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(mongoErr))
-		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(names))
-	}
-
-	// Redis 的「表」是键名：只抽样前若干条，键空间可能上百万
-	if s.DBType == model.DBTypeRedis {
-		keys, redisErr := s.RedisScanKeys(model.RedisParseDB(u.DataBase), "", model.RedisScanLimit)
-		if redisErr != nil {
-			c.Logger().Error(redisErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(redisErr))
-		}
-		return c.JSON(http.StatusOK, common.SuccessPayload(keys))
-	}
-
-	// pg 的「表」是 schema 下的表
-	if s.DBType == model.DBTypePostgreSQL {
-		names, pgErr := s.PgTables(u.DataBase)
-		if pgErr != nil {
-			c.Logger().Error(pgErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
+	// 非 MySQL 方言（pg / mongo / redis）的「表/集合/键」列表已收敛到 dbengine。
+	if s.DBType != 0 {
+		names, e := dbengine.For(s.DBType).ListCollections(context.Background(), &s, u.DataBase)
+		if e != nil {
+			c.Logger().Error(e.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(e))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(names))
 	}

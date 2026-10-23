@@ -122,6 +122,13 @@
             </a-space>
           </a-col>
           <a-col :xs="24" :xl="19">
+            <a-alert
+              v-if="isMongoBlock(b)"
+              type="info"
+              show-icon
+              :message="$t('order.apply.mongo.tips')"
+              style="margin-bottom: 8px"
+            />
             <Editor
               :ref="el => setEditorRef(el, b.uid)"
               :container-id="`batch-editor-${b.uid}`"
@@ -289,6 +296,8 @@
   const findBlock = (uid: number) => blocks.value.find(b => b.uid === uid);
 
   const sourceOptions = ref<{ label: string; value: string }[]>([]);
+  // source_id → db_type，供判断该明细是不是 MongoDB（决定提示条与 table 提取）
+  const dbTypeMap = ref<Record<string, number>>({});
 
   const statusMap: Record<number, { txt: string; color: string }> = {
     0: { txt: '已驳回', color: 'red' },
@@ -322,10 +331,26 @@
 
   const fetchSources = async () => {
     const { data } = await querySourceList(type.value === 1 ? 'dml' : 'ddl');
-    sourceOptions.value = (data.payload as any[]).map(i => ({
-      label: `${i.source}（${i.idc}）`,
-      value: i.source_id,
-    }));
+    const map: Record<string, number> = {};
+    sourceOptions.value = (data.payload as any[]).map(i => {
+      map[i.source_id] = i.db_type ?? 0;
+      return { label: `${i.source}（${i.idc}）`, value: i.source_id };
+    });
+    dbTypeMap.value = map;
+  };
+
+  // MongoDB 数据源类型（与后端 model.DBTypeMongoDB 一致）
+  const isMongoBlock = (b: Block) => dbTypeMap.value[b.source_id] === 2;
+
+  // 从 MongoDB 命令里取集合名（命令形如 {"update":"users",...} → users）
+  const mongoCollection = (text: string): string => {
+    try {
+      const obj = JSON.parse(text);
+      const v = obj[Object.keys(obj)[0]];
+      return typeof v === 'string' ? v : '';
+    } catch {
+      return '';
+    }
   };
 
   const onSourceChange = async (b: Block) => {
@@ -375,12 +400,17 @@
       message.error('每条明细都需要选择数据源与目标库');
       return;
     }
-    const items = blocks.value.map(b => ({
-      source_id: b.source_id,
-      data_base: b.data_base,
-      file: b.file,
-      sql: editorRefs.value[b.uid]?.GetValue() || '',
-    }));
+    const items = blocks.value.map(b => {
+      const sql = editorRefs.value[b.uid]?.GetValue() || '';
+      return {
+        source_id: b.source_id,
+        data_base: b.data_base,
+        file: b.file,
+        sql,
+        // MongoDB：工单的「表」字段用命令里的集合名，便于详情页与审计日志辨识
+        table: isMongoBlock(b) ? mongoCollection(sql) : '',
+      };
+    });
     if (items.some(it => it.sql.trim() === '')) {
       message.error('SQL 内容不能为空');
       return;

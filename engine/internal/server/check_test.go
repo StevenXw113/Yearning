@@ -215,3 +215,49 @@ func TestCheckWarnDoesNotBlock(t *testing.T) {
 		t.Fatalf("未配置级别时仍应拦截（level=1），实际 %+v", rep2.Records[0])
 	}
 }
+
+// TestCheckDispatchesBySourceKind 核对 kind → 方言的分派：MongoDB / Redis 走自研规则，
+// 未设置 source 时仍按 MySQL。这三条分支此前没有任何测试覆盖。
+func TestCheckDispatchesBySourceKind(t *testing.T) {
+	// mongodb：查询模式下只读命令通过、写命令被拒（说明没进 SQL 解析器）
+	rep, err := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:    `{"find":"users"}`,
+		Mode:   "query",
+		Source: &enginev1.DataSource{Kind: "mongodb"},
+		Rule:   &enginev1.AuditRole{},
+	})
+	if err != nil || !rep.Ok {
+		t.Fatalf("mongodb 只读命令应通过: err=%v rep=%+v", err, rep)
+	}
+	rep, err = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:    `{"delete":"users","deletes":[{"q":{"a":1},"limit":0}]}`,
+		Mode:   "query",
+		Source: &enginev1.DataSource{Kind: "mongodb"},
+		Rule:   &enginev1.AuditRole{},
+	})
+	if err != nil || rep.Ok || !strings.Contains(rep.Error, "只读") {
+		t.Fatalf("mongodb 写命令在查询模式下应被拒: err=%v rep=%+v", err, rep)
+	}
+
+	// redis：合法命令按命令审核，不应出现 SQL 语法错误
+	rep, err = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:    "SET a b",
+		Source: &enginev1.DataSource{Kind: "redis"},
+		Rule:   &enginev1.AuditRole{},
+	})
+	if err != nil || !rep.Ok || len(rep.Records) != 1 {
+		t.Fatalf("redis 命令应走命令审核: err=%v rep=%+v", err, rep)
+	}
+	if strings.Contains(rep.Records[0].Error, "语法错误") {
+		t.Fatalf("redis 命令不该被当成 SQL 解析: %+v", rep.Records[0])
+	}
+
+	// 未设置 source：仍按 MySQL（老调用方行为不变）
+	rep, err = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:  "SELEC 1",
+		Rule: &enginev1.AuditRole{},
+	})
+	if err != nil || len(rep.Records) != 1 || !strings.Contains(rep.Records[0].Error, "语法错误") {
+		t.Fatalf("空 source 应仍按 MySQL 解析: err=%v rep=%+v", err, rep)
+	}
+}

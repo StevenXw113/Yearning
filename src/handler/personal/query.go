@@ -325,7 +325,7 @@ func SocketQueryResults(c yee.Context) (err error) {
 
 				var queryData []*Query
 
-				if err := msg.PreCheck(core.insulateWordList); err != nil {
+				if err := msg.PreCheck(core.insulateWordList, core.dbType); err != nil {
 					if err := websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()})); err != nil {
 						c.Logger().Error(err)
 					}

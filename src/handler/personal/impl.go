@@ -47,7 +47,7 @@ type Query struct {
 	Data  []map[string]interface{} `msgpack:"data"`
 }
 
-func (q *QueryDeal) PreCheck(insulateWordList string) error {
+func (q *QueryDeal) PreCheck(insulateWordList string, dbType int) error {
 	client, conn, err := calls.NewClient()
 	if err != nil {
 		return err
@@ -59,6 +59,8 @@ func (q *QueryDeal) PreCheck(insulateWordList string) error {
 		Sql:              q.Ref.Sql,
 		Limit:            model.GloOther.Load().Limit,
 		InsulateWordList: insulateWordList,
+		// 方言：pg 走 pg 解析器，mysql/mongo/redis 由引擎按 kind 分流（此处主要修正 pg 预检）
+		Kind: calls.DataSourceKind(dbType),
 	})
 	if rep == nil || !rep.Ok {
 		return calls.CombineReplyErr(rep, err)

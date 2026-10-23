@@ -40,6 +40,7 @@
     getOrderRollSQLS,
     userPostOrder,
   } from '@/apis/orderPostApis';
+  import { ISource, querySourceList } from '@/apis/source';
   import { onMounted, reactive, ref } from 'vue';
   import { useStore } from '@/store';
   import { useRoute, useRouter } from 'vue-router';
@@ -63,6 +64,9 @@
   }>();
 
   const activeKey = ref('1');
+
+  // 0 mysql / 1 pg / 2 mongodb / 3 redis（与后端 model.DBType* 一致）
+  const dbType = ref(0);
 
   const resultTable = reactive<tableRef>({
     col: [
@@ -123,14 +127,40 @@
     rollTable.pageCount = data.payload.count;
   };
 
+  // 工单表里没有 db_type：按工单类型查一次数据源列表（dml/ddl 都是权限过滤后的），
+  // 供「提交换回滚」决定怎么拼 SQL、「重新提交」决定跳转时带什么类型。
+  const loadSourceType = async () => {
+    try {
+      const order = store.state.order.order;
+      const { data } = await querySourceList(order.type === 1 ? 'dml' : 'ddl');
+      const hit = (data.payload as ISource[] | null)?.find(
+        (i) => i.source_id === order.source_id
+      );
+      dbType.value = hit?.db_type ?? 0;
+    } catch (e) {
+      dbType.value = 0; // 取不到就按 SQL 处理（与改动前一致）
+    }
+  };
+
   const submit = async () => {
-    const wrapper = Object.assign({}, store.state.order.order);
-    wrapper.delay = 'none';
-    wrapper.sql = rollTable.data.map((item) => item.sql).join('\n');
-    if (wrapper.sql === '') {
+    const statements = rollTable.data.map((item) => item.sql);
+    if (statements.length === 0 || statements.join('') === '') {
       message.warning(t('order.roll.tips'));
       return;
     }
+    const wrapper = Object.assign({}, store.state.order.order);
+    wrapper.delay = 'none';
+    // MongoDB 一张工单只承载一条命令：回滚语句可能有多条（如 createIndexes 每个索引一条），
+    // 逐条提交；用 \n 拼成一条会被提交时的硬保底当成非法 JSON 拒掉。
+    if (dbType.value === 2) {
+      for (const sql of statements) {
+        if (sql === '') continue;
+        await userPostOrder(Object.assign({}, wrapper, { sql }) as OrderItem);
+      }
+      router.go(-1);
+      return;
+    }
+    wrapper.sql = statements.join('\n');
     await userPostOrder(wrapper as OrderItem);
     router.go(-1);
   };
@@ -143,6 +173,8 @@
         idc: store.state.order.order.idc,
         source: store.state.order.order.source,
         source_id: store.state.order.order.source_id,
+        // 不带 db_type 会被申请页当成 MySQL：Mongo 提示条与集合名提取都不生效
+        db_type: dbType.value,
         remark: 'true',
       },
     });
@@ -150,6 +182,7 @@
 
   onMounted(() => {
     currentRolling(1);
+    loadSourceType();
   });
 </script>
 
