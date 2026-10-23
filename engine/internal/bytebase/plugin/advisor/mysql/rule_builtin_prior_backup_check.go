@@ -12,6 +12,7 @@ import (
 	"engine/internal/bytebase/plugin/advisor"
 	"engine/internal/bytebase/plugin/advisor/code"
 	"engine/internal/bytebase/plugin/parser/base"
+	"engine/internal/bytebase/plugin/parser/mariadb"
 	mysqlparser "engine/internal/bytebase/plugin/parser/mysql"
 )
 
@@ -51,6 +52,17 @@ func (*StatementPriorBackupCheckAdvisor) Check(ctx context.Context, checkCtx adv
 
 	for _, stmt := range checkCtx.ParsedStatements {
 		if stmt.AST == nil {
+			continue
+		}
+		// The backup transform parses every statement with omni's MySQL parser, which rejects this one.
+		if _, ok := stmt.AST.(*mariadb.OmniAST); ok {
+			adviceList = append(adviceList, &storepb.Advice{
+				Status:        level,
+				Title:         title,
+				Content:       "Prior backup cannot handle MariaDB-specific syntax",
+				Code:          code.BuiltinPriorBackupCheck.Int32(),
+				StartPosition: base.ConvertANTLRLineToPosition(stmt.BaseLine()),
+			})
 			continue
 		}
 		node, ok := mysqlparser.GetOmniNode(stmt.AST)

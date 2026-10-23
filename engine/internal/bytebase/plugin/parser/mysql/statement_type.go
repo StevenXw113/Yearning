@@ -8,11 +8,16 @@ import (
 
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/parser/base"
+	"engine/internal/bytebase/plugin/parser/mariadb"
 )
 
 func GetStatementTypes(asts []base.AST) ([]storepb.StatementType, error) {
 	sqlTypeSet := make(map[storepb.StatementType]bool)
 	for _, a := range asts {
+		if _, ok := a.(*mariadb.OmniAST); ok {
+			sqlTypeSet[storepb.StatementType_STATEMENT_TYPE_UNSPECIFIED] = true
+			continue
+		}
 		node, ok := GetOmniNode(a)
 		if !ok {
 			return nil, errors.New("expected OmniAST for MySQL")

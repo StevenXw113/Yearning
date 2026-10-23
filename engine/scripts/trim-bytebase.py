@@ -165,6 +165,10 @@ for rel in [
     "plugin/parser/mysql/completion.go",  # MySQL 补全实现
     "plugin/parser/mysql/diagnose.go",  # MySQL 诊断实现
 
+    # mariadb（3.24.0 起 mysql 解析器依赖它）：诊断实现会调用 base.RegisterDiagnoseFunc，
+    # 而该注册已在 #3 里被裁掉；解析本体（omni.go）保留。
+    "plugin/parser/mariadb/diagnose.go",
+
     # pg：补全/诊断/语句区间同样依赖 lsp-protocol 与 base 里被删掉的注册函数
     "plugin/parser/pg/completion.go",
     "plugin/parser/pg/diagnose.go",

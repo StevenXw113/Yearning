@@ -1,6 +1,6 @@
 # internal/bytebase
 
-本目录内化（vendor-in）了 **Bytebase 的 SQL 解析器与 MySQL 审核规则**，供 engine 的审核链路直接调用。
+本目录内化（vendor-in）了 **Bytebase 的 SQL 解析器（MySQL / MariaDB / PostgreSQL）与 MySQL、PG 审核规则**，供 engine 的审核链路直接调用。
 engine 自身只做「拆分 → 逐条审核 → 结果映射」，不重复实现任何规则，也不依赖第三方封装 module。
 
 - 上游仓库：`https://github.com/bytebase/bytebase`
@@ -12,9 +12,12 @@ engine 自身只做「拆分 → 逐条审核 → 结果映射」，不重复实
 engine/internal/bytebase/          # 对应 bytebase/backend/
 ├── plugin/advisor/                # 审核规则框架（advisor.go、builtin_rules.go、code）
 │   ├── sql_review.go              # 仅保留规则类型常量与模板解析（已砍 SQLReviewCheck）
-│   └── mysql/                     # MySQL 全部审核规则实现
+│   ├── mysql/                     # MySQL 全部审核规则实现
+│   └── pg/                        # PostgreSQL 审核规则实现
 ├── plugin/parser/base/            # 解析器接口、AST、拆分、错误类型
+├── plugin/parser/mariadb/         # MariaDB 解析（3.24.0 起 MySQL 解析器依赖它）
 ├── plugin/parser/mysql/           # MySQL 解析 / 拆分 / 资源变更
+├── plugin/parser/pg/              # PostgreSQL 解析 / 拆分
 ├── plugin/parser/tokenizer/       # 通用分词器
 ├── common/                        # 审核链路用到的通用工具（已裁剪）
 ├── store/model/                   # 元数据模型
@@ -31,12 +34,14 @@ engine/internal/bytebase/          # 对应 bytebase/backend/
 
 主要裁剪：
 
-1. **只保留 MySQL**：删除 `plugin/advisor/{mssql,oceanbase,oracle,pg,redshift,snowflake,tidb}`。
+1. **只保留 MySQL 与 PG**：删除 `plugin/advisor/{bigquery,mssql,oceanbase,oracle,redshift,snowflake,tidb}`
+   （`bigquery` 是 3.24.0 新增，依赖未内化的 `parser/bigquery` + `parser/googlesql`）。
+   MySQL 解析器自 3.24.0 起依赖 `parser/mariadb`，故该目录一并保留，但不保留它的 `diagnose.go`。
 2. **砍掉 `SQLReviewCheck`**：它依赖 `component/sheet` 与 `plugin/schema`（会牵入全部方言解析器与 tidb），
    engine 改为规则级调用 `advisor.Check`。`plugin/advisor/sql_review.go` 仅保留规则常量与 payload 解析。
 3. **去掉补全 / 诊断 / 语句区间**：删除 `plugin/parser/base/{complete.go,diagnose.go}`、
-   `plugin/parser/mysql/{completion.go,diagnose.go}`，并在 `plugin/parser/base/interface.go` 中移除
-   对应注册与 `lsp-protocol` 依赖。
+   `plugin/parser/mysql/{completion.go,diagnose.go}`、`plugin/parser/mariadb/diagnose.go`，
+   并在 `plugin/parser/base/interface.go` 中移除对应注册与 `lsp-protocol` 依赖。
 4. **去掉 tidb 依赖**：删除 `plugin/parser/tokenizer/tokenizer.go` 中
    `SetLineForMySQLCreateTableStmt` / `matchMySQLTableConstraint`。
 5. **精简 `common`**：复制阶段排除 `cel*.go`、`context.go`、`retry.go`、`qb/`（分别依赖 cel-go、
@@ -50,7 +55,7 @@ engine/internal/bytebase/          # 对应 bytebase/backend/
 ```bash
 cd engine
 ./scripts/sync-bytebase.sh              # 同步脚本内置的默认版本
-./scripts/sync-bytebase.sh 3.23.0       # 指定 tag / 分支 / commit
+./scripts/sync-bytebase.sh 3.24.0       # 指定 tag / 分支 / commit
 ```
 
 流程：稀疏拉取上游 → 复制子集 → 改写 import 前缀为 `engine/internal/bytebase/` → 重放裁剪 → `gofmt` → `go build` / `go test`。
