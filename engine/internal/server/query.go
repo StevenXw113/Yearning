@@ -13,15 +13,20 @@ import (
 //
 // 方言按 kind 分派，各自独立实现、互不混用：
 //   - postgres → queryPG（query_pg.go）
+//   - doris    → queryDoris（query_doris.go，查询语法兼容 MySQL）
 //   - 其余（含空值）→ querySQL（query_sql.go，MySQL）
 func (e *Engine) Query(_ context.Context, req *enginev1.QueryRequest) (*enginev1.QueryReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
 		return &enginev1.QueryReply{Ok: false, Error: "SQL 不能为空"}, nil
 	}
-	if strings.EqualFold(req.GetKind(), "postgres") {
+	switch {
+	case strings.EqualFold(req.GetKind(), "postgres"):
 		return queryPG(req), nil
+	case strings.EqualFold(req.GetKind(), "doris"):
+		return queryDoris(req), nil
+	default:
+		return querySQL(req), nil
 	}
-	return querySQL(req), nil
 }
 
 // splitList 将逗号分隔的词表拆成切片。

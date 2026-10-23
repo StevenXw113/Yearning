@@ -11,6 +11,7 @@ import (
 
 	enginev1 "engine/gen/engine/v1"
 	"engine/internal/customrules"
+	"engine/internal/dorischeck"
 	"engine/internal/mongocheck"
 	"engine/internal/redischeck"
 )
@@ -24,6 +25,7 @@ var selfRuleGroups = []string{
 	"SQL 侧 · internal/customrules",
 	"MongoDB 侧 · internal/mongocheck",
 	"Redis 侧 · internal/redischeck",
+	"Doris 侧 · internal/dorischeck",
 	"执行期限制 · 非静态审核",
 }
 
@@ -268,6 +270,83 @@ func TestRedisSwitchesAreImplemented(t *testing.T) {
 	}
 }
 
+// TestDorisSwitchesAreImplemented 反向核对：AuditRole 里每个 Doris* 开关都必须有实现。
+func TestDorisSwitchesAreImplemented(t *testing.T) {
+	covered := map[string]bool{}
+	for _, r := range dorischeck.All() {
+		covered[normSwitch(r.Name())] = true
+	}
+	found := 0
+	for _, name := range auditRoleFields(t) {
+		if !strings.HasPrefix(strings.ToLower(name), "doris") {
+			continue
+		}
+		found++
+		if !covered[normSwitch(name)] {
+			t.Errorf("enginev1.AuditRole 有 %q，但 dorischeck 里没有同名规则：规则页勾了不会生效", name)
+		}
+	}
+	if found == 0 {
+		t.Error("未在 AuditRole 里找到任何 Doris* 开关，proto 生成物可能有问题")
+	}
+	if found != len(dorischeck.All()) {
+		t.Errorf("AuditRole 的 Doris 开关有 %d 个，dorischeck 注册了 %d 条规则，两者应一一对应",
+			found, len(dorischeck.All()))
+	}
+}
+
+// TestDorisConfigCoversAllSwitches 核对 proto 里每个 Doris* 开关都能被 dorischeck.Config 取到。
+func TestDorisConfigCoversAllSwitches(t *testing.T) {
+	cfg := dorischeck.Config{}
+	checked := 0
+	for _, name := range auditRoleFields(t) {
+		if !strings.HasPrefix(strings.ToLower(name), "doris") {
+			continue
+		}
+		checked++
+		if !cfg.Has(name) {
+			t.Errorf("enginev1.AuditRole 的 %q 在 dorischeck.Config 里没有对应字段：规则读不到它，开关会变成「勾了不生效」", name)
+		}
+	}
+	if checked == 0 {
+		t.Error("未在 AuditRole 里找到任何参与静态审核的 Doris* 开关")
+	}
+}
+
+// TestDorisRuleDefaultLevels 核对规则自带的默认级别：取值合法，安全类必须 error。
+func TestDorisRuleDefaultLevels(t *testing.T) {
+	for _, r := range dorischeck.All() {
+		lv := r.DefaultLevel()
+		if !dorischeck.ValidLevel(lv) {
+			t.Errorf("规则 %q 的默认级别非法: %q", r.Name(), lv)
+			continue
+		}
+		if r.Category() == dorischeck.CategorySecurity && lv != dorischeck.LevelError {
+			t.Errorf("安全类规则 %q 的默认级别是 %q，必须是 error", r.Name(), lv)
+		}
+	}
+}
+
+// TestDorisRulesHaveFrontendEntries 核对每条 Doris 规则在规则页里都有开关与文案。
+func TestDorisRulesHaveFrontendEntries(t *testing.T) {
+	root := filepath.Join(moduleRoot(t), "..")
+	rulesTS := readFile(t, filepath.Join(root, "front/src/views/manager/rules/rules.ts"))
+	langs := map[string]string{
+		"zh-cn": readFile(t, filepath.Join(root, "front/src/lang/zh-cn/rule/index.ts")),
+		"en-us": readFile(t, filepath.Join(root, "front/src/lang/en-us/rule/index.ts")),
+	}
+	for _, r := range dorischeck.All() {
+		if !strings.Contains(rulesTS, "'"+r.Name()+"'") {
+			t.Errorf("规则 %q 不在 front/src/views/manager/rules/rules.ts 里：规则页配不出这个开关", r.Name())
+		}
+		for lang, content := range langs {
+			if !strings.Contains(content, r.Name()+":") {
+				t.Errorf("规则 %q 缺少 %s 文案（front/src/lang/%s/rule/index.ts）", r.Name(), lang, lang)
+			}
+		}
+	}
+}
+
 // auditRoleFields 返回 enginev1.AuditRole 的全部字段名（proto 名，snake_case）。
 func auditRoleFields(t *testing.T) []string {
 	t.Helper()
@@ -352,9 +431,23 @@ func scanSelfRules(t *testing.T) []selfRule {
 		})
 	}
 
-	for name, desc := range mongoExecOnly {
+	dorisRules := dorischeck.All()
+	if len(dorisRules) == 0 {
+		t.Fatal("未扫描到任何 dorischeck 规则：init 注册是否被移除了？")
+	}
+	for _, r := range dorisRules {
+		// Doris 规则的规则名同样是 AuditRole 字段名（也是 rule_levels 的 key）
 		out = append(out, selfRule{
 			Group:    selfRuleGroups[3],
+			Name:     r.Name(),
+			Switches: []string{r.Name()},
+			Desc:     r.Desc(),
+		})
+	}
+
+	for name, desc := range mongoExecOnly {
+		out = append(out, selfRule{
+			Group:    selfRuleGroups[4],
 			Name:     name,
 			Switches: []string{name},
 			Desc:     desc,

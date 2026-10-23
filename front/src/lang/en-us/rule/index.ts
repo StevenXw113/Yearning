@@ -136,4 +136,8 @@ export default {
   RedisForbidPersist: 'Forbid PERSIST: it removes the TTL and the key stays forever',
   RedisScanRequireMatch: 'SCAN should carry MATCH, otherwise it walks the whole keyspace',
   RedisForbidBlocking: 'Forbid blocking commands (BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE)',
+  DorisRequireDistribution: 'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
+  DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',
+  DorisReplicationNum: 'Doris: expected replication num (0 = no check)',
+  DorisKeyModel: 'Doris: warn on AGGREGATE KEY model (wrong aggregate type yields wrong results)',
 };

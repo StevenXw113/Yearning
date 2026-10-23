@@ -17,6 +17,7 @@ func TestDataSourceKind(t *testing.T) {
 		1: "postgres",
 		2: "mongodb",
 		3: "redis",
+		4: "doris",
 		9: "", // 未知类型由引擎拒绝
 	}
 	for in, want := range cases {
@@ -26,8 +27,8 @@ func TestDataSourceKind(t *testing.T) {
 	}
 
 	// 常量编号是跨层契约（前端 db_type、数据库列、引擎 kind 都由它派生）
-	if model.DBTypePostgreSQL != 1 || model.DBTypeMongoDB != 2 || model.DBTypeRedis != 3 {
-		t.Fatalf("数据源类型常量漂移: pg=%d mongo=%d redis=%d",
-			model.DBTypePostgreSQL, model.DBTypeMongoDB, model.DBTypeRedis)
+	if model.DBTypePostgreSQL != 1 || model.DBTypeMongoDB != 2 || model.DBTypeRedis != 3 || model.DBTypeDoris != 4 {
+		t.Fatalf("数据源类型常量漂移: pg=%d mongo=%d redis=%d doris=%d",
+			model.DBTypePostgreSQL, model.DBTypeMongoDB, model.DBTypeRedis, model.DBTypeDoris)
 	}
 }

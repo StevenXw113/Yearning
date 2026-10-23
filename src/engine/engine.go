@@ -108,6 +108,11 @@ type AuditRole struct {
 	RedisForbidPersist    bool `json:"RedisForbidPersist"`
 	RedisScanRequireMatch bool `json:"RedisScanRequireMatch"`
 	RedisForbidBlocking   bool `json:"RedisForbidBlocking"`
+	// Doris 建表审核规则（自研 dorischeck）：建表必须有分桶、BUCKETS 上限、副本数、KEY 模型
+	DorisRequireDistribution bool `json:"DorisRequireDistribution"`
+	DorisBucketLimit         int  `json:"DorisBucketLimit"`
+	DorisReplicationNum      int  `json:"DorisReplicationNum"`
+	DorisKeyModel            bool `json:"DorisKeyModel"`
 }
 
 type Record struct {

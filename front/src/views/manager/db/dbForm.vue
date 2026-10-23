@@ -220,6 +220,10 @@
       value: 3,
       label: 'redis',
     },
+    {
+      value: 4,
+      label: 'doris',
+    },
   ];
 
   const dbForm = ref({

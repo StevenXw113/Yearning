@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	enginev1 "engine/gen/engine/v1"
+	"engine/internal/dorischeck"
 	"engine/internal/mongocheck"
 	"engine/internal/redischeck"
 
@@ -266,4 +267,11 @@ func mongoRulesFrom(r *enginev1.AuditRole, mode string) mongocheck.Config {
 // 但字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
 func redisRulesFrom(r *enginev1.AuditRole, mode string) redischeck.Config {
 	return redischeck.ConfigFromProto(r, redischeck.Mode(mode))
+}
+
+// dorisRulesFrom 构造 Doris 建表审核规则配置。
+// Doris 的建表 DDL 是自有语法、MySQL 解析器审不了，走自研 internal/dorischeck；
+// 字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
+func dorisRulesFrom(r *enginev1.AuditRole) dorischeck.Config {
+	return dorischeck.ConfigFromProto(r)
 }

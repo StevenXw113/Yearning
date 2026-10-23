@@ -63,6 +63,13 @@
 - `RedisRequireTTL` — 开关：`RedisRequireTTL`；SET 必须带过期时间（EX / PX / EXAT），避免键无上限增长
 - `RedisScanRequireMatch` — 开关：`RedisScanRequireMatch`；SCAN 应带 MATCH 限定范围，否则等同于全量遍历
 
+## Doris 侧 · internal/dorischeck（4 条）
+
+- `DorisBucketLimit` — 开关：`DorisBucketLimit`；建表 BUCKETS 数量超过上限（0 = 不限制）
+- `DorisKeyModel` — 开关：`DorisKeyModel`；提示 AGGREGATE KEY 聚合模型（写入有约束，聚合类型选错会导致结果错误）
+- `DorisReplicationNum` — 开关：`DorisReplicationNum`；建表副本数与期望值不一致（0 = 不校验）
+- `DorisRequireDistribution` — 开关：`DorisRequireDistribution`；建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）
+
 ## 执行期限制 · 非静态审核（1 条）
 
 - `MongoMaxAffectRows` — 开关：`MongoMaxAffectRows`；单次 update / delete 允许命中的文档数上限（0 = 不限），由主程序抓取前镜像时判定

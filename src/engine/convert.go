@@ -100,6 +100,10 @@ func AuditRoleToProto(r *AuditRole) *enginev1.AuditRole {
 		RedisForbidPersist:             r.RedisForbidPersist,
 		RedisScanRequireMatch:          r.RedisScanRequireMatch,
 		RedisForbidBlocking:            r.RedisForbidBlocking,
+		DorisRequireDistribution:       r.DorisRequireDistribution,
+		DorisBucketLimit:               int32(r.DorisBucketLimit),
+		DorisReplicationNum:            int32(r.DorisReplicationNum),
+		DorisKeyModel:                  r.DorisKeyModel,
 	}
 }
 

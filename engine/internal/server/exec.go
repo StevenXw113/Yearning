@@ -7,10 +7,11 @@ import (
 	enginev1 "engine/gen/engine/v1"
 )
 
-// Exec 按数据源方言分派执行。四个引擎各自独立实现、互不混用：
+// Exec 按数据源方言分派执行。五个引擎各自独立实现、互不混用：
 //   - mongodb  → execMongo（exec_mongo.go，主程序驱动 + 前镜像回滚）
 //   - redis    → execRedis（exec_redis.go）
 //   - postgres → execPG（exec_pg.go，pgx + SET search_path，无 binlog 回滚）
+//   - doris    → execDoris（exec_doris.go，mysql 协议直连，无事务无回滚）
 //   - 其余     → execSQL（exec_mysql.go，MySQL；未知 kind 按 MySQL 处理以兼容旧调用方）
 func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
 	if req == nil || req.Order == nil {
@@ -27,6 +28,8 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 		return e.execRedis(ctx, req)
 	case "postgres":
 		return e.execPG(ctx, req)
+	case "doris":
+		return e.execDoris(ctx, req)
 	default:
 		return e.execSQL(ctx, req)
 	}

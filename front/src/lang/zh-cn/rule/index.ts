@@ -127,4 +127,8 @@ export default {
   RedisForbidPersist: '禁止 PERSIST：会移除键的过期时间，变成常驻内存',
   RedisScanRequireMatch: 'SCAN 应带 MATCH 限定范围，否则等同于全量遍历',
   RedisForbidBlocking: '禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE 等）',
+  DorisRequireDistribution: 'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
+  DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',
+  DorisReplicationNum: 'Doris：建表副本数期望值（0 不校验）',
+  DorisKeyModel: 'Doris：提示 AGGREGATE KEY 聚合模型（聚合类型选错会导致结果错误）',
 };

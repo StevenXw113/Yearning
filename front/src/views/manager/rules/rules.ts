@@ -557,6 +557,30 @@ const rule: Rule[] = [
     type: 'Redis',
     tp: 0,
   },
+  {
+    name: 'DorisRequireDistribution',
+    desc: t('DorisRequireDistribution'),
+    type: 'Doris',
+    tp: 0,
+  },
+  {
+    name: 'DorisBucketLimit',
+    desc: t('DorisBucketLimit'),
+    type: 'Doris',
+    tp: 1,
+  },
+  {
+    name: 'DorisReplicationNum',
+    desc: t('DorisReplicationNum'),
+    type: 'Doris',
+    tp: 1,
+  },
+  {
+    name: 'DorisKeyModel',
+    desc: t('DorisKeyModel'),
+    type: 'Doris',
+    tp: 0,
+  },
 ];
 
 export { rule, Rule };

@@ -15,10 +15,11 @@ import (
 	"engine/internal/bytebase/plugin/parser/base"
 )
 
-// Check 按数据源方言分派审核。四个引擎各自独立实现、互不混用：
+// Check 按数据源方言分派审核。五个引擎各自独立实现、互不混用：
 //   - mongodb  → checkMongo（check_mongo.go）
 //   - redis    → checkRedis（check_redis.go）
 //   - postgres → checkPG（check_pg.go）
+//   - doris    → checkDoris（check_doris.go，建表走 dorischeck，DML/查询走 MySQL 解析器）
 //   - 其余     → checkSQL（check_sql.go，MySQL）
 func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*enginev1.CheckReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
@@ -31,6 +32,8 @@ func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*engine
 		return checkRedis(req), nil
 	case isPgSource(req.Source):
 		return checkPG(ctx, req), nil
+	case isDorisSource(req.Source):
+		return checkDoris(ctx, req), nil
 	default:
 		return checkSQL(ctx, req), nil
 	}

@@ -165,6 +165,19 @@ message AuditRole {
   bool redis_scan_require_match = 89;
   // 禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT 等）
   bool redis_forbid_blocking = 90;
+
+  // ------- Doris 建表审核规则（internal/dorischeck，自研）-------
+  // Doris 兼容 MySQL 协议与查询/DML 语法，但建表 DDL 是自有语法
+  // （DISTRIBUTED BY / PROPERTIES / KEY 模型），MySQL 解析器解析不了，这几项自研。
+  // true = 启用该限制；级别同样走 rule_levels（key 为下面的字段名）。
+  // 建表必须有 DISTRIBUTED BY（否则默认随机分桶，不可控），默认拦截
+  bool doris_require_distribution = 91;
+  // BUCKETS 数量上限，0 = 不限制
+  int32 doris_bucket_limit = 92;
+  // 期望副本数，0 = 不校验
+  int32 doris_replication_num = 93;
+  // 是否提示 KEY 数据模型（聚合模型写入有约束）
+  bool doris_key_model = 94;
 }
 
 
