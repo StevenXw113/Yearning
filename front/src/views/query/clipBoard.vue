@@ -23,7 +23,8 @@
 
 <script lang="ts" setup>
   import { Clip } from '@/types';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import ClipboardJS from 'clipboard';
   import { useI18n } from 'vue-i18n';
   import { CloseOutlined, CopyOutlined } from '@ant-design/icons-vue';

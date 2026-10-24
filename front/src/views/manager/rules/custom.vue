@@ -80,7 +80,8 @@
   import rules from './rules.vue';
   import { useElementSize } from '@vueuse/core';
   import { useI18n } from 'vue-i18n';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
 
   const { is_open, turnState } = CommonMixins();
 

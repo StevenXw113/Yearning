@@ -137,7 +137,8 @@
 
 <script lang="ts" setup>
   import CommonMixins from '@/mixins/common';
-  import { Step as aStep, Steps as aSteps, message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { onMounted, ref } from 'vue';
   import { RespSteps, Steps, createFlow, getFlowUsers } from '@/apis/flow';
   import { AuditorList } from '@/types';

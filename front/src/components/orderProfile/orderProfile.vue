@@ -244,7 +244,8 @@
     getNextOrderState,
     SQLTestParams,
   } from '@/apis/orderPostApis';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { SQLTesting } from '@/types';
   import { useRoute } from 'vue-router';
   import JunoMixin from '@/mixins/juno';

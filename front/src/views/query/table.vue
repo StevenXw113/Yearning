@@ -50,7 +50,8 @@
   import { computed, ref, watch } from 'vue';
   import { useCommonStore } from '@/store';
   import router from '@/router';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { useI18n } from 'vue-i18n';
   import * as XLSX from 'xlsx';
   import { encode, decode } from '@msgpack/msgpack';

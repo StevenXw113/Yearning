@@ -228,7 +228,8 @@
     queryHighlight,
   } from '@/apis/source';
   import dayjs, { Dayjs } from 'dayjs';
-  import { message, Modal } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message, modal } = App.useApp();
   import {
     checkSQLS,
     SQLTestParams,
@@ -650,7 +651,7 @@
 
   onBeforeRouteLeave((to, from, next) => {
     if (editor.value.GetValue() !== '') {
-      Modal.warn({
+      modal.warning({
         content: t('common.leave'),
         onOk: () => {
           next();

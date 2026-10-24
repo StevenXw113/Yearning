@@ -17,7 +17,8 @@
 <script lang="ts" setup>
   import { markOrderFinished } from '@/apis/orderPostApis';
   import CommonMixins from '@/mixins/common';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 

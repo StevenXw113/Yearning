@@ -125,7 +125,8 @@
   } from '@/apis/user';
   import { EventBus } from '@/lib';
   import ChangePassword from '@/components/user/changePassword.vue';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { useI18n } from 'vue-i18n';
   import { tableRef } from '@/components/table';
   import { CommonPage } from '@/types';

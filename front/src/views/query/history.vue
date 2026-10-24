@@ -36,7 +36,8 @@
 
 <script lang="ts" setup>
   import { useOrderStore } from '@/store';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import ClipboardJS from 'clipboard';
   import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';

@@ -241,7 +241,8 @@
   import { onMounted, reactive, ref, watch } from 'vue';
   import { tableRef } from '@/components/table';
   import { useRoute } from 'vue-router';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import dayjs, { Dayjs } from 'dayjs';
   import Editor from '@/components/editor/editor.vue';
   import PageHeader from '@/components/pageHeader/pageHeader.vue';

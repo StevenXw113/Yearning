@@ -1,6 +1,7 @@
 <template>
   <a-config-provider :locale="lang" :theme="themeConfig">
     <a-app>
+      <antd-app-bridge />
       <router-view />
     </a-app>
   </a-config-provider>
@@ -15,6 +16,7 @@
   import { systemLang } from './apis/loginApi';
   import i18n from '@/lang';
   import { themeConfig, applyTheme, isDark } from '@/style/theme';
+  import AntdAppBridge from '@/config/antdAppBridge.vue';
 
   const lang = ref();
 

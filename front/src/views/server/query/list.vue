@@ -76,7 +76,8 @@
   import { tableRef } from '@/components/table';
   import { useElementSize, useWebSocket } from '@vueuse/core';
   import { useUserStore } from '@/store';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
 
   interface propsAttr {
     isRecord?: boolean;

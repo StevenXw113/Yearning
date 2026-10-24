@@ -131,7 +131,8 @@
     getRuleHistory,
     rollbackRule,
   } from '@/apis/rules';
-  import { message, Modal } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message, modal } = App.useApp();
   import { useI18n } from 'vue-i18n';
 
   const props = defineProps<{
@@ -262,7 +263,7 @@
     if (data.code !== 1200) return; // 非 1200 已由请求拦截器统一提示
     const { current, latest, hasUpdate } = data.payload;
     if (hasUpdate) {
-      Modal.warning({
+      modal.warning({
         title: t('upstreamNew'),
         content: t('upstreamNewDesc', { current, latest }),
       });

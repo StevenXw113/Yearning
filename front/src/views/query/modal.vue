@@ -15,7 +15,8 @@
   import { reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import CommonMixins from '@/mixins/common';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
 
   const { is_open, turnState } = CommonMixins();
 

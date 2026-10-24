@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { notification } from 'ant-design-vue';
+import { antdFeedback } from '@/config/antdApp';
 import { pinia, useUserStore } from '@/store';
 const userStore = useUserStore(pinia);
 import router from '@/router';
@@ -43,7 +43,7 @@ const errorHandler = (error: {
       if (userStore.account?.token) {
         resetSession();
       }
-      notification.error({
+      antdFeedback.notification.error({
         message: t('common.session.title'),
         description: t('common.session.desc'),
       });
@@ -53,7 +53,7 @@ const errorHandler = (error: {
       return Promise.reject(error);
     }
     const data = error.response.data;
-    notification.error({
+    antdFeedback.notification.error({
       message: t('common.session.state') + `:${error.response.status}`,
       description: data.message,
     });
@@ -63,14 +63,14 @@ const errorHandler = (error: {
 
 const responseInject = (res: Res<never>) => {
   if (res.text !== '' && res.code === 1200) {
-    notification.info({
+    antdFeedback.notification.info({
       message: t('common.session.state') + ':1200',
       description: res.text,
     });
   }
 
   if (res.code > 1200) {
-    notification.error({
+    antdFeedback.notification.error({
       message: t('common.session.state') + `:${res.code}`,
       description: res.text,
     });

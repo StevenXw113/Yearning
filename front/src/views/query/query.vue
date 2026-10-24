@@ -91,7 +91,8 @@
   import { useElementSize, useWebSocket } from '@vueuse/core';
   import { checkSchema } from '@/lib';
   import { COMMON_URI } from '@/config/request';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { useI18n } from 'vue-i18n';
 
   const panes = ref([{ title: 'Untitled 1', key: '1', closable: false }]);

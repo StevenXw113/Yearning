@@ -100,7 +100,8 @@
     RetryPreview,
   } from '@/apis/orderPostApis';
   import CommonMixins from '@/mixins/common';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { ref, Ref } from 'vue';
 
   const emit = defineEmits(['close']);

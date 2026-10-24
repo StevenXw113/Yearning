@@ -78,7 +78,8 @@
 <script lang="ts" setup>
   import { nextTick, onMounted, ref } from 'vue';
   import QRCode from 'qrcode';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import {
     mfaSetup,
     mfaStatus,

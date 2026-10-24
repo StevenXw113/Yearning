@@ -46,7 +46,8 @@
   import { useRoute, useRouter } from 'vue-router';
   import { useI18n } from 'vue-i18n';
   import { tableRef } from '../table';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
   import { OrderItem } from '@/types';
 
   interface page {

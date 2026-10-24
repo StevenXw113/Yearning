@@ -69,7 +69,8 @@
   import { useUserStore, useMenuStore } from '@/store';
   import { useRoute } from 'vue-router';
   import { debounce } from 'lodash-es';
-  import { message } from 'ant-design-vue';
+  import { App } from 'ant-design-vue';
+  const { message } = App.useApp();
 
   const loginForm: UnwrapRef<LoginFrom> = reactive({
     username: '',
