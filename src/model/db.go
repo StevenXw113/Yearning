@@ -37,6 +37,17 @@ import (
 
 var sqlDB *gorm.DB
 
+// sqlPool 原始元数据库连接池（DBNew 自建，经 retryReadPool 包装交给 gorm）。
+// gorm.DB().DB() 对自定义 ConnPool 会返回 invalid db，需要原始池的场景
+// （单实例互斥持锁连接）从这里取。
+var sqlPool *sql.DB
+
+// SQLPool 返回元数据库原始连接池；未初始化（尚未 DBNew）时返回 nil。
+func SQLPool() *sql.DB { return sqlPool }
+
+// UseDB 注入已建立的 gorm 连接（测试与离线工具用；正常启动走 DBNew）。
+func UseDB(db *gorm.DB) { sqlDB = db }
+
 type DSN struct {
 	Username string
 	Password string
@@ -106,6 +117,7 @@ func DBNew(cPath string) {
 	pool.SetConnMaxLifetime(time.Minute * 3)
 	pool.SetMaxOpenConns(50)
 	pool.SetMaxIdleConns(5)
+	sqlPool = pool
 
 	db, err := gorm.Open(drive.New(drive.Config{
 		Conn:                      retryReadPool{pool},

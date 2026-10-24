@@ -35,10 +35,15 @@ func AcquireInstanceLock(ctx context.Context) error {
 	return nil
 }
 
-// instanceLockDB 返回元数据库连接池。独立出来是为了测试可注入假池
-// （真实环境即 model.DB() 底层的 *sql.DB）。
+// instanceLockDB 返回元数据库连接池。取 model.SQLPool()（DBNew 自建的原始池）
+// 而非 gorm 的 DB().DB()——gorm 用自定义 retryReadPool 包装连接，
+// gorm.DB().DB() 对它会返回 invalid db（实机验证发现，集成测试注入假池没踩到）。
 var instanceLockDB = func() (*sql.DB, error) {
-	return model.DB().DB()
+	pool := model.SQLPool()
+	if pool == nil {
+		return nil, fmt.Errorf("元数据库连接池尚未初始化")
+	}
+	return pool, nil
 }
 
 // grabLock 在（新）连接上抢锁；GET_LOCK(name, 0) 立即返回：1=抢到 0=被占。

@@ -26,6 +26,7 @@ func TestArchiveOnce(t *testing.T) {
 		t.Fatalf("连接元库失败: %v", err)
 	}
 	db := gdb.Session(&gorm.Session{AllowGlobalUpdate: true})
+	model.UseDB(gdb) // RunArchiveOnce 内部走 model.DB()
 
 	tables := []interface{}{
 		&model.CoreSqlOrder{}, &model.CoreSqlRecord{}, &model.CoreRollback{},
@@ -50,16 +51,36 @@ func TestArchiveOnce(t *testing.T) {
 	old := time.Now().AddDate(0, 0, -400).Format("2006-01-02 15:04")
 	recent := time.Now().AddDate(0, 0, -3).Format("2006-01-02 15:04")
 
-	// 植入：W-OLD 终态(完成)带明细/回滚/流水；W-AUDIT 非终态(审核中)带明细；W-RECENT 终态但未到期
-	db.Exec("INSERT INTO core_sql_orders (work_id,username,status,type,date,sql,`text`) VALUES ('W-OLD', 'u', 1, 1, ?, 'SELECT 1', 'old')", old)
-	db.Exec("INSERT INTO core_sql_records (work_id,sql,state,affect_row,time,error) VALUES ('W-OLD', 'SELECT 1', '已执行', 1, ?, '')", old)
-	db.Exec("INSERT INTO core_rollbacks (work_id,sql) VALUES ('W-OLD', 'ROLLBACK')")
-	db.Exec("INSERT INTO core_workflow_details (work_id,username,time,action) VALUES ('W-OLD', 'u', ?, 'executed')", old)
-	db.Exec("INSERT INTO core_sql_orders (work_id,username,status,type,date,sql,`text`) VALUES ('W-AUDIT', 'u', 2, 1, ?, 'SELECT 2', 'auditing')", old)
-	db.Exec("INSERT INTO core_sql_records (work_id,sql,state,affect_row,time,error) VALUES ('W-AUDIT', 'SELECT 2', '已执行', 1, ?, '')", old)
-	db.Exec("INSERT INTO core_sql_orders (work_id,username,status,type,date,sql,`text`) VALUES ('W-RECENT', 'u', 1, 1, ?, 'SELECT 3', 'recent')", recent)
+	// 植入：W-OLD 终态(完成)带明细/回滚/流水；W-AUDIT 非终态(审核中)带明细；W-RECENT 终态但未到期。
+	// 用 gorm 结构体 Create：列多且多有 NOT NULL 约束，手写 INSERT 极易漏列。
+	seedOrder := func(workId string, status int, date string) {
+		o := model.CoreSqlOrder{
+			WorkId: workId, Username: "u", Status: uint(status), Type: 1, Backup: 0,
+			IDC: "idc-demo", Source: "demo-mysql", SourceId: "src-" + workId,
+			DataBase: "demo", Table: "", Date: date,
+			SQL: "SELECT " + workId, Text: workId, Assigned: "admin",
+			Delay: "none", RealName: "tester", CurrentStep: 1,
+		}
+		if err := db.Create(&o).Error; err != nil {
+			t.Fatalf("seed order %s: %v", workId, err)
+		}
+	}
+	seedOrder("W-OLD", 1, old)
+	seedOrder("W-AUDIT", 2, old)
+	seedOrder("W-RECENT", 1, recent)
+
+	mustCreate := func(v interface{}) {
+		t.Helper()
+		if err := db.Create(v).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	mustCreate(&model.CoreSqlRecord{WorkId: "W-OLD", SQL: "SELECT W-OLD", State: "已执行", Affectrow: 1, Time: old})
+	mustCreate(&model.CoreSqlRecord{WorkId: "W-AUDIT", SQL: "SELECT W-AUDIT", State: "已执行", Affectrow: 1, Time: old})
+	mustCreate(&model.CoreRollback{WorkId: "W-OLD", SQL: "ROLLBACK"})
+	mustCreate(&model.CoreWorkflowDetail{WorkId: "W-OLD", Username: "u", Time: old, Action: "executed"})
 	for i := 0; i < 3; i++ {
-		db.Exec("INSERT INTO core_query_records (work_id,sql,ex_time,time,source,schema,audit) VALUES ('Q-OLD', 'SELECT * FROM t', 10, ?, 's', 'db', '')", old)
+		mustCreate(&model.CoreQueryRecord{WorkId: "Q-OLD", SQL: "SELECT * FROM t", ExTime: 10, Time: old, Source: "s", Schema: "db", Audit: ""})
 	}
 
 	prevDays := model.C.General.ArchiveDays
