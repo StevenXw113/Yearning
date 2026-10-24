@@ -7,8 +7,10 @@
 - `engine/` —— SQL 解析 / 审核 / 执行引擎（独立 Go module，见第 8 节），由 `go.mod` 的 `replace engine => ./engine` 引用。
 
 > 技术栈：Go ≥ 1.26、GORM、自研 Web 框架 `github.com/cookieY/yee`、MySQL。
-> 前端为 Vue3 + Vite + TypeScript，技术栈详见 `front/README.md`。
-> SQL 解析 / 审核 / 执行由独立的「审核引擎」进程提供（源码在本仓库 `engine/`，见下文「审核引擎」）。
+> 前端为 Vue 3.5 + Vite 5 + TypeScript 5 + Pinia + ant-design-vue 4（CSS-in-JS 主题，
+> 支持运行时暗/亮切换），详见 `front/README.md`。
+> SQL 解析 / 审核 / 执行由独立的「审核引擎」进程提供（源码在本仓库 `engine/`，见下文「审核引擎」），
+> 支持 MySQL / PostgreSQL / MongoDB / Redis / Doris 五类数据源。
 
 ---
 
@@ -18,7 +20,7 @@
 |---|---|---|
 | Go | >= 1.26（`go.mod` 已声明 `go 1.26.0`） | 编译后端 |
 | MySQL | 5.7+ / 8.0，字符集 **utf8mb4** | 元数据存储（工单、用户、权限等） |
-| Node.js + yarn | 前端 `front/` 使用 | 前端依赖安装与构建（Vue3 + Vite） |
+| Node.js + yarn | Node >= 18（Vite 5 要求），yarn 1.x | 前端依赖安装与构建 |
 | 审核引擎 | 见第 8 节（源码在 `engine/`） | SQL 检测 / 执行 / 查询预检（RPC） |
 
 > Windows / PowerShell 与 macOS / Linux / bash 命令在下方分别给出。
@@ -54,7 +56,7 @@ cd c:/hub/Yearning
 Copy-Item conf.toml.template conf.toml
 ```
 
-按模板修改 `conf.toml`：
+按模板修改 `conf.toml`（**模板内含全部配置项的逐项注释，是权威说明**，此处只列要点）：
 
 - `[Mysql]`：本机数据库连接。
 - `[General].SecretKey`：**必须替换为随机字符串（建议 ≥ 32 字符）**。代码已强制拒绝使用模板占位值启动，否则进程直接退出。
@@ -65,6 +67,19 @@ Copy-Item conf.toml.template conf.toml
   - 或用 Python：`python -c "import secrets;print(secrets.token_hex(32))"`
   - 也可通过环境变量 `SECRET_KEY` 注入（优先级高于配置文件）。
 - `[General].RpcAddr`：审核引擎地址，默认 `127.0.0.1:50001`。
+
+其他常用 `[General]` 配置（详见 `conf.toml.template` 注释）：
+
+| 配置 | 默认 | 说明 |
+|---|---|---|
+| `RpcToken` | 空 | 引擎 gRPC 共享令牌；与引擎 `-auth-token`/`ENGINE_AUTH_TOKEN` 一致即启用认证（跨不完全可信网络部署必须启用） |
+| `RpcTLSCA` / `RpcTLSCert` / `RpcTLSKey` | 空 | 引擎通道 TLS / mTLS（证书生成：`engine/scripts/gen-tls-certs.sh`） |
+| `SuperUsers` | 空 | 额外超管名单（逗号分隔；`admin` 恒为超管） |
+| `CorsOrigins` | 空 | CORS 允许来源（逗号分隔；空 = 通配 *） |
+| `DisableInstanceLock` | false | 单实例互斥开关（默认开启：第二个实例连同一元库会拒绝启动） |
+| `ExecTimeoutMinutes` | 5 | 单工单引擎执行超时（0 = 不限） |
+| `SelfHealHours` | 6 | 执行中(status=3)僵尸工单自愈阈值小时数（0 = 关闭） |
+| `ArchiveDays` | 0 | 历史归档天数（0 = 关闭；归档数据经 `/api/v2/record/archive` 查询） |
 
 > 同一主密钥同时用于 JWT 签名与数据源口令加密，泄露等同交出全部数据库凭据，请妥善保管、勿提交仓库。
 
@@ -156,6 +171,20 @@ go vet ./...       # 静态检查（可选；有两个升级前已存在的存�
 
 > 纯语法级检查可用 `gofmt -e -l ./src ./cmd`。
 
+### 5.1 单元测试
+
+```bash
+go test ./src/...   # 主程序（含 archguard 契约测试：前后端工单状态枚举对齐）
+cd engine && go test ./...   # 引擎是独立 Go module，必须单独跑（在根目录 ./engine/... 会报 pattern 错误）
+```
+
+需要真实 MySQL 的集成用例（缺省自动跳过，CI 无外部依赖）：
+
+```bash
+YEARNING_TEST_META_DSN='root:pwd@tcp(127.0.0.1:3306)/Yearning_go?charset=utf8mb4&parseTime=true' \
+  go test ./src/service/ -run 'TestArchiveOnce|TestAcquireInstanceLock' -count=1
+```
+
 ---
 
 ## 6. 初始化数据库
@@ -179,10 +208,15 @@ go run . run -c conf.toml -p 8000
 - 访问 `http://127.0.0.1:8000`（有前端产物时打开完整 UI）。
 - 常用调试端口：`-p 8000`。
 - 实时重载：热重启依赖你在编辑器配置运行 `go run . run`（项目未内置 air/watcher，可自装 `github.com/air-verse/air`）。
+- 探针与指标端点（无需登录）：`/health`（进程 + 引擎健康 JSON）、
+  `/metrics`（Prometheus 文本格式：工单量/引擎 RPC 耗时/失败率/进程指标）。
+- 单实例互斥默认开启：同一元数据库已有实例在跑时，第二个进程会拒绝启动
+  （`[General].DisableInstanceLock = true` 可关，仅特殊部署才应关）。
 
 启动成功标志（日志）：
 ```
 Yearning is running on port:  8000
+已获取单实例锁（MySQL GET_LOCK）
 ```
 
 ---
@@ -204,12 +238,21 @@ SQL 解析 / 审核 / 执行引擎**源码在本仓库 `engine/`**（独立 Go m
 ```powershell
 cd engine
 go build -o ../bin/engine ./cmd/engine   # 产出引擎可执行文件
-../bin/engine                             # 默认监听 127.0.0.1:50001
+../bin/engine                             # 默认监听 :13307（-addr 可改；主程序 RpcAddr 对准它）
 ```
+
+常用启动参数：
+
+| 参数 | 说明 |
+|---|---|
+| `-addr :13307` | gRPC 监听地址 |
+| `-auth-token <token>` / 环境变量 `ENGINE_AUTH_TOKEN` | 共享访问令牌：非空时业务方法要求 `authorization: Bearer <token>`（健康检查/反射豁免）。主程序侧配 `[General].RpcToken` 同值即启用 |
+| `-tls-cert` / `-tls-key` / `-tls-client-ca` | TLS / mTLS（证书一键生成：`engine/scripts/gen-tls-certs.sh`；详见 `engine/README.md`） |
+| `-metrics-addr :13308` | 独立 Prometheus /metrics HTTP 口（空 = 关闭） |
 
 > `engine/.gitignore` 已忽略引擎自身的编译产物（`/bin/`、`*.exe`、`*.test`）。
 
-缺引擎时：登录、用户、数据源 CRUD、设置、权限等不依赖引擎的接口可正常自测；凡发起 `Engine.*` 的调用（SQL 检测、执行、查询）会报连接错误。若需完整联调，请先在 `RpcAddr` 指定的地址部署引擎进程。
+缺引擎时：登录、用户、数据源 CRUD、设置、权限等不依赖引擎的接口可正常自测；凡发起 `Engine.*` 的调用（SQL 检测、执行、查询）会报连接错误，且主程序会在健康状态翻转时经钉钉 WebHook 告警一次。若需完整联调，请先在 `RpcAddr` 指定的地址部署引擎进程。
 
 ---
 
@@ -231,9 +274,12 @@ Yearning --help         # 帮助
 |---|---|
 | `go build` 报 `chat/*: no matching files found` | 前端 embed 产物缺失，见第 3 节在 `src/service/dist/` 放入产物或使用最小占位 |
 | 进程秒退，日志含 `SecretKey 强度不足或仍是模板示例值` | `conf.toml` 的 SecretKey 仍是占位值，替换为随机串（第 2 节） |
+| 秒退，日志含 `单实例互斥: 另一 Yearning 实例正在运行` | 同一元数据库已有实例持有 GET_LOCK；确认是否重复启动，确需多实例再评估 `DisableInstanceLock` |
+| SQL 检测/执行报 `Unauthenticated` 或连接拒绝 | 引擎启用了 `-auth-token` 而主程序 `RpcToken` 未配同值（或反之）；两端对齐后重启主程序 |
 | `go mod tidy` / `go get` 网络超时 | 未启用国内源；先按第 4.1 节 `go env -w GOPROXY=https://goproxy.cn,direct` |
 | 提示工具链损坏、`textflag.h:1: expected identifier` | 使用了损坏的 Go（含此前临时目录 `%USERPROFILE%\sdk`）。请用官方安装包重装到默认路径 |
 | 页面空白 | 使用了第 3.2 节的占位产物；接上真实前端构建产物即可 |
+| 升级前端依赖后 dev 页面黑屏 | Vite 依赖预构建缓存陈旧：`rm -rf front/node_modules/.vite` 后重启 dev server |
 | 端口被占用 | `run` 命令加 `-p <端口>` |
 | `go.sum` 未被 git 跟踪 | dev 分支已恢复跟踪；勿再从 `.gitignore` 删除/忽略它 |
 | 修改配置文件后需重启 | 配置在启动时读取，改动后重启进程 |

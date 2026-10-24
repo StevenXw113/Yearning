@@ -172,7 +172,14 @@ docker compose down
 - [ ] 修改默认 `admin` 密码。
 - [ ] 为 `MYSQL_*` 更换强口令，避免复用示例值。
 - [ ] 生产对外建议置于反向代理（Nginx/网关）之后并启用 HTTPS。
-- [ ] 控制 `8000` 端口只对可信来源开放。
+- [ ] 控制 `8000` 端口只对可信来源开放；需要时可配置 `[General].CorsOrigins` 收紧跨域来源。
+- [ ] 引擎与主程序同容器回环部署时可不开认证；若**单独部署引擎**（跨网络可达），
+      必须启用共享令牌（引擎 `-auth-token` ↔ 主程序 `RpcToken`），跨不可信网络再加
+      TLS/mTLS（证书生成 `engine/scripts/gen-tls-certs.sh`，详见 `engine/README.md`）。
+
+> 单实例约束：主程序默认通过 MySQL `GET_LOCK` 保证同一元数据库只有一个实例在跑
+> （重复启动会被拒绝）；cron 统计、OSC 中止、僵尸工单自愈都依赖它。容器编排的
+> 副本数请保持 1，或显式确认多实例的影响后再改 `DisableInstanceLock`。
 
 ---
 

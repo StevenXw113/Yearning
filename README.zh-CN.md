@@ -5,7 +5,7 @@
 </h1>
 </div>
 
-一个强大且本地部署的平台，专为数据库管理员（DBA）和开发人员设计，提供无缝的SQL检测和查询审计。专注于隐私和效率，为MYSQL审计提供直观且安全的环境。
+一个强大且本地部署的平台，专为数据库管理员（DBA）和开发人员设计，提供无缝的SQL检测和查询审计。专注于隐私和效率，为 MySQL、PostgreSQL、MongoDB、Redis、Doris 多类数据源提供直观且安全的审计环境。
 
 ---
 [![OSCS 状态](https://www.oscs1024.com/platform/badge/cookieY/Yearning.svg?size=small)](https://www.murphysec.com/dr/nDuoncnUbuFMdrZsh7)
@@ -20,6 +20,8 @@
 [英文](README.md) | 简体中文 | [日本語](README.ja-JP.md)
 
 ## ✨ 功能
+
+- **多数据源支持**：MySQL、PostgreSQL、MongoDB、Redis、Doris 五类数据源的审计与执行——DDL/DML/查询工单、回滚语句生成、查询审计逐引擎覆盖。
 
 - **AI 助手**：我们的AI助手提供实时SQL优化建议，提升SQL性能。同时支持文本到SQL的转换，允许用户输入自然语言并接收优化后的SQL语句。
   

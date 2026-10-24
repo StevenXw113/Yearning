@@ -19,7 +19,11 @@
 
 [Gemini](https://github.com/cookieY/Yearning) backed
 
-[Vue3]()
+- Vue 3.5 + TypeScript 5（`vue-tsc` 全量类型检查）
+- Vite 5 构建（dev / release 双模式）
+- 状态管理 Pinia（会话持久化见 `src/store/persist.ts`）
+- ant-design-vue 4（CSS-in-JS 主题，运行时暗/亮切换，见 `src/style/theme.ts`）
+- monaco-editor（SQL 高亮 / 补全）
 
 ## Website 官网
 

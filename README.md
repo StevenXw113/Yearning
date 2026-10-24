@@ -5,7 +5,7 @@
 </h1>
 </div>
 
- A robust, locally deployed platform designed for seamless SQL detection and query auditing, tailored specifically for DBAs and developers. Focused on privacy and efficiency, it provides an intuitive and secure environment for MYSQL auditing.
+ A robust, locally deployed platform designed for seamless SQL detection and query auditing, tailored specifically for DBAs and developers. Focused on privacy and efficiency, it provides an intuitive and secure environment for database auditing across MySQL, PostgreSQL, MongoDB, Redis and Doris.
 
 ---
 [![OSCS Status](https://www.oscs1024.com/platform/badge/cookieY/Yearning.svg?size=small)](https://www.murphysec.com/dr/nDuoncnUbuFMdrZsh7)
@@ -19,6 +19,8 @@
 English | [简体中文](README.zh-CN.md) | [日本語](README.ja-JP.md)
 
 ## ✨ Features
+
+- **Multi-Engine Support**: Audit and execute across MySQL, PostgreSQL, MongoDB, Redis and Doris — DDL/DML/query tickets, rollback generation and query auditing for each engine type.
 
 - **AI Assistant**: Our AI assistant offers real-time SQL optimization suggestions, enhancing SQL performance. It also supports text-to-SQL conversion, allowing users to input natural language and receive optimized SQL statements.
   
