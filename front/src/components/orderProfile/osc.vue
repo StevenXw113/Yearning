@@ -7,7 +7,7 @@
 
 <script lang="ts" setup>
   import { onMounted, ref } from 'vue';
-  import { useStore } from '@/store';
+  import { useUserStore } from '@/store';
   import { checkSchema } from '@/lib';
   import { COMMON_URI } from '@/config/request';
   import { useWebSocket } from '@vueuse/core';
@@ -16,7 +16,7 @@
 
   const pre = ref('');
 
-  const store = useStore();
+    const userStore = useUserStore();
 
   const props = defineProps<{
     workId: string;
@@ -39,7 +39,7 @@
           interval: 5000,
           message: 'ping',
         },
-        protocols: [store.state.user.account.token],
+        protocols: [userStore.account.token],
         onMessage: (e, event) => {
           pre.value = event.data;
         },

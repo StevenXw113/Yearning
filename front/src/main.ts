@@ -2,7 +2,8 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import routes from '@/router';
 import Antd from 'ant-design-vue';
-import { store, key } from '@/store/index';
+import { pinia } from '@/store/index';
+import { setupSessionPersistence } from '@/store/persist';
 import i18n from '@/lang';
 import CTable from '@/components/table/index';
 import { extend } from 'dayjs';
@@ -28,11 +29,16 @@ createApp(App)
     addWaterMarker(binding.value.text);
   })
   .use(i18n)
-  .use(store, key)
+  .use(pinia)
   .use(Antd)
   .use(CTable)
   .use(routes)
   .mount('#app');
+
+// 诊断辅助：浏览器控制台可直接查看 store 状态
+(window as any).__pinia = pinia;
+// 会话持久化：user/menu/order 状态写回 sessionStorage 并在刷新时恢复
+setupSessionPersistence();
 
 function addWaterMarker(text: string) {
   const id = '1.23452384164.123412415';

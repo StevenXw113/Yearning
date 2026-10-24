@@ -143,7 +143,7 @@
   import { getFlowProfile, Steps } from '@/apis/flow';
   import CommonMixins from '@/mixins/common';
   import { ref, computed } from 'vue';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import { createSource, Source } from '@/apis/db';
   import { querySchemaList } from '@/apis/source';
   import { EventBus } from '@/lib';
@@ -157,21 +157,21 @@
 
   const checked = ref(false);
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const loading = ref(false);
 
   const idc = computed(() => {
-    return store.state.common.idc;
+    return commonStore.idc;
   });
 
   const flow = computed(() => {
-    return store.state.common.flow;
+    return commonStore.flow;
   });
 
   const steps = ref([] as Steps[]);
 
-  const principalList = computed(() => store.state.common.principal);
+  const principalList = computed(() => commonStore.principal);
 
   let dbForm = ref({
     idc: '',

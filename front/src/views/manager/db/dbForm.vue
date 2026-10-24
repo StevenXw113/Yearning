@@ -133,7 +133,7 @@
 <script lang="ts" setup>
   import { ref, computed, reactive } from 'vue';
   import { Source, createSource as cs } from '@/apis/db';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import { EventBus } from '@/lib';
   import { RuleObject } from 'ant-design-vue/es/form';
   import { useI18n } from 'vue-i18n';
@@ -149,7 +149,7 @@
     key: false,
   });
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const regExp_Name = (rule: RuleObject, value: string) => {
     let pPattern = new RegExp(
@@ -203,14 +203,14 @@
 
   const loading = ref(false);
 
-  const principalList = computed(() => store.state.common.principal);
+  const principalList = computed(() => commonStore.principal);
 
   const idc = computed(() => {
-    return store.state.common.idc;
+    return commonStore.idc;
   });
 
   const flow = computed(() => {
-    return store.state.common.flow;
+    return commonStore.flow;
   });
 
   const db_type = [

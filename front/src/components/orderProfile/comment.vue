@@ -43,7 +43,7 @@
   import customParseFormat from 'dayjs/plugin/customParseFormat';
   import { Comment, postOrderComment } from '@/apis/orderPostApis';
   import { onMounted, ref, nextTick, onUpdated } from 'vue';
-  import { useStore } from '@/store';
+  import { useUserStore } from '@/store';
   import comment from '@/assets/comment/rockets.svg';
   import icon from '@/assets/comment/comment.svg';
   import { useWebSocket } from '@vueuse/core';
@@ -72,7 +72,7 @@
     });
   };
 
-  const store = useStore();
+    const userStore = useUserStore();
 
   const postComment = async () => {
     await postOrderComment({
@@ -80,7 +80,7 @@
       content: content.value,
     });
     data.value.push({
-      username: store.state.user.account.user,
+      username: userStore.account.user,
       time: dayjs().format('YY-MM-DD HH:mm'),
       content: content.value,
       work_id: props.workId,
@@ -108,7 +108,7 @@
           interval: 5000,
           message: 'ping',
         },
-        protocols: [store.state.user.account.token],
+        protocols: [userStore.account.token],
         onMessage: (e, event) => {
           data.value = JSON.parse(event.data);
         },

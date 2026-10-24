@@ -50,7 +50,7 @@
   import { querySchemaList, queryTable } from '@/apis/query';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
   import { HddOutlined } from '@ant-design/icons-vue';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import { TreeNodeProps } from 'ant-design-vue/lib/vc-tree';
 
   // 树高由父级传入（原来写死 700，比右侧 SQL 卡片高出一大截）
@@ -62,7 +62,7 @@
 
   const searchValue = ref<string>('');
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const expandedKeys = ref<string[]>([]);
 
@@ -129,7 +129,7 @@
 
   const showTableData = (key: string) => {
     emit('showTableRef', {
-      source_id: store.state.common.queryInfo.source_id,
+      source_id: commonStore.queryInfo.source_id,
       schema: schema.value,
       sql:
         dbType.value === 2
@@ -147,7 +147,7 @@
 
   const showTableArch = (key: string) => {
     emit('showTableRef', {
-      source_id: store.state.common.queryInfo.source_id,
+      source_id: commonStore.queryInfo.source_id,
       schema: schema.value,
       sql:
         dbType.value === 2
@@ -173,12 +173,12 @@
       gData.value = list;
       dbType.value = list.length > 0 ? (list[0].db_type ?? 0) : 0;
       if (list.length > 0) {
-        store.commit('common/SET_SCHEMA_List', {
+        commonStore.SET_SCHEMA_List({
           schema: list.map((item: { key: string }) => item.key),
           source: route.query.source as string,
           source_id: route.query.source_id as string,
         });
-        store.commit('common/SET_SCHEMA', '');
+        commonStore.SET_SCHEMA('');
       }
     } finally {
       spin();

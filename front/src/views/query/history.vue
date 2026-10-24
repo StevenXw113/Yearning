@@ -35,7 +35,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { useStore } from '@/store';
+  import { useOrderStore } from '@/store';
   import { message } from 'ant-design-vue';
   import ClipboardJS from 'clipboard';
   import { computed } from 'vue';
@@ -45,9 +45,9 @@
 
   const { t } = useI18n();
 
-  const store = useStore();
+    const orderStore = useOrderStore();
 
-  const data = computed(() => store.state.order.history);
+  const data = computed(() => orderStore.history);
 
   clipboard.on('success', (e) => {
     message.info(t('query.clip.is.paste'));

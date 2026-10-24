@@ -77,7 +77,7 @@
   import { onMounted, reactive, ref } from 'vue';
   import { OrderExpr, OrderParams, checkUri } from '@/apis/orderPostApis';
   import { OrderTableData, OrderState } from '@/types';
-  import { useStore } from '@/store';
+  import { useUserStore, useOrderStore } from '@/store';
   import { useI18n } from 'vue-i18n';
   import { tableRef } from '@/components/table';
   import type { TableColumnsType } from 'ant-design-vue';
@@ -111,7 +111,8 @@
 
   const { width } = useElementSize(container);
 
-  const store = useStore();
+    const userStore = useUserStore();
+  const orderStore = useOrderStore();
 
   const tbl = ref();
 
@@ -253,7 +254,7 @@
         autoReconnect: {
           retries: 3,
         },
-        protocols: [store.state.user.account.token],
+        protocols: [userStore.account.token],
         onMessage: (e, event) => {
           let payload = JSON.parse(event.data);
           tblRef.data = groupByProject(payload.payload.data);
@@ -280,7 +281,7 @@
   };
 
   const profile = (record: OrderTableData) => {
-    store.commit('order/ORDER_STORE', record);
+    orderStore.ORDER_STORE(record);
     visible.value = true;
   };
 

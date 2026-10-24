@@ -1,5 +1,4 @@
-import { Module } from 'vuex';
-import { RootStore } from '../types';
+import { defineStore } from 'pinia';
 import { OrderTableData } from '@/types';
 
 export interface orderStore {
@@ -8,33 +7,33 @@ export interface orderStore {
   history: string[];
 }
 
-export const order: Module<orderStore, RootStore> = {
-  namespaced: true,
-  state: {
+// pinia 迁移（原 vuex order 模块）：整模块持久化到 sessionStorage
+export const useOrderStore = defineStore('order', {
+  state: (): orderStore => ({
     order: {} as OrderTableData,
     enabled: true,
     history: [] as string[],
-  },
-  mutations: {
-    ORDER_STORE(state, vl: OrderTableData) {
-      state.order = vl;
+  }),
+  actions: {
+    ORDER_STORE(vl: OrderTableData) {
+      this.order = vl;
     },
-    SET_ORDER_STATUS(state, vl: number) {
-      state.order.status = vl;
+    SET_ORDER_STATUS(vl: number) {
+      this.order.status = vl;
     },
-    IS_ENABLED(state, vl: boolean) {
-      state.enabled = vl;
+    IS_ENABLED(vl: boolean) {
+      this.enabled = vl;
     },
-    SET_QUERY_HISTORY(state, vl: string) {
+    SET_QUERY_HISTORY(vl: string) {
       if (vl === '') {
         return;
       }
-      if (state.history.length < 100) {
-        state.history.unshift(vl);
+      if (this.history.length < 100) {
+        this.history.unshift(vl);
       } else {
-        state.history.pop();
-        state.history.unshift(vl);
+        this.history.pop();
+        this.history.unshift(vl);
       }
     },
   },
-};
+});

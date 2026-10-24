@@ -48,7 +48,7 @@
 
 <script lang="ts" setup>
   import { computed, ref, watch } from 'vue';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import router from '@/router';
   import { message } from 'ant-design-vue';
   import { useI18n } from 'vue-i18n';
@@ -65,7 +65,7 @@
 
   const { toClipboard } = useClipboard();
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const executeTime = ref(0);
 
@@ -99,7 +99,7 @@
     XLSX.writeFile(workbook, 'Yearning_Table_Data.xlsx');
   };
 
-  const sock = computed(() => store.state.common.sock);
+  const sock = computed(() => commonStore.sock);
 
   watch(
     () => sock.value.data as any,
@@ -109,7 +109,7 @@
   );
 
   const runResults = (schema: string, sql: string) => {
-    store.commit('common/SET_SPINNING');
+    commonStore.SET_SPINNING();
     const encoded: Uint8Array = encode({ type: 4, sql: sql, schema: schema });
     sock.value.send(encoded);
     const ws = sock.value.ws as any;
@@ -118,7 +118,7 @@
       return;
     }
     message.error(t('query.ws.error'));
-    store.commit('common/SET_DISABLED_SPINNING');
+    commonStore.SET_DISABLED_SPINNING();
   };
 
   const recv = async (e: any) => {
@@ -146,7 +146,7 @@
         resp.audit ? message.warning(resp.audit) : null;
       }
     }
-    store.commit('common/SET_DISABLED_SPINNING');
+    commonStore.SET_DISABLED_SPINNING();
   };
 
   const copy = async (text: string) => {

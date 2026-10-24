@@ -66,7 +66,7 @@
     getOIDCState,
   } from '@/apis/loginApi';
   import router from '@/router';
-  import { useStore } from '@/store';
+  import { useUserStore, useMenuStore } from '@/store';
   import { useRoute } from 'vue-router';
   import { debounce } from 'lodash-es';
   import { message } from 'ant-design-vue';
@@ -81,7 +81,8 @@
   const mfaRequired = ref(false);
   const mfaForm = reactive({ ticket: '', code: '', user: '' });
 
-  const store = useStore();
+    const userStore = useUserStore();
+  const menuStore = useMenuStore();
   const route = useRoute();
 
   const oidcEnabled = ref(false);
@@ -100,9 +101,18 @@
   onMounted(() => {
     fetchOIDC();
     if (query.oidcLogin) {
+      // OIDC 回调把登录态放在查询参数里（token/user/real_name/is_record）。
+      // 显式构造 LoginRespPayload：route.query 的值是 string|string[]，
+      // 直接透传曾让 is_record 以字符串入 store，导致 is_record === 1 判断失效。
       const { oidcLogin, ...rest } = query;
-      store.commit('user/USER_STORE', rest);
-      store.commit('menu/CHANGE_SELECTED', ['/home']);
+      userStore.USER_STORE({
+        token: String(rest.token ?? ''),
+        user: String(rest.user ?? ''),
+        real_name: String(rest.real_name ?? ''),
+        is_record: Number(rest.is_record ?? 2),
+        rule: String(rest.rule ?? ''),
+      });
+      menuStore.CHANGE_SELECTED(['/home']);
       router.replace('/home');
     }
   });
@@ -124,8 +134,8 @@
       mfaRequired.value = true;
       return;
     }
-    store.commit('user/USER_STORE', data.payload);
-    store.commit('menu/CHANGE_SELECTED', ['/home']);
+    userStore.USER_STORE(data.payload);
+    menuStore.CHANGE_SELECTED(['/home']);
     router.replace('/home');
   }, 200);
 
@@ -137,8 +147,8 @@
       message.error(data.text);
       return;
     }
-    store.commit('user/USER_STORE', data.payload);
-    store.commit('menu/CHANGE_SELECTED', ['/home']);
+    userStore.USER_STORE(data.payload);
+    menuStore.CHANGE_SELECTED(['/home']);
     router.replace('/home');
   }, 200);
 

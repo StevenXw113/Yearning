@@ -75,7 +75,7 @@
   import { useI18n } from 'vue-i18n';
   import { tableRef } from '@/components/table';
   import { useElementSize, useWebSocket } from '@vueuse/core';
-  import { useStore } from '@/store';
+  import { useUserStore } from '@/store';
   import { message } from 'ant-design-vue';
 
   interface propsAttr {
@@ -90,7 +90,7 @@
 
   const { t } = useI18n();
 
-  const store = useStore();
+    const userStore = useUserStore();
 
   const profile = ref();
 
@@ -150,7 +150,7 @@
             message.error(t('query.ws.error'));
           },
         },
-        protocols: [store.state.user.account.token],
+        protocols: [userStore.account.token],
         // 挂载时那次查询可能早于 socket 打开而被丢弃，连接成功后再补发一次，
         // 否则页面会一直停在「暂无数据」。
         onConnected: () => tbl.value?.manual(),

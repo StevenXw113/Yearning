@@ -58,19 +58,19 @@
   import ListApp from '@/components/listApp/listApp.vue';
   import QueryApp from '@/components/listApp/queryApp.vue';
   import { useI18n } from 'vue-i18n';
-  import { useStore } from '@/store';
+  import { useMenuStore } from '@/store';
   import { querySourceList, IKindCount } from '@/apis/source';
 
   const { t } = useI18n();
 
-  const store = useStore();
+    const menuStore = useMenuStore();
 
   const activeKey = computed({
     get() {
-      return store.state.menu.activeKey;
+      return menuStore.activeKey;
     },
     set(val: string) {
-      store.commit('menu/CHANGE_ACTIVE_TABS', val);
+      menuStore.CHANGE_ACTIVE_TABS(val);
     },
   });
 

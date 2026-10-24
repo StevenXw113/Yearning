@@ -1,5 +1,5 @@
 <template>
-  <div v-watermark="{ text: store.state.user.account.user }">
+  <div v-watermark="{ text: userStore.account.user }">
     <a-layout style="min-height: 100vh">
       <!-- 窄屏（<992px）自动收起成 0 宽，靠顶栏的折叠图标展开，
            取代原来那个永远打不开的 drawer（is_open 全文件没人置 true） -->
@@ -74,7 +74,7 @@
                 </a-tooltip>
                 <a-dropdown>
                 <span class="user-entry user-name">{{
-                  store.state.user.account.user
+                  userStore.account.user
                 }}</span>
                 <template #overlay>
                   <a-menu @click="changeUser">
@@ -120,7 +120,7 @@
 <script setup lang="ts">
   import { Copyright } from '@/config/vars';
   import Menu from '@/components/menu/menu.vue';
-  import { useStore } from '@/store';
+  import { useUserStore } from '@/store';
   import { useRouter } from 'vue-router';
   import {
     FullscreenOutlined,
@@ -134,7 +134,7 @@
   // 只用系统图标（public/icon.png），不再用带文字的整张 logo，省掉那一段横向空白
   const logoUrl = `${import.meta.env.BASE_URL}icon.png`;
 
-  const store = useStore();
+    const userStore = useUserStore();
 
   const router = useRouter();
 
@@ -152,7 +152,7 @@
     const key = e.key as string;
     if (key === '/exist') {
       sessionStorage.clear();
-      store.state.user.account.token = '';
+      userStore.account.token = '';
       router.push('/login');
     } else {
       router.push(key);

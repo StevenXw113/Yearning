@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import NProgress from 'nprogress';
-import { store } from './store';
+import { pinia, useUserStore } from './store';
+const userStore = useUserStore(pinia);
 
 NProgress.configure({ showSpinner: false });
 
@@ -240,7 +241,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   NProgress.start();
   // user.account 可能为 null/undefined（storage 还原或 plugin 整体覆盖时的边界），用可选链保护
-  const token = store.state.user?.account?.token;
+  const token = userStore.account?.token;
   if (!token && to.name !== 'login') {
     // 判断是否已经登录且前往的页面不是登录页
     next(false);

@@ -17,7 +17,7 @@
       <span>{{ $t('menu.order.apply') }}</span>
     </a-menu-item>
     <a-menu-item
-      v-if="store.state.user.account.is_record === 1"
+      v-if="userStore.account.is_record === 1"
       key="/comptroller/order/record"
     >
       <AreaChartOutlined />
@@ -35,7 +35,7 @@
       </a-menu-item>
     </a-sub-menu>
     <a-sub-menu
-      v-if="store.state.user.account.user === 'admin'"
+      v-if="userStore.account.user === 'admin'"
       :title="$t('menu.manage')"
     >
       <template #icon>
@@ -94,18 +94,19 @@
     CrownOutlined,
     UserOutlined,
   } from '@ant-design/icons-vue';
-  import { useStore } from '@/store';
+  import { useUserStore, useMenuStore } from '@/store';
   import { ref } from 'vue';
   import router from '@/router';
 
   const emit = defineEmits(['close']);
 
-  const store = useStore();
+    const userStore = useUserStore();
+  const menuStore = useMenuStore();
 
-  const selectedKey = ref(store.state.menu.selectedKey);
+  const selectedKey = ref(menuStore.selectedKey);
 
   const changeMenu = (vl: { keyPath: string[]; key: string }) => {
-    store.commit('menu/CHANGE_SELECTED', vl.keyPath);
+    menuStore.CHANGE_SELECTED(vl.keyPath);
     router.push(vl.key).finally(() => emit('close'));
   };
 </script>

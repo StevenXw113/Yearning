@@ -58,10 +58,10 @@
 
 <script lang="ts" setup>
   import { DBExpr } from '@/apis/db';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import { UnwrapRef, reactive, ref, unref, computed } from 'vue';
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const advanced = ref(false);
 
@@ -75,7 +75,7 @@
   });
 
   const idc = computed(() => {
-    return store.state.common.idc;
+    return commonStore.idc;
   });
 
   const initExpr = Object.assign({}, expr);

@@ -14,7 +14,7 @@
         >
           <a-form-item :label="$t('user.form.user')">
             <a-input
-              v-model:value="store.state.user.account.user"
+              v-model:value="userStore.account.user"
               disabled
             ></a-input>
           </a-form-item>
@@ -76,7 +76,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { useStore } from '@/store';
+  import { useUserStore } from '@/store';
   import { onMounted, ref } from 'vue';
   import CommonMixins from '@/mixins/common';
   import PageHeader from '@/components/pageHeader/pageHeader.vue';
@@ -85,7 +85,7 @@
   import { getUserInfo, RegisterForm, updateUserInfo } from '@/apis/user';
   import { useI18n } from 'vue-i18n';
 
-  const store = useStore();
+    const userStore = useUserStore();
 
   const formItem = ref<RegisterForm>({
     password: '',

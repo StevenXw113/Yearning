@@ -1,5 +1,6 @@
 import { COMMON_URI } from '@/config/request';
-import { store } from '@/store';
+import { pinia, useUserStore } from '@/store';
+const userStore = useUserStore(pinia);
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -36,7 +37,7 @@ export async function chatStream(
   onDelta: (text: string) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const token = store.state.user?.account?.token;
+  const token = userStore.account?.token;
   const res = await fetch(`${COMMON_URI}/chat`, {
     method: 'POST',
     headers: {

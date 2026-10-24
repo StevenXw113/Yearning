@@ -1,5 +1,4 @@
-import { Module } from 'vuex';
-import { RootStore } from '../types';
+import { defineStore } from 'pinia';
 
 export interface lightWord {
   meta: string;
@@ -10,14 +9,14 @@ export interface highlightStore {
   highlight: { [key: string]: lightWord[] };
 }
 
-export const highlight: Module<highlightStore, RootStore> = {
-  namespaced: true,
-  state: {
+// pinia 迁移（原 vuex highlight 模块）：不持久化
+export const useHighlightStore = defineStore('highlight', {
+  state: (): highlightStore => ({
     highlight: {},
-  },
-  mutations: {
-    SAVE_HIGHLIGHT(state, word) {
-      state.highlight[word.key] = word.highlight;
+  }),
+  actions: {
+    SAVE_HIGHLIGHT(word: { key: string; highlight: lightWord[] }) {
+      this.highlight[word.key] = word.highlight;
     },
   },
-};
+});

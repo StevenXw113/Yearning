@@ -1,10 +1,8 @@
+import { defineStore } from 'pinia';
 import { getFlowList, RespTPLs } from '@/apis/flow';
 import { Res } from '@/config/request';
-import { encode } from '@msgpack/msgpack';
 import { UseWebSocketReturn } from '@vueuse/core';
 import { AxiosResponse } from 'axios';
-import { Module } from 'vuex';
-import { RootStore } from '../types';
 
 export interface commonStore {
   idc: string[];
@@ -24,9 +22,9 @@ export interface QueryInfo {
   schema: string;
 }
 
-export const common: Module<commonStore, RootStore> = {
-  namespaced: true,
-  state: {
+// pinia 迁移（原 vuex common 模块）：不持久化
+export const useCommonStore = defineStore('common', {
+  state: (): commonStore => ({
     idc: [] as string[],
     flow: [] as RespTPLs[],
     queryInfo: {} as QueryInfo,
@@ -36,41 +34,41 @@ export const common: Module<commonStore, RootStore> = {
     sock: {} as UseWebSocketReturn<any>,
     schema: '',
     principal: [],
-  },
-  mutations: {
-    GET_IDC(state, idc) {
-      state.idc = idc;
+  }),
+  actions: {
+    GET_IDC(idc: string[]) {
+      this.idc = idc;
     },
-    GET_FLOWS(state) {
+    GET_FLOWS() {
       getFlowList().then(
-        (res: AxiosResponse<Res<RespTPLs[]>>) => (state.flow = res.data.payload)
+        (res: AxiosResponse<Res<RespTPLs[]>>) => (this.flow = res.data.payload)
       );
     },
-    SET_SOURCE_SCHEMA(state, query) {
-      state.queryInfo = query;
+    SET_SOURCE_SCHEMA(query: QueryInfo) {
+      this.queryInfo = query;
     },
-    SET_SCHEMA_List(state, f) {
-      state.schemaList = f.schema;
-      state.queryInfo.source = f.source;
-      state.queryInfo.source_id = f.source_id;
+    SET_SCHEMA_List(f: { schema: string[]; source: string; source_id: string }) {
+      this.schemaList = f.schema;
+      this.queryInfo.source = f.source;
+      this.queryInfo.source_id = f.source_id;
     },
-    SET_SCHEMA(state, v) {
-      state.schema = v;
+    SET_SCHEMA(v: string) {
+      this.schema = v;
     },
-    SET_SPINNING(state) {
-      state.spinning = !state.spinning;
+    SET_SPINNING() {
+      this.spinning = !this.spinning;
     },
-    SET_DISABLED_SPINNING(state) {
-      state.spinning = false;
+    SET_DISABLED_SPINNING() {
+      this.spinning = false;
     },
-    ORDER_SET_SQL(state, vl) {
-      state.sql = vl;
+    ORDER_SET_SQL(vl: string) {
+      this.sql = vl;
     },
-    QUERY_CONN(state, vl) {
-      state.sock = vl;
+    QUERY_CONN(vl: UseWebSocketReturn<any>) {
+      this.sock = vl;
     },
-    DB_SET_PRINCIPAL(state, vl) {
-      state.principal = vl;
+    DB_SET_PRINCIPAL(vl: any[]) {
+      this.principal = vl;
     },
   },
-};
+});

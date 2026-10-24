@@ -42,7 +42,7 @@
   } from '@/apis/orderPostApis';
   import { ISource, querySourceList } from '@/apis/source';
   import { onMounted, reactive, ref } from 'vue';
-  import { useStore } from '@/store';
+  import { useOrderStore } from '@/store';
   import { useRoute, useRouter } from 'vue-router';
   import { useI18n } from 'vue-i18n';
   import { tableRef } from '../table';
@@ -119,7 +119,7 @@
 
   const router = useRouter();
 
-  const store = useStore();
+    const orderStore = useOrderStore();
 
   const currentRolling = async (vl: number) => {
     const { data } = await getOrderRollSQLS(props.workId, vl);
@@ -131,7 +131,7 @@
   // 供「提交换回滚」决定怎么拼 SQL、「重新提交」决定跳转时带什么类型。
   const loadSourceType = async () => {
     try {
-      const order = store.state.order.order;
+      const order = orderStore.order;
       const { data } = await querySourceList(order.type === 1 ? 'dml' : 'ddl');
       const hit = (data.payload as ISource[] | null)?.find(
         (i) => i.source_id === order.source_id
@@ -148,7 +148,7 @@
       message.warning(t('order.roll.tips'));
       return;
     }
-    const wrapper = Object.assign({}, store.state.order.order);
+    const wrapper = Object.assign({}, orderStore.order);
     wrapper.delay = 'none';
     // MongoDB 一张工单只承载一条命令：回滚语句可能有多条（如 createIndexes 每个索引一条），
     // 逐条提交；用 \n 拼成一条会被提交时的硬保底当成非法 JSON 拒掉。
@@ -169,10 +169,10 @@
     router.push({
       name: 'apply/order',
       query: {
-        type: store.state.order.order.type,
-        idc: store.state.order.order.idc,
-        source: store.state.order.order.source,
-        source_id: store.state.order.order.source_id,
+        type: orderStore.order.type,
+        idc: orderStore.order.idc,
+        source: orderStore.order.source,
+        source_id: orderStore.order.source_id,
         // 不带 db_type 会被申请页当成 MySQL：Mongo 提示条与集合名提取都不生效
         db_type: dbType.value,
         remark: 'true',

@@ -80,7 +80,7 @@
   import Modal from './modal.vue';
   import Switch from './switch.vue';
   import { computed, onMounted, onUnmounted, ref } from 'vue';
-  import { useStore } from '@/store';
+  import { useUserStore, useCommonStore } from '@/store';
   import { ArrowLeftOutlined } from '@ant-design/icons-vue';
   import { checkIsQuery, queryUndoOrder } from '@/apis/query';
   import { queryHighlight } from '@/apis/source';
@@ -135,7 +135,8 @@
 
   const ss = ref();
 
-  const store = useStore();
+    const userStore = useUserStore();
+  const commonStore = useCommonStore();
 
   const route = useRoute();
 
@@ -143,7 +144,7 @@
 
   let monaco_editor: any = null;
 
-  const spinning = computed(() => store.state.common.spinning);
+  const spinning = computed(() => commonStore.spinning);
 
   const onEdit = (targetKey: string, action: string) => {
     if (action === 'add') {
@@ -201,17 +202,17 @@
           },
         },
         onDisconnected: () => {
-          store.commit('common/SET_DISABLED_SPINNING');
+          commonStore.SET_DISABLED_SPINNING();
         },
         heartbeat: {
           interval: 5000,
           message: 'ping',
         },
-        protocols: [store.state.user.account.token],
+        protocols: [userStore.account.token],
       }
     );
 
-    store.commit('common/QUERY_CONN', sock);
+    commonStore.QUERY_CONN(sock);
   };
 
   const registerCompletionItemProvider = async (
@@ -249,7 +250,7 @@
     monaco_editor !== null ? monaco_editor.dispose() : null;
     registerCompletionItemProvider(
       route.query.source_id as string,
-      store.state.common.schema,
+      commonStore.schema,
       true,
       nonFields.value
     );

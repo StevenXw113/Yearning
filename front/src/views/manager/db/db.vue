@@ -21,20 +21,20 @@
   import { onMounted } from 'vue';
   import DBForm from './dbForm.vue';
   import DBTable from './dbTable.vue';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import { queryIDCList } from '@/apis/source';
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const getPrincipal = async () => {
     const { data } = await updateUserPrincipal();
-    store.commit('common/DB_SET_PRINCIPAL', data.payload);
+    commonStore.DB_SET_PRINCIPAL(data.payload);
   };
 
   onMounted(async () => {
     const { data } = await queryIDCList();
-    store.commit('common/GET_IDC', data.payload);
-    store.commit('common/GET_FLOWS');
+    commonStore.GET_IDC(data.payload);
+    commonStore.GET_FLOWS();
     getPrincipal();
   });
 </script>

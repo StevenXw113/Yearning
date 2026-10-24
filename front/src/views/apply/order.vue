@@ -237,7 +237,7 @@
   import CommonMixins from '@/mixins/common';
   import { readSQLFile } from '@/lib';
   import router from '@/router';
-  import { useStore } from '@/store';
+  import { useCommonStore } from '@/store';
   import { useI18n } from 'vue-i18n';
   import { debounce } from 'lodash-es';
   import { createSQLToken } from '@/components/editor/impl';
@@ -265,7 +265,7 @@
 
   const route = useRoute();
 
-  const store = useStore();
+    const commonStore = useCommonStore();
 
   const enabled = ref(true);
 
@@ -638,7 +638,7 @@
     fetchHighLight();
 
     route.query.remark === 'true'
-      ? editor.value.ChangeEditorText(store.state.common.sql)
+      ? editor.value.ChangeEditorText(commonStore.sql)
       : null;
 
     window.onbeforeunload = function () {

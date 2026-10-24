@@ -232,7 +232,7 @@
   import Step from '@/components/steps/steps.vue';
   import router from '@/router';
   import OSC from './osc.vue';
-  import { useStore } from '@/store';
+  import { useUserStore, useOrderStore, useCommonStore } from '@/store';
   import { computed, reactive, ref, onMounted } from 'vue';
   import { tableRef } from '@/components/table';
   import FetchMixins from '@/mixins/fetch';
@@ -268,7 +268,9 @@
 
   const sqls = ref('');
 
-  const store = useStore();
+    const userStore = useUserStore();
+  const orderStore = useOrderStore();
+  const commonStore = useCommonStore();
 
   // SQL 检测结果表（列定义来自 JunoMixin）；不分页，可拖拽列宽
   const tblRef = reactive<tableRef>({
@@ -281,13 +283,13 @@
 
   // 初始禁用：审核人须先点一次「SQL检测」，且没有错误级命中（level===1）才解锁「同意」；
   // 警告/观察级命中不拦提交。
-  const enabled = ref(store.state.order.order.type !== 2);
+  const enabled = ref(orderStore.order.type !== 2);
 
   const spin = ref(false);
 
   const route = useRoute();
 
-  const order = computed(() => store.state.order.order);
+  const order = computed(() => orderStore.order);
 
   const { fetchProfileSQL, orderProfileArch } = FetchMixins();
 
@@ -388,9 +390,9 @@
           interval: 5000,
           message: 'ping',
         },
-        protocols: [store.state.user.account.token],
+        protocols: [userStore.account.token],
         onMessage: (e, event) => {
-          store.commit('order/SET_ORDER_STATUS', parseInt(event.data, 10));
+          orderStore.SET_ORDER_STATUS(parseInt(event.data, 10));
         },
       }
     );
@@ -409,7 +411,7 @@
       if (orderProfileArch.timeline[order.value.current_step] !== undefined) {
         let currentStep = orderProfileArch.timeline[order.value.current_step];
         isCurrent.value = currentStep.auditor.indexOf(
-          store.state.user.account.user
+          userStore.account.user
         );
       }
     }
@@ -417,7 +419,7 @@
     orderEditor.value.ChangeEditorText(sql.data.payload.sqls);
 
     sqls.value = sql.data.payload.sqls;
-    store.commit('common/ORDER_SET_SQL', sql.data.payload.sqls);
+    commonStore.ORDER_SET_SQL(sql.data.payload.sqls);
   });
 </script>
 
