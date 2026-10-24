@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func TestMongoRows(t *testing.T) {
@@ -38,7 +37,7 @@ func TestMongoRows(t *testing.T) {
 }
 
 func TestMongoDisplay(t *testing.T) {
-	id := primitive.NewObjectID()
+	id := bson.NewObjectID()
 	if got := mongoDisplay(id); got != id.Hex() {
 		t.Errorf("ObjectID 应转 hex, got %v", got)
 	}
@@ -50,7 +49,7 @@ func TestMongoDisplay(t *testing.T) {
 	}
 	// Mongo 的 Date 以 UTC 存储，展示按本地时区（东八区下同一时刻是 11:04:05）
 	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	if got, want := mongoDisplay(primitive.NewDateTimeFromTime(ts)), ts.Local().Format("2006-01-02 15:04:05"); got != want {
+	if got, want := mongoDisplay(bson.NewDateTimeFromTime(ts)), ts.Local().Format("2006-01-02 15:04:05"); got != want {
 		t.Errorf("时间应按本地时区格式化, got %v want %v", got, want)
 	}
 }
@@ -88,7 +87,8 @@ func TestMongoCommandIntegration(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	// v2 起 Connect 不再收 ctx
+	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
 		t.Fatal(err)
 	}

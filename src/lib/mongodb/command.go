@@ -10,7 +10,7 @@ import (
 	"errors"
 	"strings"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // 变更类型，取值与工单的 Type 对齐（vars.DDL=0 / vars.DML=1）

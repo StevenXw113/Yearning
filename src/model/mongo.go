@@ -12,9 +12,9 @@ import (
 
 	"Yearning-go/src/lib/enc"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // DBTypeMongoDB 数据源类型：0 mysql（默认）、1 PostgreSQL、2 mongodb（另见 postgresql.go / redis.go）
@@ -55,7 +55,8 @@ func (s *CoreDataSource) ConnectMongo() (*mongo.Client, error) {
 func (s *CoreDataSource) ConnectMongoWith(password string) (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), MongoTimeout)
 	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().
+	// v2 起 Connect 不再收 ctx:连接建立的时限由客户端选项控制(下方已设)
+	client, err := mongo.Connect(options.Client().
 		ApplyURI(MongoURI(s, password)).
 		SetConnectTimeout(MongoTimeout).
 		SetServerSelectionTimeout(MongoTimeout))

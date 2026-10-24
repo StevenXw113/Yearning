@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	driver "go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	driver "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // indexWatchInterval 进度轮询间隔
@@ -121,7 +121,11 @@ func asMapOf(v interface{}) (map[string]interface{}, bool) {
 	case map[string]interface{}:
 		return x, true
 	case bson.D:
-		return x.Map(), true
+		m := bson.M{}
+		for _, e := range x {
+			m[e.Key] = e.Value
+		}
+		return m, true
 	}
 	return nil, false
 }

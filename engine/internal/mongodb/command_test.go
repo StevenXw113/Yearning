@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	driver "go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	driver "go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func cmd(s string) bson.D {
@@ -132,7 +132,8 @@ func TestExecuteRollbackIntegration(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	client, err := driver.Connect(ctx, options.Client().ApplyURI(uri))
+	// v2 起 Connect 不再收 ctx
+	client, err := driver.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
 		t.Fatal(err)
 	}

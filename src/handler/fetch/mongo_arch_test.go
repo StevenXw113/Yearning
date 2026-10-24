@@ -3,7 +3,7 @@ package fetch
 import (
 	"testing"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // Mongo 的索引清单要摊成与 MySQL SHOW INDEX 一样的「一个索引键一行」，

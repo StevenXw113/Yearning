@@ -7,7 +7,7 @@ import (
 	"Yearning-go/src/lib/mongodb"
 	"Yearning-go/src/model"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func init() { register(model.DBTypeMongoDB, mongoEngine{}) }

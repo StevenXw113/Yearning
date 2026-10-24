@@ -20,9 +20,8 @@ import (
 
 	"github.com/cookieY/yee"
 	"github.com/vmihailenco/msgpack/v5"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"golang.org/x/net/websocket"
 	"io"
 )
@@ -261,7 +260,11 @@ func asMap(v interface{}) (bson.M, bool) {
 	case map[string]interface{}:
 		return bson.M(x), true
 	case bson.D:
-		return x.Map(), true
+		m := bson.M{}
+		for _, e := range x {
+			m[e.Key] = e.Value
+		}
+		return m, true
 	}
 	return nil, false
 }
@@ -282,9 +285,9 @@ func mongoDisplay(v interface{}) interface{} {
 	switch x := v.(type) {
 	case nil, string, bool, int32, int64, float64:
 		return x
-	case primitive.ObjectID:
+	case bson.ObjectID:
 		return x.Hex()
-	case primitive.DateTime:
+	case bson.DateTime:
 		return x.Time().Format("2006-01-02 15:04:05")
 	case time.Time:
 		return x.Format("2006-01-02 15:04:05")

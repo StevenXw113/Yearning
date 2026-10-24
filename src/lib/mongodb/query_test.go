@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // cmd 把 relaxed 扩展 JSON 解析成 bson.D（测试用）。
