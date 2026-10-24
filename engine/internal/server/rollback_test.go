@@ -22,6 +22,9 @@ func TestLiteral(t *testing.T) {
 		{int64(12), "12"},
 		{true, "1"},
 		{time.Date(2026, 9, 11, 10, 0, 0, 0, time.UTC), "'2026-09-11 10:00:00'"},
+		// DATETIME(6)/TIMESTAMP(6) 的微秒必须保留，截断到秒会把回滚本身写坏
+		{time.Date(2026, 9, 11, 10, 0, 0, 123456000, time.UTC), "'2026-09-11 10:00:00.123456'"},
+		{time.Date(2026, 9, 11, 10, 0, 0, 120000000, time.UTC), "'2026-09-11 10:00:00.12'"},
 	}
 	for _, c := range cases {
 		if got := literal(c.in); got != c.want {
@@ -33,6 +36,22 @@ func TestLiteral(t *testing.T) {
 func TestHasLimit(t *testing.T) {
 	if !hasLimit("ORDER BY id LIMIT 3") || hasLimit("ORDER BY id") {
 		t.Fatal("hasLimit 判定错误")
+	}
+}
+
+// TestRollbackBuilderSkipsODKUAndReplace 回归：REPLACE / ON DUPLICATE KEY UPDATE
+// 会改写工单之前就存在的行，按显式主键生成 DELETE 回滚会把那行旧行删掉。
+// 这类语句必须返回空（宁可不给回滚），且判定在建连查元数据之前就能完成（离线可测）。
+func TestRollbackBuilderSkipsODKUAndReplace(t *testing.T) {
+	rb := newRollbackBuilder(nil, "")
+	ctx := context.Background()
+	for _, s := range []string{
+		"INSERT INTO t (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = VALUES(name)",
+		"REPLACE INTO t (id, name) VALUES (1, 'a')",
+	} {
+		if got := rb.build(ctx, s); got != "" {
+			t.Fatalf("不应生成回滚语句（会删掉工单前就存在的行）: %s -> %s", s, got)
+		}
 	}
 }
 

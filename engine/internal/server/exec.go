@@ -42,3 +42,18 @@ func orderType(t int32) string {
 	}
 	return "ddl"
 }
+
+// affectRowOverLimit 判断真实影响行数是否超过规则集上限（0 = 不限制）。
+// DML 工单用 MaxAffectRows，DDL 工单用 MaxDdlAffectRows，与开关文案语义一致；
+// 三条 SQL 执行路径（mysql / pg / doris）共用，执行期逐条语句比对。
+func affectRowOverLimit(rules *enginev1.AuditRole, tp string, rows uint32) (bool, uint32) {
+	var limit uint32
+	if rules != nil {
+		if tp == "dml" {
+			limit = rules.GetMaxAffectRows()
+		} else {
+			limit = rules.GetMaxDdlAffectRows()
+		}
+	}
+	return limit > 0 && rows > limit, limit
+}

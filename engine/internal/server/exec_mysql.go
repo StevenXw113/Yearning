@@ -118,6 +118,18 @@ func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*engin
 		if n, err := res.RowsAffected(); err == nil {
 			rec.AffectRows = uint32(n)
 		}
+		// 规则集影响行数上限：超限即中止（已执行的不可撤回，但不再放行后续语句）
+		if over, limit := affectRowOverLimit(req.Rules, orderType(req.Order.Type), rec.AffectRows); over {
+			rec.Error = fmt.Sprintf("影响行数 %d 超过规则集上限 %d，已中止执行", rec.AffectRows, limit)
+			rec.Status = "执行失败"
+			rec.Level = 1
+			recs = append(recs, rec)
+			if dmlTx {
+				_ = tx.Rollback()
+			}
+			// 与执行失败路径一致：已生效的部分改动仍要抓回滚语句
+			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: captureRollback(ctx, blc, db)}, nil
+		}
 		rec.Status = "已执行"
 		recs = append(recs, rec)
 	}

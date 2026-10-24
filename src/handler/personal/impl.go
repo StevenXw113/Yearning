@@ -84,17 +84,26 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string, dbType int) (*Query, er
 	if !factory.IsValidIdentifier(schema) {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
 	}
-	// 切库：MySQL 用 use，pg 用 SET search_path（pg 的「库」映射为 schema）
-	var err error
+	// 切库：MySQL 用 use，pg 用 SET search_path（pg 的「库」映射为 schema）。
+	// 两者都是会话状态，必须与查询落在同一条连接上：database/sql 池上直接 Exec
+	// 只影响当时那条连接，断线重连/换连接后会话状态丢失，查询会落到错误的库。
+	// 这里用事务把「切库 + 查询」钉在同一条连接上，查询结束随 Rollback 释放。
+	tx, err := db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
 	if dbType == model.DBTypePostgreSQL {
-		_, err = db.Exec(fmt.Sprintf(`SET search_path TO "%s"`, factory.EscapePgIdentifier(schema)))
+		_, err = tx.Exec(fmt.Sprintf(`SET search_path TO "%s"`, factory.EscapePgIdentifier(schema)))
 	} else {
-		_, err = db.Exec(fmt.Sprintf("use `%s`", factory.EscapeIdentifier(schema)))
+		_, err = tx.Exec(fmt.Sprintf("use `%s`", factory.EscapeIdentifier(schema)))
 	}
 	if err != nil {
+		// 切库失败继续查会查到默认库的数据，必须中止（schema 已通过标识符校验，非空）
 		logger.LogCreator().Error(err)
+		return nil, err
 	}
-	rows, err := db.Queryx(m.SQL)
+	rows, err := tx.Queryx(m.SQL)
 
 	if err != nil {
 		return nil, err

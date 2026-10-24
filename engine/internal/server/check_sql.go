@@ -65,6 +65,12 @@ func checkSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckRe
 			// 影响行数估算：MySQL 的 AST 支持，直接做（不再用 if engine==MYSQL 区分）
 			if node, ok := mysqlparser.GetOmniNode(parsed[0].AST); ok {
 				rec.AffectRows = estimateRows(ctx, &db, req.Source, req.Schema, node, text)
+				// 审核期用估算值比对规则集上限（执行期还会用真实影响行数再比对一次）；
+				// 估算只覆盖 DML，DDL 工单的 MaxDDLAffectRows 由执行期兜底
+				if over, limit := affectRowOverLimit(req.Rule, "dml", rec.AffectRows); over {
+					rec.Error = fmt.Sprintf("预估影响行数 %d 超过规则集上限 %d", rec.AffectRows, limit)
+					rec.Status, rec.Level = "审核不通过", 1
+				}
 			}
 		}
 		recs = append(recs, rec)

@@ -59,6 +59,12 @@ func (b *rollbackBuilder) build(ctx context.Context, text string) string {
 	case *ast.DeleteStmt:
 		return b.delete(ctx, text, n)
 	case *ast.InsertStmt:
+		// REPLACE / ON DUPLICATE KEY UPDATE 会改写工单之前就存在的行：
+		// 按显式主键生成 DELETE 回滚会把那行旧行删掉（数据丢失），宁可不给回滚。
+		// binlog 路径能精确还原这类改写，不经过这里。
+		if n.IsReplace || len(n.OnDuplicateKey) > 0 {
+			return ""
+		}
 		return b.insert(ctx, n)
 	}
 	return ""
@@ -413,7 +419,9 @@ func literal(v any) string {
 		}
 		return "0"
 	case time.Time:
-		return quote(x.Format("2006-01-02 15:04:05"))
+		// 必须保留微秒：DATETIME(6)/TIMESTAMP(6) 截断到秒会把回滚本身写坏。
+		// .999999 会省略尾部零，零微秒的时间仍渲染成不带小数位的经典格式。
+		return quote(x.Format("2006-01-02 15:04:05.999999"))
 	default:
 		return quote(fmt.Sprint(x))
 	}
