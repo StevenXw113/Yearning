@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/cookieY/yee"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/net/websocket"
 	"gorm.io/gorm"
 	"io"

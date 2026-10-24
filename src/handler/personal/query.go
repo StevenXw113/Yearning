@@ -25,7 +25,7 @@ import (
 	"errors"
 	"github.com/cookieY/sqlx"
 	"github.com/cookieY/yee"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/net/websocket"
 	"gorm.io/gorm"

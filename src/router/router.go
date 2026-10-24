@@ -36,7 +36,7 @@ import (
 
 	"github.com/cookieY/yee"
 	"github.com/cookieY/yee/middleware"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func SuperManageGroup() yee.HandlerFunc {

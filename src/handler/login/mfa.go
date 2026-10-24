@@ -34,12 +34,12 @@ type mfaLoginForm struct {
 
 // mfaTicket 签发 MFA 中间票据：仅供第二步换票，不含任何权限声明
 func mfaTicket(username string) (string, error) {
-	t := jwt.New(jwt.SigningMethodHS256)
-	claims := t.Claims.(jwt.MapClaims)
-	claims["mfa_user"] = username
-	claims["iat"] = time.Now().Unix()
-	claims["exp"] = time.Now().Add(mfaTicketTTL).Unix()
-	return t.SignedString(model.JwtSigningKey())
+	claims := jwt.MapClaims{
+		"mfa_user": username,
+		"iat":      time.Now().Unix(),
+		"exp":      time.Now().Add(mfaTicketTTL).Unix(),
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(model.JwtSigningKey())
 }
 
 // mfaTicketParse 校验并解出 ticket 中的用户名。签名/过期/缺 claim 一律拒绝。

@@ -1,7 +1,11 @@
 import axios, { AxiosInstance } from 'axios';
 import { antdFeedback } from '@/config/antdApp';
 import { pinia, useUserStore } from '@/store';
-const userStore = useUserStore(pinia);
+
+// 惰性取实例：本模块处于 store→apis→request→router→store 的循环依赖链上，
+// 顶层立即 useUserStore(pinia) 在部分加载顺序下（如测试环境）会读到未初始化的
+// pinia；拦截器只在请求时执行，届时必然已初始化。
+const userStore = () => useUserStore(pinia);
 import router from '@/router';
 import i18n from '@/lang';
 
@@ -24,7 +28,7 @@ const request: AxiosInstance = axios.create({
 
 // 会话失效后统一清理本地凭据，避免残留的失效 token 导致页面反复跳登录/死循环
 const resetSession = () => {
-  userStore.USER_STORE({
+  userStore().USER_STORE({
     token: '',
     real_name: '',
     user: '',
@@ -40,7 +44,7 @@ const errorHandler = (error: {
   if (error.response) {
     if (error.response.status === 401) {
       // 若仍持有失效凭据，先清理，避免“跳登录后守卫仍放行 → 再次 401”的死循环
-      if (userStore.account?.token) {
+      if (userStore().account?.token) {
         resetSession();
       }
       antdFeedback.notification.error({
@@ -79,7 +83,7 @@ const responseInject = (res: Res<never>) => {
 
 request.interceptors.request.use((config) => {
   // 每个请求都从 store 实时取 token，避免模块加载时快照到失效/空凭据
-  const token = userStore.account?.token;
+  const token = userStore().account?.token;
   if (token) {
     config.headers.set('Authorization', 'Bearer ' + token);
     // 供同源内嵌页（如 AI 聊天 iframe）读取，避免把 JWT 放进 URL

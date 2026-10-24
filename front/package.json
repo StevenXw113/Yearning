@@ -5,7 +5,9 @@
       "scripts": {
             "dev": "vite  --mode dev",
             "build": "vue-tsc --noEmit && vite build  --mode release",
-            "serve": "vite preview"
+            "serve": "vite preview",
+            "test": "vitest run",
+            "test:watch": "vitest"
       },
       "dependencies": {
             "@ant-design/icons-vue": "^7.0.1",
@@ -32,7 +34,7 @@
             "vue-clipboard3": "^2.0.0",
             "vue-i18n": "^9.14.0",
             "vue-router": "4",
-            "xlsx": "^0.18.5"
+            "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
       },
       "devDependencies": {
             "@types/node": "^22.9.0",
@@ -40,15 +42,18 @@
             "@typescript-eslint/parser": "^7.18.0",
             "@vitejs/plugin-vue": "^5.2.0",
             "@vue/compiler-sfc": "^3.5.13",
+            "@vue/test-utils": "^2.5.1",
             "eslint": "^8.23.1",
             "eslint-config-prettier": "^8.5.0",
             "eslint-import-resolver-typescript": "^3.5.1",
             "eslint-plugin-import": "^2.26.0",
             "eslint-plugin-prettier": "^4.2.1",
             "eslint-plugin-vue": "^9.30.0",
+            "happy-dom": "^21.0.4",
             "prettier": "^2.7.1",
             "typescript": "^5.6.3",
             "vite": "^5.4.10",
+            "vitest": "^3",
             "vue-eslint-parser": "^9.0.3",
             "vue-tsc": "^2.1.10"
       }
