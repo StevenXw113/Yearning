@@ -27,7 +27,7 @@ func cronTabDelayOrder() {
 		// delay 为 'YYYY-MM-DD HH:MM' 到点即执行；delay='manual' 是人工执行、
 		// 'handled' 是人工处理模式（DBA 自行处理），都必须排除
 		model.DB().Model(model.CoreSqlOrder{}).
-			Where("`status` =? AND `delay` != 'none' AND `delay` != 'manual' AND `delay` != 'handled' AND `delay` <= ?", 5, now).
+			Where("`status` =? AND `delay` != 'none' AND `delay` != 'manual' AND `delay` != 'handled' AND `delay` <= ?", model.OrderStatusWaiting, now).
 			Find(&orders)
 		var wg sync.WaitGroup
 		sem := make(chan struct{}, 4)
@@ -36,8 +36,8 @@ func cronTabDelayOrder() {
 			// 抢占必须在 goroutine 内做：串行抢占+并发执行会让「抢到但还没跑」的
 			// 工单在慢工单占满信号量时被饿死在待执行队列里。
 			res := model.DB().Model(model.CoreSqlOrder{}).
-				Where("work_id =? AND `status` =?", o.WorkId, 5).
-				Updates(map[string]interface{}{"status": 3, "execute_time": time.Now().Format("2006-01-02 15:04")})
+				Where("work_id =? AND `status` =?", o.WorkId, model.OrderStatusWaiting).
+				Updates(map[string]interface{}{"status": model.OrderStatusExecuting, "execute_time": time.Now().Format("2006-01-02 15:04")})
 			if res.RowsAffected != 1 {
 				continue
 			}
@@ -86,7 +86,7 @@ func cronTabSelfHeal() {
 		cutoff := time.Now().Add(-time.Duration(hours) * time.Hour).Format("2006-01-02 15:04")
 		var orders []model.CoreSqlOrder
 		model.DB().Model(model.CoreSqlOrder{}).
-			Where("`status` =? AND `execute_time` != '' AND `execute_time` <= ?", 3, cutoff).
+			Where("`status` =? AND `execute_time` != '' AND `execute_time` <= ?", model.OrderStatusExecuting, cutoff).
 			Find(&orders)
 		for _, o := range orders {
 			if audit.IsOSCRunning(o.WorkId) {

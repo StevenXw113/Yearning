@@ -50,7 +50,7 @@ func BatchExecute(c yee.Context) (err error) {
 			continue
 		}
 		// 抢占失败=其他会话正在执行或状态已变化，跳过该条继续（并非 SQL 失败）
-		if !claimExecution(o.WorkId, orderStatusWaiting) {
+		if !claimExecution(o.WorkId, model.OrderStatusWaiting) {
 			r.Msg = "已跳过（并发执行或状态已变化）"
 			results = append(results, r)
 			continue

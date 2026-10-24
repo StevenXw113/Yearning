@@ -6,6 +6,7 @@ import (
 	"Yearning-go/src/handler/manage/flow"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/model"
 	"encoding/json"
 	"errors"
@@ -61,6 +62,7 @@ func SuperDeleteUser(c yee.Context) (err error) {
 	model.DB().Where("username =?", user).Delete(&model.CoreAccount{})
 	model.DB().Where("username =?", user).Delete(&model.CoreGrained{})
 	tx.Commit()
+	permission.InvalidateAll()
 
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(fmt.Sprintf(i18n.DefaultLang.Load(i18n.USER_DELETE_SUCCESS), user)))
 }
@@ -89,6 +91,7 @@ func ManageUserCreateOrEdit(c yee.Context) (err error) {
 	case "policy":
 		g, _ := json.Marshal(u.Group)
 		model.DB().Model(model.CoreGrained{}).Scopes(common.AccordingToUsernameEqual(u.Username)).Updates(model.CoreGrained{Group: g})
+		permission.InvalidateAll()
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(fmt.Sprintf(i18n.DefaultLang.Load(i18n.USER_PROLICY_EDIT_SUCCESS), u.Username)))
 	}
 	return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_PASSWORD_FAKE))))

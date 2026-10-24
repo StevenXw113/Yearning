@@ -45,6 +45,9 @@ type general struct {
 	// (-auth-token 或环境变量 ENGINE_AUTH_TOKEN) 一致；空 = 引擎未启用认证。
 	// 引擎是「拿到数据源凭据即可执行 SQL」的代理，跨不完全可信网络部署必须配置。
 	RpcToken string
+	// SuperUsers 超级管理员名单（逗号分隔），内置 admin 恒为超管无需配置。
+	// 此前管理端权限硬编码只认 admin 单账号，多管理员无法表达。
+	SuperUsers string
 	// DisableInstanceLock 关闭单实例互斥（默认开启）。cron 统计、OSC 中止、
 	// 执行中超时自愈等均假设同一元数据库只有一个主实例在跑，多实例会互相破坏；
 	// 互斥基于 MySQL GET_LOCK，仅特殊部署（如主动外部调度）才应关闭。

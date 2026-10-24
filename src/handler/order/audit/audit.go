@@ -36,8 +36,8 @@ func AuditOrderState(c yee.Context) (err error) {
 		}
 		// 仅审核中(2)可撤销；0 行命中说明状态已被并发操作改变，不再推送/报成功
 		res := model.DB().Model(model.CoreSqlOrder{}).
-			Where("work_id =? AND `status` =?", u.WorkId, 2).
-			Updates(&model.CoreSqlOrder{Status: 6})
+			Where("work_id =? AND `status` =?", u.WorkId, model.OrderStatusAuditing).
+			Updates(&model.CoreSqlOrder{Status: model.OrderStatusUndo})
 		if res.Error != nil || res.RowsAffected != 1 {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.UNDO_MESSAGE_ERROR)))
 		}
@@ -98,7 +98,7 @@ func ScheduledChange(c yee.Context) (err error) {
 	}
 	// 延迟调度在 Yearning 侧完成：'none'/空 表示立即执行，否则重排到新时间点由 cron 到点触发。
 	if u.Delay == "" || u.Delay == "none" {
-		oscAsync, err := executeClaimedOrder(&od, user.Username, orderStatusWaiting)
+		oscAsync, err := executeClaimedOrder(&od, user.Username, model.OrderStatusWaiting)
 		if err != nil {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 		}
@@ -109,7 +109,7 @@ func ScheduledChange(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_ORDER_DELAY_SUCCESS)))
 	}
 	res := model.DB().Model(model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` =?", u.WorkId, orderStatusWaiting).
+		Where("work_id =? AND `status` =?", u.WorkId, model.OrderStatusWaiting).
 		Updates(map[string]interface{}{"delay": u.Delay})
 	if res.Error != nil || res.RowsAffected != 1 {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_EXECUTABLE)))
@@ -249,7 +249,7 @@ func FetchRetryPreview(c yee.Context) (err error) {
 	if od.WorkId == "" {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH)))
 	}
-	if od.Status != orderStatusFailed {
+	if od.Status != model.OrderStatusFailed {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RETRYABLE)))
 	}
 	// 全量执行记录（含历次重试）按时间排序：失败明细直接展示；

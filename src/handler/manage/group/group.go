@@ -17,6 +17,7 @@ import (
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/model"
 	"encoding/json"
 	"fmt"
@@ -65,6 +66,7 @@ func SuperGroupUpdate(c yee.Context) (err error) {
 		} else {
 			model.DB().Model(model.CoreRoleGroup{}).Scopes(common.AccordingToIDEqual(u.ID)).Updates(&model.CoreRoleGroup{Permissions: g, Name: u.Name})
 		}
+		permission.InvalidateAll()
 		return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(fmt.Sprintf(i18n.DefaultLang.Load(i18n.GROUP_CREATE_SUCCESS), u.Name)))
 	}
 	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
@@ -84,5 +86,6 @@ func SuperClearUserRule(c yee.Context) (err error) {
 		model.DB().Model(model.CoreGrained{}).Scopes(common.AccordingToUsernameEqual(i.Username)).Updates(&model.CoreGrained{Group: b})
 	}
 	model.DB().Model(model.CoreRoleGroup{}).Where("group_id = ?", scape).Delete(&model.CoreRoleGroup{})
+	permission.InvalidateAll()
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(fmt.Sprintf(i18n.DefaultLang.Load(i18n.GROUP_DELETE_SUCCESS), scape)))
 }

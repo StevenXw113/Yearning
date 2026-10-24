@@ -73,10 +73,10 @@ func RunArchiveOnce() (orders int, queryRecords int64) {
 
 // archiveOrders 归档终态工单及其全部明细，返回本轮归档的单数。
 func archiveOrders(cutoff string) int {
-	// 终态白名单（裸值与 audit 包状态机同源：0/1/4/6，改动状态机时须同步）
+	// 终态白名单（model.OrderTerminalStatuses：驳回/完成/失败/撤销）
 	var ids []string
 	model.DB().Model(&model.CoreSqlOrder{}).
-		Where("`status` IN ? AND `date` <= ?", []int{0, 1, 4, 6}, cutoff).
+		Where("`status` IN ? AND `date` <= ?", model.OrderTerminalStatuses, cutoff).
 		Order("id asc").Limit(archiveBatchLimit).
 		Pluck("work_id", &ids)
 	if len(ids) == 0 {

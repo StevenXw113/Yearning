@@ -1,6 +1,11 @@
 package permission
 
 import (
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
 	"gorm.io/gorm"
@@ -23,12 +28,37 @@ func NewPermissionService(db *gorm.DB) *PermissionService {
 	return &PermissionService{db: db}
 }
 
-// SuperUser 内置超级管理员用户名：拥有全部数据源权限，不受权限组配置约束。
-// 与 router.SuperManageGroup 判定管理端权限用的是同一个约定。
+// SuperUser 内置超级管理员用户名：始终拥有全部权限，与配置无关。
 const SuperUser = "admin"
 
-// IsSuperUser 判断是否为内置超级管理员
-func IsSuperUser(user string) bool { return user == SuperUser }
+// superUsers 解析后的超管名单（惰性：首次调用 IsSuperUser 时从
+// [General].SuperUsers 解析一次——配置进程内不热更，原子替换保并发读）。
+// 不在 model.initConfig 里回调注入：permission 已依赖 model，反向调用成环。
+var (
+	superUsers     atomic.Value // map[string]struct{}
+	superUsersOnce sync.Once
+)
+
+func superUserSet() map[string]struct{} {
+	superUsersOnce.Do(func() {
+		list := map[string]struct{}{SuperUser: {}}
+		for _, name := range strings.Split(model.C.General.SuperUsers, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				list[name] = struct{}{}
+			}
+		}
+		superUsers.Store(list)
+	})
+	v, _ := superUsers.Load().(map[string]struct{})
+	return v
+}
+
+// IsSuperUser 判断是否为超级管理员：内置 admin + [General].SuperUsers 配置名单。
+// 此前硬编码单账号 admin，多管理员/管理分层无法表达。
+func IsSuperUser(user string) bool {
+	_, found := superUserSet()[user]
+	return found
+}
 
 // CreatePermissionListFromGroups 从组ID列表创建一个合并的权限列表
 func (service *PermissionService) CreatePermissionListFromGroups(groupIDs []string) *model.PermissionList {
@@ -60,9 +90,52 @@ func (service *PermissionService) CreatePermissionListFromGroups(groupIDs []stri
 	return combinedPermissions
 }
 
-// CreatePermissionList 返回用户的数据源权限列表。超级管理员直接取全部数据源，
-// 无需加入任何权限组；其余用户按权限组合并（无权限组时返回空列表）。
-func (service *PermissionService) CreatePermissionList(user string) *model.PermissionList {
+// permCacheTTL 权限列表缓存有效期。权限查询在每请求/每条查询 WS 消息上发生，
+// 原实现每次 N+1 查库（grained → 每权限组 → admin 全量数据源）；TTL 内同用户
+// 只算一次。变更点另配主动失效（InvalidateAll），TTL 只是漏埋时的兜底。
+const permCacheTTL = 30 * time.Second
+
+type permCacheEntry struct {
+	list     *model.PermissionList
+	expireAt time.Time
+}
+
+var permCache struct {
+	sync.Mutex
+	m map[string]permCacheEntry
+}
+
+func init() {
+	permCache.m = map[string]permCacheEntry{}
+}
+
+// InvalidateAll 清空权限缓存。权限组/用户组分配/数据源/用户的写路径在
+// 落库成功后调用，让变更立即生效（不等 TTL 过期）。
+func InvalidateAll() {
+	permCache.Lock()
+	permCache.m = map[string]permCacheEntry{}
+	permCache.Unlock()
+}
+
+func (service *PermissionService) cachedOrLoad(user string) *model.PermissionList {
+	now := time.Now()
+	permCache.Lock()
+	if e, ok := permCache.m[user]; ok && now.Before(e.expireAt) {
+		permCache.Unlock()
+		return e.list
+	}
+	permCache.Unlock()
+
+	list := service.loadPermissionList(user)
+
+	permCache.Lock()
+	permCache.m[user] = permCacheEntry{list: list, expireAt: now.Add(permCacheTTL)}
+	permCache.Unlock()
+	return list
+}
+
+// loadPermissionList 实际查库组装权限列表（原 CreatePermissionList 主体）。
+func (service *PermissionService) loadPermissionList(user string) *model.PermissionList {
 	if IsSuperUser(user) {
 		var ids []string
 		service.db.Model(model.CoreDataSource{}).Pluck("source_id", &ids)
@@ -81,6 +154,11 @@ func (service *PermissionService) CreatePermissionList(user string) *model.Permi
 		return new(model.PermissionList)
 	}
 	return service.CreatePermissionListFromGroups(roleGroups)
+}
+
+// CreatePermissionList 返回用户的数据源权限列表（带 TTL 缓存，见 permCacheTTL）。
+func (service *PermissionService) CreatePermissionList(user string) *model.PermissionList {
+	return service.cachedOrLoad(user)
 }
 
 // Equal 检查用户对资源的权限

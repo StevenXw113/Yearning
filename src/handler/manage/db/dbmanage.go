@@ -18,6 +18,7 @@ import (
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/model"
 	"github.com/cookieY/yee"
 	"net/http"
@@ -67,6 +68,7 @@ func SuperDeleteSource(c yee.Context) (err error) {
 	}
 
 	tx.Commit()
+	permission.InvalidateAll()
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_DATA_IS_DELETE)))
 }
 
@@ -78,9 +80,13 @@ func ManageDBCreateOrEdit(c yee.Context) (err error) {
 	}
 	switch u.Tp {
 	case "edit":
-		return c.JSON(http.StatusOK, SuperEditSource(&u.DB))
+		resp := SuperEditSource(&u.DB)
+		permission.InvalidateAll() // 数据源增删影响超管的全量权限列表（缓存）
+		return c.JSON(http.StatusOK, resp)
 	case "create":
-		return c.JSON(http.StatusOK, SuperCreateSource(&u.DB))
+		resp := SuperCreateSource(&u.DB)
+		permission.InvalidateAll()
+		return c.JSON(http.StatusOK, resp)
 	case "test":
 		if u.DB.Password != "" && enc.Decrypt(model.C.General.SecretKey, u.DB.Password) != "" {
 			u.DB.Password = enc.Decrypt(model.C.General.SecretKey, u.DB.Password)

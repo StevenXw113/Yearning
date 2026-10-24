@@ -49,16 +49,6 @@ func (e *Confirm) GetTPL() []flow.Tpl {
 	return tpl
 }
 
-// 工单状态常量（core_sql_orders.status，与前端 OrderState 枚举对应）
-const (
-	orderStatusRejected  = 0 // 已驳回
-	orderStatusFinished  = 1 // 完成
-	orderStatusAuditing  = 2 // 审核中
-	orderStatusExecuting = 3 // 执行中
-	orderStatusFailed    = 4 // 失败
-	orderStatusWaiting   = 5 // 待执行（人工/定时）
-)
-
 // claimExecution 原子抢占执行权：把工单置为「执行中」(status=3) 并记录开始时间。
 // from 为允许抢占的起始状态（末级审批刚通过的 2、等待执行的 5）；
 // 并发触发/状态已变化时 UPDATE 命中 0 行，返回 false，调用方必须放弃执行——
@@ -70,7 +60,7 @@ func claimExecution(workId string, from ...int) bool {
 	res := model.DB().Model(&model.CoreSqlOrder{}).
 		Where("work_id =? AND `status` IN ?", workId, from).
 		Updates(map[string]interface{}{
-			"status":       orderStatusExecuting,
+			"status":       model.OrderStatusExecuting,
 			"execute_time": time.Now().Format("2006-01-02 15:04"),
 		})
 	return res.Error == nil && res.RowsAffected == 1
@@ -80,12 +70,12 @@ func claimExecution(workId string, from ...int) bool {
 // 带 status=3 守卫，避免覆盖执行期间被其他操作改写的状态。
 // 导出供 cron（src/service）延迟调度共用。
 func FinalizeExecution(workId string, execErr error) {
-	status := orderStatusFinished
+	status := model.OrderStatusFinished
 	if execErr != nil {
-		status = orderStatusFailed
+		status = model.OrderStatusFailed
 	}
 	model.DB().Model(&model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` =?", workId, orderStatusExecuting).
+		Where("work_id =? AND `status` =?", workId, model.OrderStatusExecuting).
 		Updates(map[string]interface{}{"status": status})
 }
 
@@ -126,10 +116,10 @@ func ExecuteOrder(u *Confirm, user string) common.Resp {
 	// 对外执行入口只受理「已审批通过、等待执行」(status=5)的工单。
 	// 不允许 status=2（审核中）从这里执行——那等于让申请人绕过审批直接执行；
 	// 末级审批通过后的立即执行在 MultiAuditOrder 内部以 from=2 走 executeClaimedOrder。
-	if order.Status != orderStatusWaiting {
+	if order.Status != model.OrderStatusWaiting {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_EXECUTABLE))
 	}
-	oscAsync, err := executeClaimedOrder(&order, user, orderStatusWaiting)
+	oscAsync, err := executeClaimedOrder(&order, user, model.OrderStatusWaiting)
 	if err != nil {
 		logger.DefaultLogger.Error(err)
 		return common.ERR_COMMON_MESSAGE(err)
@@ -353,7 +343,7 @@ func SkipAndContinue(u *Confirm, user string) common.Resp {
 	if order.WorkId == "" {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
-	if order.Status != orderStatusFailed {
+	if order.Status != model.OrderStatusFailed {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RETRYABLE))
 	}
 	// 全量记录（已执行 + 失败，含历次尝试）：失败语句视为已处理，定位到它之后
@@ -367,7 +357,7 @@ func SkipAndContinue(u *Confirm, user string) common.Resp {
 	}
 	continueOrder := order
 	continueOrder.SQL = remain
-	oscAsync, err := executeClaimedOrder(&continueOrder, user, orderStatusFailed)
+	oscAsync, err := executeClaimedOrder(&continueOrder, user, model.OrderStatusFailed)
 	if err != nil {
 		logger.DefaultLogger.Error(err)
 		return common.ERR_COMMON_MESSAGE(err)
@@ -393,7 +383,7 @@ func RetryOrder(u *Confirm, user string) common.Resp {
 	if order.WorkId == "" {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
-	if order.Status != orderStatusFailed {
+	if order.Status != model.OrderStatusFailed {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RETRYABLE))
 	}
 	var executed []model.CoreSqlRecord
@@ -407,7 +397,7 @@ func RetryOrder(u *Confirm, user string) common.Resp {
 	// 只替换 SQL 内容重走统一执行链路；工单本身仍是原工单（编号/审批流/权限不变）
 	retry := order
 	retry.SQL = remain
-	oscAsync, err := executeClaimedOrder(&retry, user, orderStatusFailed)
+	oscAsync, err := executeClaimedOrder(&retry, user, model.OrderStatusFailed)
 	if err != nil {
 		logger.DefaultLogger.Error(err)
 		return common.ERR_COMMON_MESSAGE(err)
@@ -443,14 +433,14 @@ func MarkOrderFinished(u *Confirm, user string) common.Resp {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_MARK_PERMISSION))
 	}
 	switch od.Status {
-	case orderStatusAuditing, orderStatusFailed, orderStatusWaiting:
+	case model.OrderStatusAuditing, model.OrderStatusFailed, model.OrderStatusWaiting:
 	default:
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_MARKABLE))
 	}
 	// 状态迁移带原状态守卫，与撤销/执行等并发操作互斥
 	res := model.DB().Model(model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` IN ?", u.WorkId, []int{orderStatusAuditing, orderStatusFailed, orderStatusWaiting}).
-		Updates(map[string]interface{}{"status": orderStatusFinished, "execute_time": time.Now().Format("2006-01-02 15:04")})
+		Where("work_id =? AND `status` IN ?", u.WorkId, []int{model.OrderStatusAuditing, model.OrderStatusFailed, model.OrderStatusWaiting}).
+		Updates(map[string]interface{}{"status": model.OrderStatusFinished, "execute_time": time.Now().Format("2006-01-02 15:04")})
 	if res.Error != nil || res.RowsAffected != 1 {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_MARKABLE))
 	}
@@ -475,8 +465,8 @@ func MarkOrderFinished(u *Confirm, user string) common.Resp {
 // 与撤销/驳回/重复同意等并发操作互斥；命中 0 行说明状态已被改变，调用方报幂等错误。
 func moveToWaiting(workId string) bool {
 	res := model.DB().Model(model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` =?", workId, orderStatusAuditing).
-		Updates(map[string]interface{}{"status": orderStatusWaiting})
+		Where("work_id =? AND `status` =?", workId, model.OrderStatusAuditing).
+		Updates(map[string]interface{}{"status": model.OrderStatusWaiting})
 	return res.Error == nil && res.RowsAffected == 1
 }
 
@@ -512,7 +502,7 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 			}
 			// 立即执行：此刻工单仍是审核中(status=2)，从这里原子抢占(2→3)后执行。
 			// 抢占失败说明状态已被并发操作改变（如撤销/重复同意），直接报冲突。
-			oscAsync, err := executeClaimedOrder(&od, user, orderStatusAuditing)
+			oscAsync, err := executeClaimedOrder(&od, user, model.OrderStatusAuditing)
 			if err != nil {
 				return common.ERR_COMMON_MESSAGE(err)
 			}
@@ -524,7 +514,7 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 		// 中间级同意：WHERE 带 status=2（仅审核中的工单可推进）且 current_step=flag
 		// （审批层级与请求一致），重放已通过的层级、推进已终结的工单都会命中 0 行
 		res := model.DB().Model(model.CoreSqlOrder{}).
-			Where("work_id =? AND `status` =? AND current_step =?", req.WorkId, orderStatusAuditing, req.Flag).
+			Where("work_id =? AND `status` =? AND current_step =?", req.WorkId, model.OrderStatusAuditing, req.Flag).
 			Updates(&model.CoreSqlOrder{CurrentStep: req.Flag + 1, Assigned: strings.Join(assigned, ",")})
 		if res.Error != nil || res.RowsAffected != 1 {
 			return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
@@ -557,7 +547,7 @@ func RejectOrder(req *Confirm, user string) common.Resp {
 	var od model.CoreSqlOrder
 	model.DB().Model(model.CoreSqlOrder{}).Select("work_id, status, current_step").
 		Where("work_id =?", req.WorkId).First(&od)
-	if od.WorkId == "" || od.Status != orderStatusAuditing {
+	if od.WorkId == "" || od.Status != model.OrderStatusAuditing {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
 	tpl := req.GetTPL()
@@ -565,8 +555,8 @@ func RejectOrder(req *Confirm, user string) common.Resp {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
 	res := model.DB().Model(&model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` =?", req.WorkId, orderStatusAuditing).
-		Updates(map[string]interface{}{"status": orderStatusRejected})
+		Where("work_id =? AND `status` =?", req.WorkId, model.OrderStatusAuditing).
+		Updates(map[string]interface{}{"status": model.OrderStatusRejected})
 	if res.Error != nil || res.RowsAffected != 1 {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
@@ -592,8 +582,8 @@ func RejectOrder(req *Confirm, user string) common.Resp {
 // 返回是否确实终止了工单（0 行命中说明状态不符，调用方不应再写流水/返回成功）。
 func delayKill(workId string) (string, bool) {
 	res := model.DB().Model(&model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` IN ?", workId, []int{orderStatusAuditing, orderStatusWaiting}).
-		Updates(map[string]interface{}{"status": orderStatusFailed, "execute_time": time.Now().Format("2006-01-02 15:04")})
+		Where("work_id =? AND `status` IN ?", workId, []int{model.OrderStatusAuditing, model.OrderStatusWaiting}).
+		Updates(map[string]interface{}{"status": model.OrderStatusFailed, "execute_time": time.Now().Format("2006-01-02 15:04")})
 	if res.Error != nil || res.RowsAffected != 1 {
 		return "", false
 	}
