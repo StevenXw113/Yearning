@@ -72,6 +72,7 @@
 </template>
 
 <script lang="ts" setup>
+import { wsHeartbeat } from '@/socket';
   import History from './history.vue';
   import Tree from './tree.vue';
   import Input from './input.vue';
@@ -205,10 +206,7 @@
         onDisconnected: () => {
           commonStore.SET_DISABLED_SPINNING();
         },
-        heartbeat: {
-          interval: 5000,
-          message: 'ping',
-        },
+        heartbeat: wsHeartbeat(),
         protocols: [userStore.account.token],
       }
     );

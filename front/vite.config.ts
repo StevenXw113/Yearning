@@ -5,9 +5,8 @@ import * as path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   base: '/front/',
-  build: {
-    minify: 'esbuild',
-  },
+  // build.minify 沿用 vite 8 默认(oxc):显式 'esbuild' 会要求单独安装 esbuild,
+  // 且 vite 8 已把 esbuild 从内置依赖移除
   server: {
     proxy: {
       '/register': {

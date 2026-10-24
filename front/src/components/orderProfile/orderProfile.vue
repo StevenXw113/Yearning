@@ -224,6 +224,7 @@
 </template>
 
 <script lang="ts" setup>
+import { wsHeartbeat } from '@/socket';
   import RejectModal from './rejectModal.vue';
   import MarkModal from './markModal.vue';
   import RetryModal from './retryModal.vue';
@@ -387,10 +388,7 @@
         autoReconnect: {
           retries: 3,
         },
-        heartbeat: {
-          interval: 5000,
-          message: 'ping',
-        },
+        heartbeat: wsHeartbeat(),
         protocols: [userStore.account.token],
         onMessage: (e, event) => {
           orderStore.SET_ORDER_STATUS(parseInt(event.data, 10));

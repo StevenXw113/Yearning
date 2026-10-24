@@ -38,6 +38,7 @@
 </template>
 
 <script lang="ts" setup>
+import { wsHeartbeat } from '@/socket';
   import dayjs, { extend } from 'dayjs';
   import relativeTime from 'dayjs/plugin/relativeTime';
   import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -105,10 +106,7 @@
             message.error(t('query.ws.error'));
           },
         },
-        heartbeat: {
-          interval: 5000,
-          message: 'ping',
-        },
+        heartbeat: wsHeartbeat(),
         protocols: [userStore.account.token],
         onMessage: (e, event) => {
           data.value = JSON.parse(event.data);

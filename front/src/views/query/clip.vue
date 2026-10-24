@@ -6,7 +6,7 @@
     placement="bottom"
   >
     <a-row :gutter="16">
-      <template v-for="(i, idx) in clip" :key="i">
+      <template v-for="(i, idx) in clip" :key="idx">
         <a-col :span="4">
           <ClipBoard :id-ref="idx" :clips="i" @del-btn="spliceClip"></ClipBoard>
         </a-col>

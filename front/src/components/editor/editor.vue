@@ -104,7 +104,7 @@
     run: async function (ed: monaco.editor.ICodeEditor) {
       let s = ed.getModel() as monaco.editor.ITextModel;
       let sel = s.getValueInRange(ed.getSelection() as monaco.Selection);
-      let sqls = '';
+      let sqls: string;
       if (sel !== '') {
         sqls = sel;
       } else {

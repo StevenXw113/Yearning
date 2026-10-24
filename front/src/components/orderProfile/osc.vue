@@ -6,6 +6,7 @@
 </template>
 
 <script lang="ts" setup>
+import { wsHeartbeat } from '@/socket';
   import { onMounted, ref } from 'vue';
   import { useUserStore } from '@/store';
   import { checkSchema } from '@/lib';
@@ -36,10 +37,7 @@
             message.error(t('query.ws.error'));
           },
         },
-        heartbeat: {
-          interval: 5000,
-          message: 'ping',
-        },
+        heartbeat: wsHeartbeat(),
         protocols: [userStore.account.token],
         onMessage: (e, event) => {
           pre.value = event.data;

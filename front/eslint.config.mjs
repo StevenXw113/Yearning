@@ -4,6 +4,7 @@
 // vue 模板排版类规则关（prettier 管格式）；import/* 插件未迁移——
 // 其在 eslint 9 下无官方支持，原配置中的相关规则多为噪音。
 import js from '@eslint/js';
+import globals from 'globals';
 import pluginVue from 'eslint-plugin-vue';
 import tseslint from 'typescript-eslint';
 import configPrettier from 'eslint-config-prettier';
@@ -19,6 +20,9 @@ export default tseslint.config(
     files: ['**/*.vue'],
     languageOptions: {
       parserOptions: { parser: tseslint.parser },
+      // <script> 段无类型检查,js.recommended 的 no-undef 需要 browser 全局表
+      // (TS 文件被 tseslint 的 eslint-recommended 覆盖关掉 no-undef,不受影响)
+      globals: { ...globals.browser },
     },
   },
   {
