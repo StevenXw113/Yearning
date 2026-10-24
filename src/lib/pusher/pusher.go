@@ -18,7 +18,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/cookieY/yee/logger"
-	"gopkg.in/gomail.v2"
+	"github.com/wneessen/go-mail"
 	"strings"
 )
 
@@ -161,31 +161,38 @@ func (tpl *OrderTPL) Push() {
 	}
 }
 
-func SendMail(addr string, mail model.Message, tmpl string) {
-	m := gomail.NewMessage()
-	m.SetHeader("From", mail.User)
-	m.SetHeader("To", addr)
-	m.SetHeader("Subject", "Yearning消息推送!")
-	m.SetBody("text/html", tmpl)
-	d := dialer(mail)
-	if mail.Ssl {
-		// 校验服务器证书与主机名：跳过校验会让 SMTP 账号密码与邮件正文暴露给中间人
-		d.TLSConfig = &tls.Config{ServerName: mail.Host}
+// SendMail 经 SMTP 推送告警邮件(go-mail,替代 2016 年起停更的 gomail.v2)。
+func SendMail(addr string, cfg model.Message, tmpl string) {
+	m := mail.NewMsg()
+	if err := m.From(cfg.User); err != nil {
+		logger.DefaultLogger.Errorf("send mail: %s", err.Error())
+		return
 	}
-	// Send the email to Bob, Cora and Dan.
-	if err := d.DialAndSend(m); err != nil {
+	if err := m.To(addr); err != nil {
+		logger.DefaultLogger.Errorf("send mail: %s", err.Error())
+		return
+	}
+	m.Subject("Yearning消息推送!")
+	m.SetBodyString(mail.TypeTextHTML, tmpl)
+	opts := []mail.Option{
+		mail.WithPort(cfg.Port),
+		mail.WithSMTPAuth(mail.SMTPAuthPlain),
+		mail.WithUsername(cfg.User),
+		mail.WithPassword(cfg.Password),
+		// gomail 语义:非 SSL 走机会性 STARTTLS(服务器支持才升级,不支持则明文投递)
+		mail.WithTLSPolicy(mail.TLSOpportunistic),
+	}
+	if cfg.Ssl {
+		// 隐式 TLS;校验服务器证书与主机名:跳过校验会让 SMTP 账号密码与邮件正文暴露给中间人
+		opts = append(opts, mail.WithSSLPort(false), mail.WithTLSConfig(&tls.Config{ServerName: cfg.Host}))
+	}
+	c, err := mail.NewClient(cfg.Host, opts...)
+	if err != nil {
+		logger.DefaultLogger.Errorf("send mail: %s", err.Error())
+		return
+	}
+	if err := c.DialAndSend(m); err != nil {
 		logger.DefaultLogger.Errorf("send mail:%s", err.Error())
 		return
 	}
-}
-
-func dialer(mail model.Message) *gomail.Dialer {
-	d := gomail.Dialer{
-		Host:     mail.Host,
-		Port:     mail.Port,
-		Username: mail.User,
-		Password: mail.Password,
-		SSL:      mail.Ssl,
-	}
-	return &d
 }
