@@ -2,8 +2,8 @@ package factory
 
 import (
 	"Yearning-go/src/model"
-	crand "crypto/rand"
 	"crypto/pbkdf2"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"

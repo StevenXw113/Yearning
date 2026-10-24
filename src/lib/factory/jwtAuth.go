@@ -19,11 +19,6 @@ import (
 	"time"
 
 	"github.com/cookieY/yee"
-	// v3 仅剩一个用途：yee 的 JWT 中间件（内部锁定 golang-jwt v3）把 v3 类型的
-	// *jwt.Token 存进 context("auth")，Token.JwtParse 的类型断言必须与它同版本，
-	// 换成 v5 会静默认证失败。其余签发/解析（JwtAuth/WsTokenParse/mfa）均已升 v5，
-	// v3 的爆炸半径被锁死在本文件这一处互操作。
-	jwtv3 "github.com/golang-jwt/jwt"
 	jwt "github.com/golang-jwt/jwt/v5"
 )
 
@@ -37,11 +32,11 @@ type Token struct {
 // v5 产物与 v3 在线上格式上完全一致（JWT 标准），yee 中间件照常解析校验。
 func JwtAuth(h Token) (t string, err error) {
 	claims := jwt.MapClaims{
-		"name":       h.Username,
-		"real_name":  h.RealName,
-		"is_record":  h.IsRecord,
-		"iat":        time.Now().Unix(),
-		"exp":        time.Now().Add(time.Hour * 8).Unix(),
+		"name":      h.Username,
+		"real_name": h.RealName,
+		"is_record": h.IsRecord,
+		"iat":       time.Now().Unix(),
+		"exp":       time.Now().Add(time.Hour * 8).Unix(),
 	}
 	t, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(model.JwtSigningKey())
 	if err != nil {
@@ -50,14 +45,14 @@ func JwtAuth(h Token) (t string, err error) {
 	return t, nil
 }
 
-// JwtParse 从请求上下文中提取身份（token 由 yee 的 v3 中间件解析并注入）。
+// JwtParse 从请求上下文中提取身份（token 由 JwtMiddleware 注入，v5）。
 // 任何一步失败都返回零值 Token，调用方据此判断为未认证，而不是让类型断言 panic。
 func (h *Token) JwtParse(c yee.Context) *Token {
-	user, ok := c.Get("auth").(*jwtv3.Token)
+	user, ok := c.Get(authContextKey).(*jwt.Token)
 	if !ok || user == nil || !user.Valid {
 		return h
 	}
-	claims, ok := user.Claims.(jwtv3.MapClaims)
+	claims, ok := user.Claims.(jwt.MapClaims)
 	if !ok {
 		return h
 	}

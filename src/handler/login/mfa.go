@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cookieY/yee"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 	"net/http"
 	"time"
