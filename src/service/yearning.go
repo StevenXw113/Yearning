@@ -91,6 +91,9 @@ func StartYearning(port string) {
 	go cronTabMaskQuery()
 	go cronTabTotalTickets()
 	go cronTabDelayOrder()
+	// 僵尸工单自愈：依赖单实例互斥（上方 AcquireInstanceLock 已先行完成），
+	// 多实例场景该 cron 会误杀其他实例正在执行的工单
+	go cronTabSelfHeal()
 	e := yee.New()
 	e.Pack("/front", f, "dist")
 	e.Use(middleware.Cors())

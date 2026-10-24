@@ -98,6 +98,7 @@ var en_US = map[int]string{
 	ORDER_MARK_MESSAGE:                                        "Manually marked as finished: %s",
 	ER_ORDER_MARK_NO_TEXT:                                     "A note explaining how the SQL was handled outside the platform is required to mark an order as finished",
 	ER_ORDER_NOT_MARKABLE:                                     "Order cannot be marked as finished in its current state (only auditing / failed / waiting-for-execution orders can)",
+	ORDER_SELF_HEAL_MESSAGE:                                   "Self-heal: order was still executing after %d hours (the service process may have restarted abnormally); it has been marked as failed. Verify the actual database state, then take over via retry / skip / mark-finished",
 	ER_ORDER_MARK_PERMISSION:                                  "Only the current auditor or a super administrator can mark an order as finished",
 	ORDER_SKIP_MESSAGE:                                        "Manual intervention: skip the failed statement and continue with the rest",
 	ER_ORDER_SKIP_EMPTY:                                       "No statements left after the failed one; nothing to continue (mark the order as finished to close it)",

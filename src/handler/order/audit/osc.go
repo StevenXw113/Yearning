@@ -42,6 +42,13 @@ func KillOSC(workId string) bool {
 	return true
 }
 
+// IsOSCRunning 判断工单的 gh-ost 是否仍在本进程执行（单实例互斥保证本进程
+// 即唯一主实例）。执行中超时自愈依赖它豁免长时 OSC——gh-ost 跑几小时是常态。
+func IsOSCRunning(workId string) bool {
+	_, ok := oscRunning.Load(workId)
+	return ok
+}
+
 // resolveGhOst 返回 gh-ost 可执行文件路径：优先取配置，其次从 PATH 查找，都没有则返回空
 func resolveGhOst() string {
 	if p := strings.TrimSpace(model.C.General.GhOstPath); p != "" {

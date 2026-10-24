@@ -49,6 +49,13 @@ type general struct {
 	// 执行中超时自愈等均假设同一元数据库只有一个主实例在跑，多实例会互相破坏；
 	// 互斥基于 MySQL GET_LOCK，仅特殊部署（如主动外部调度）才应关闭。
 	DisableInstanceLock bool
+	// ExecTimeoutMinutes 单工单引擎执行超时（分钟），默认 5。0 = 不限制——
+	// 大批量 DML / 未走 OSC 的大 DDL 可能需要更久，被 5 分钟切断的 DDL 回滚代价很高。
+	ExecTimeoutMinutes int
+	// SelfHealHours 执行中(status=3)工单的僵尸自愈阈值（小时），默认 6。
+	// 进程崩溃会留下永远「执行中」的工单；超过阈值且 gh-ost 不在本进程运行
+	// （豁免长时 OSC）即置为失败并留痕。0 = 关闭自愈。
+	SelfHealHours int
 	// GhOstPath gh-ost 可执行文件路径；留空则从 PATH 中查找 gh-ost
 	GhOstPath string
 	// OscMinRows 触发在线表结构变更(OSC)的表行数估算下限；<=0 表示关闭 OSC（全部走引擎执行）

@@ -151,6 +151,20 @@ func withTxMode(rule *engine.AuditRole, tx uint) *engine.AuditRole {
 	return &copied
 }
 
+// execContext 构造引擎执行用的上下文：超时取 [General].ExecTimeoutMinutes
+// （分钟），未配置默认 5 分钟，0 = 不限制。大批量 DML / 未走 OSC 的大 DDL
+// 可能需要远超 5 分钟——被超时切断的 DDL 回滚代价极高，按环境放宽。
+func execContext() (context.Context, context.CancelFunc) {
+	timeout := time.Duration(model.C.General.ExecTimeoutMinutes) * time.Minute
+	if model.C.General.ExecTimeoutMinutes == 0 {
+		return context.WithCancel(context.Background())
+	}
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	return context.WithTimeout(context.Background(), timeout)
+}
+
 // ExecuteWorkOrder 执行单个工单并落明细/回滚/流水（引擎 Exec 或 gh-ost 二选一）。
 // 调用方（人工执行、末级审批立即执行、定时 cron、批次执行、autoTask）必须先完成
 // 状态校验与原子抢占（executeClaimedOrder / cron 的 5→3），本函数自身不动工单状态。
@@ -188,7 +202,7 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	if err != nil {
 		return false, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := execContext()
 	defer cancel()
 	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
 		Order: calls.OrderToProto(order),

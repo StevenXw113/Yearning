@@ -20,6 +20,13 @@ RpcToken = ""
 # 基于 MySQL GET_LOCK（实例崩溃锁自动释放；第二个实例启动直接失败）。
 # cron 统计、OSC 中止、执行超时自愈都依赖它。仅特殊部署才应置 true 关闭。
 DisableInstanceLock = false
+# 单工单引擎执行超时（分钟），默认 5。0 = 不限制。
+# 大批量 DML / 未走 OSC 的大 DDL 可能需要更久——被超时切断的 DDL 回滚代价很高。
+ExecTimeoutMinutes = 5
+# 执行中(status=3)工单的僵尸自愈阈值（小时），默认 6：进程异常重启会留下永远
+# 「执行中」的工单，超过阈值自动置为失败并留痕，可再用重试/跳过接管。
+# 正在运行的 gh-ost 自动豁免。0 = 关闭自愈。依赖单实例互斥开启。
+SelfHealHours = 6
 LogLevel = "info"  # debug,info,warn,error
 Lang = "en_US"  # en_US,zh_CN
 

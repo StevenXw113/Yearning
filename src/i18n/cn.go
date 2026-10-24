@@ -98,6 +98,7 @@ var zh_CN = map[int]string{
 	ORDER_MARK_MESSAGE:                                        "手动标记完成：%s",
 	ER_ORDER_MARK_NO_TEXT:                                     "标记完成必须填写手动处理说明（在平台外如何处理的），便于审计追溯",
 	ER_ORDER_NOT_MARKABLE:                                     "工单当前状态不可标记完成（仅审核中/失败/待执行的工单可标记）",
+	ORDER_SELF_HEAL_MESSAGE:                                   "执行超时自愈：工单执行超过 %d 小时仍为「执行中」（服务进程可能异常重启过），已自动置为失败，请核查数据库实际状态后用重试/跳过/标记完成接管",
 	ER_ORDER_MARK_PERMISSION:                                  "仅当前审批人或超级管理员可标记工单完成",
 	ORDER_SKIP_MESSAGE:                                        "人工介入处理：跳过失败语句，继续执行后续语句",
 	ER_ORDER_SKIP_EMPTY:                                       "失败语句之后没有待执行的语句，无需继续（如需收口请手动标记完成）",
