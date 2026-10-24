@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mysqlparse"
 
 	storepb "engine/internal/bytebase/generated-go/store"
@@ -25,16 +25,16 @@ func execSQLStatements(
 	ctx context.Context,
 	db *sql.DB,
 	stmts []string,
-	req *enginev1.ExecRequest,
+	req *api.ExecRequest,
 	dialect storepb.Engine,
 	buildRollback func(ctx context.Context, q rowQueryer, text string) (string, string),
 	capture func(ctx context.Context) ([]string, string),
-) (*enginev1.ExecReply, error) {
+) (*api.ExecReply, error) {
 	tx, dmlTx := (*sql.Tx)(nil), false
 	if req.Rules != nil && req.Rules.DmlTransaction && orderType(req.Order.Type) == "dml" {
 		txNew, err := db.BeginTx(ctx, nil)
 		if err != nil {
-			return &enginev1.ExecReply{Ok: false, Error: "开启事务失败: " + err.Error()}, nil
+			return &api.ExecReply{Ok: false, Error: "开启事务失败: " + err.Error()}, nil
 		}
 		tx, dmlTx = txNew, true
 	}
@@ -47,7 +47,7 @@ func execSQLStatements(
 
 	// finish 收尾：失败回滚事务（binlog 抓取照做——事务已回滚时抓不到本工单事件，
 	// 空结果无害）；成功先提交再抓取（提交后的位点才能覆盖全部改动）。
-	finish := func(ok bool, msg string, recs []*enginev1.Record) (*enginev1.ExecReply, error) {
+	finish := func(ok bool, msg string, recs []*api.Record) (*api.ExecReply, error) {
 		if !ok {
 			if dmlTx {
 				_ = tx.Rollback()
@@ -58,11 +58,11 @@ func execSQLStatements(
 				rb, warn = capture(ctx)
 				attachRollbackWarning(recs, warn)
 			}
-			return &enginev1.ExecReply{Ok: false, Error: msg, Records: recs, Rollback: rb}, nil
+			return &api.ExecReply{Ok: false, Error: msg, Records: recs, Rollback: rb}, nil
 		}
 		if dmlTx {
 			if err := tx.Commit(); err != nil {
-				return &enginev1.ExecReply{Ok: false, Error: "提交事务失败: " + err.Error(), Records: recs}, nil
+				return &api.ExecReply{Ok: false, Error: "提交事务失败: " + err.Error(), Records: recs}, nil
 			}
 		}
 		var rb []string
@@ -71,12 +71,12 @@ func execSQLStatements(
 			rb, warn = capture(ctx)
 			attachRollbackWarning(recs, warn)
 		}
-		return &enginev1.ExecReply{Ok: true, Records: recs, Rollback: rb}, nil
+		return &api.ExecReply{Ok: true, Records: recs, Rollback: rb}, nil
 	}
 
-	recs := make([]*enginev1.Record, 0, len(stmts))
+	recs := make([]*api.Record, 0, len(stmts))
 	for _, text := range stmts {
-		rec := &enginev1.Record{Sql: text, Status: "执行中", Level: 0}
+		rec := &api.Record{Sql: text, Status: "执行中", Level: 0}
 		if perr := mysqlparse.CheckEngine(dialect, text); perr != nil {
 			rec.Error = "SQL 语法错误: " + perr.Error()
 			rec.Status, rec.Level = "执行失败", 1

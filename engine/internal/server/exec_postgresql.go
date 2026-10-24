@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mysqlparse"
 
 	"github.com/jackc/pgx/v5"
@@ -21,7 +21,7 @@ import (
 // 会话状态就静默丢失（断线重连、事务换连接都会触发）。
 //
 // 库名先试 postgres，连不上再试与用户同名的库：托管/最小权限实例常只授权业务库。
-func connectPostgreSQL(ctx context.Context, s *enginev1.DataSource, schema string) (*sql.DB, error) {
+func connectPostgreSQL(ctx context.Context, s *api.DataSource, schema string) (*sql.DB, error) {
 	if s == nil || s.Ip == "" {
 		return nil, fmt.Errorf("数据源 IP 为空")
 	}
@@ -82,15 +82,15 @@ func postgresqlDSNValue(s string) string {
 // execPostgreSQL 执行 PostgreSQL 工单：PostgreSQL 方言拆分后走共享骨架 execSQLStatements
 // （连接的 search_path 已在连接参数里）。与 MySQL 的关键差异：没有 binlog /
 // 前镜像回滚（PostgreSQL 侧尚未实现，回滚语句留空）。
-func (e *Engine) execPostgreSQL(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
+func (e *Engine) execPostgreSQL(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
 	stmts, err := mysqlparse.SplitEngine(storepb.Engine_POSTGRES, req.Order.Sql)
 	if err != nil || len(stmts) == 0 {
-		return &enginev1.ExecReply{Ok: false, Error: "SQL 拆分失败"}, nil
+		return &api.ExecReply{Ok: false, Error: "SQL 拆分失败"}, nil
 	}
 
 	db, err := connectPostgreSQL(ctx, req.Source, req.Order.DataBase)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
 	}
 	defer db.Close()
 

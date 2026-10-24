@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mysqlparse"
 )
 
@@ -15,16 +15,16 @@ var reAlterTable = regexp.MustCompile(`(?i)^ALTER\s+TABLE\s+(?P<name>` + "`[^`]+
 // MergeAlterTables 将针对同一张表的多条 ALTER TABLE 合并为一条。
 // - 若所有语句针对同一张表，则输出一条合并后的 ALTER TABLE；
 // - 若涉及多张表或含非 ALTER 语句，则保留原样并以分号连接。
-func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTablesRequest) (*enginev1.MergeAlterTablesReply, error) {
+func (e *Engine) MergeAlterTables(_ context.Context, req *api.MergeAlterTablesRequest) (*api.MergeAlterTablesReply, error) {
 	if req == nil || strings.TrimSpace(req.Sqls) == "" {
-		return &enginev1.MergeAlterTablesReply{Ok: false, Error: "SQL 不能为空"}, nil
+		return &api.MergeAlterTablesReply{Ok: false, Error: "SQL 不能为空"}, nil
 	}
 	stmts, err := mysqlparse.Split(req.Sqls)
 	if err != nil {
-		return &enginev1.MergeAlterTablesReply{Ok: false, Error: err.Error()}, nil
+		return &api.MergeAlterTablesReply{Ok: false, Error: err.Error()}, nil
 	}
 	if len(stmts) == 0 {
-		return &enginev1.MergeAlterTablesReply{Ok: false, Error: "未解析到有效 SQL"}, nil
+		return &api.MergeAlterTablesReply{Ok: false, Error: "未解析到有效 SQL"}, nil
 	}
 
 	// 归一化每条：表名 + 动作体。
@@ -45,7 +45,7 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 
 	if !allAlter {
 		// 含非 ALTER TABLE 或跨类型语句：无法安全合并，原样返回。
-		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
+		return &api.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
 	}
 
 	// 校验是否同一张表。
@@ -58,7 +58,7 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 		}
 	}
 	if !sameTable {
-		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
+		return &api.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
 	}
 
 	// 同一张表：合并动作子句。
@@ -73,9 +73,9 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 	//   - FULLTEXT/SPATIAL 索引一条 ALTER 里最多一个；
 	//   - 合并结果还须过得了语法解析。
 	if !mergeSafe(bodies) || mysqlparse.Check(merged) != nil {
-		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
+		return &api.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
 	}
-	return &enginev1.MergeAlterTablesReply{Ok: true, Sql: merged}, nil
+	return &api.MergeAlterTablesReply{Ok: true, Sql: merged}, nil
 }
 
 // reFulltextSpatial 识别 FULLTEXT/SPATIAL 索引子句。

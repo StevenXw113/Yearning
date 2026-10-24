@@ -4,14 +4,14 @@ import (
 	"context"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/dorischeck"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 )
 
 // isDorisSource 判断审核目标是否为 Doris 数据源（kind 由主程序按 db_type 映射）。
-func isDorisSource(src *enginev1.DataSource) bool {
+func isDorisSource(src *api.DataSource) bool {
 	return src != nil && strings.EqualFold(src.GetKind(), "doris")
 }
 
@@ -25,15 +25,15 @@ func isDorisSource(src *enginev1.DataSource) bool {
 // 此前按「整单首句是否 CREATE TABLE」路由：混合工单（DML + DDL）要么被 MySQL
 // 拆分器整单误报语法错误，要么 DML 部分整段漏审，且单条 Record 与 exec 侧
 // 逐条执行明细对不上。
-func checkDoris(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckReply {
+func checkDoris(ctx context.Context, req *api.CheckRequest) *api.CheckReply {
 	stmts := splitDorisStatements(req.Sql)
 	if len(stmts) == 0 {
-		return &enginev1.CheckReply{Ok: true}
+		return &api.CheckReply{Ok: true}
 	}
 
 	const engine = storepb.Engine_MYSQL
 	plan := reviewRules(req.Rule, engine)
-	recs := make([]*enginev1.Record, 0, len(stmts))
+	recs := make([]*api.Record, 0, len(stmts))
 	for _, text := range stmts {
 		if dorischeck.Parse(text) != nil {
 			// 建表 DDL：dorischeck 一条语句一条记录
@@ -46,5 +46,5 @@ func checkDoris(ctx context.Context, req *enginev1.CheckRequest) *enginev1.Check
 		rec, _ := auditSQLStatement(ctx, engine, text, req.Schema, req.Rule, plan)
 		recs = append(recs, rec)
 	}
-	return &enginev1.CheckReply{Ok: true, Records: recs}
+	return &api.CheckReply{Ok: true, Records: recs}
 }

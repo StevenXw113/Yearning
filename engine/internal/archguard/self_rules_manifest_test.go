@@ -3,13 +3,14 @@ package archguard
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/customrules"
 	"engine/internal/dorischeck"
 	"engine/internal/mongocheck"
@@ -42,7 +43,7 @@ var selfRuleRe = regexp.MustCompile("(?m)^- `([^`]+)` — 开关：")
 type selfRule struct {
 	Group    string   // 小节标题
 	Name     string   // 规则名
-	Switches []string // 对应 enginev1.AuditRole 里的开关字段名
+	Switches []string // 对应 api.AuditRole 里的开关字段名
 	Desc     string   // 说明
 }
 
@@ -89,7 +90,7 @@ func TestSelfRulesManifest(t *testing.T) {
 	}
 }
 
-// TestSelfRuleSwitchesExistInAuditRole 核对每条自研规则的开关都真实存在于 enginev1.AuditRole。
+// TestSelfRuleSwitchesExistInAuditRole 核对每条自研规则的开关都真实存在于 api.AuditRole。
 //
 // 这条护栏挡的是一类静默失效：规则写好了、代码也跑了，但开关名与 proto 字段名不一致——
 // 规则页里配不出来，rule_levels 里的级别也取不到（引擎按字段名查 map），
@@ -103,7 +104,7 @@ func TestSelfRuleSwitchesExistInAuditRole(t *testing.T) {
 		}
 		for _, sw := range r.Switches {
 			if !hasField(fields, sw) {
-				t.Errorf("自研规则 %q 的开关 %q 不在 enginev1.AuditRole 里：规则页配不出来，rule_levels 的级别也无处安放", r.Name, sw)
+				t.Errorf("自研规则 %q 的开关 %q 不在 api.AuditRole 里：规则页配不出来，rule_levels 的级别也无处安放", r.Name, sw)
 			}
 		}
 	}
@@ -128,7 +129,7 @@ func TestMongoSwitchesAreImplemented(t *testing.T) {
 		}
 		found++
 		if !covered[normSwitch(name)] {
-			t.Errorf("enginev1.AuditRole 有 %q，但引擎侧没有实现：请写一条 mongocheck 规则（静态审核）或登记进 mongoExecOnly（执行期限制）", name)
+			t.Errorf("api.AuditRole 有 %q，但引擎侧没有实现：请写一条 mongocheck 规则（静态审核）或登记进 mongoExecOnly（执行期限制）", name)
 		}
 	}
 	if found == 0 {
@@ -153,7 +154,7 @@ func TestMongoConfigCoversAllSwitches(t *testing.T) {
 		}
 		checked++
 		if !cfg.Has(name) {
-			t.Errorf("enginev1.AuditRole 的 %q 在 mongocheck.Config 里没有对应字段：规则读不到它，开关会变成「勾了不生效」", name)
+			t.Errorf("api.AuditRole 的 %q 在 mongocheck.Config 里没有对应字段：规则读不到它，开关会变成「勾了不生效」", name)
 		}
 	}
 	if checked == 0 {
@@ -258,7 +259,7 @@ func TestRedisSwitchesAreImplemented(t *testing.T) {
 		}
 		found++
 		if !covered[normSwitch(name)] {
-			t.Errorf("enginev1.AuditRole 有 %q，但 redischeck 里没有同名规则：规则页勾了不会生效", name)
+			t.Errorf("api.AuditRole 有 %q，但 redischeck 里没有同名规则：规则页勾了不会生效", name)
 		}
 	}
 	if found == 0 {
@@ -283,7 +284,7 @@ func TestDorisSwitchesAreImplemented(t *testing.T) {
 		}
 		found++
 		if !covered[normSwitch(name)] {
-			t.Errorf("enginev1.AuditRole 有 %q，但 dorischeck 里没有同名规则：规则页勾了不会生效", name)
+			t.Errorf("api.AuditRole 有 %q，但 dorischeck 里没有同名规则：规则页勾了不会生效", name)
 		}
 	}
 	if found == 0 {
@@ -305,7 +306,7 @@ func TestDorisConfigCoversAllSwitches(t *testing.T) {
 		}
 		checked++
 		if !cfg.Has(name) {
-			t.Errorf("enginev1.AuditRole 的 %q 在 dorischeck.Config 里没有对应字段：规则读不到它，开关会变成「勾了不生效」", name)
+			t.Errorf("api.AuditRole 的 %q 在 dorischeck.Config 里没有对应字段：规则读不到它，开关会变成「勾了不生效」", name)
 		}
 	}
 	if checked == 0 {
@@ -347,23 +348,29 @@ func TestDorisRulesHaveFrontendEntries(t *testing.T) {
 	}
 }
 
-// auditRoleFields 返回 enginev1.AuditRole 的全部字段名（proto 名，snake_case）。
+// auditRoleFields 返回 api.AuditRole 的全部线缆字段名（json tag，snake_case）。
 func auditRoleFields(t *testing.T) []string {
 	t.Helper()
-	md := (&enginev1.AuditRole{}).ProtoReflect().Descriptor()
-	fds := md.Fields()
-	out := make([]string, 0, fds.Len())
-	for i := 0; i < fds.Len(); i++ {
-		out = append(out, string(fds.Get(i).Name()))
+	st := reflect.TypeOf(api.AuditRole{})
+	out := make([]string, 0, st.NumField())
+	for i := 0; i < st.NumField(); i++ {
+		tag := st.Field(i).Tag.Get("json")
+		if idx := strings.Index(tag, ","); idx >= 0 {
+			tag = tag[:idx]
+		}
+		if tag == "" {
+			tag = st.Field(i).Name
+		}
+		out = append(out, tag)
 	}
 	if len(out) == 0 {
-		t.Fatal("AuditRole 描述符为空，proto 生成物可能有问题")
+		t.Fatal("AuditRole 无字段，契约包可能有问题")
 	}
 	return out
 }
 
 // normSwitch 规范化开关名后比较：Go/前端侧写 PascalCase（MongoForbidEmptyFilter），
-// proto 字段名是 snake_case（mongo_forbid_empty_filter），两者只是命名风格不同。
+// 线缆字段名是 snake_case（mongo_forbid_empty_filter），两者只是命名风格不同。
 func normSwitch(s string) string {
 	return strings.ToLower(strings.ReplaceAll(s, "_", ""))
 }
@@ -491,7 +498,7 @@ func renderSelfRulesManifest(rules []selfRule) string {
 	b.WriteString("- `internal/customrules`：SQL 侧（上游虽有 SQL 规则，但这几条静态规则上游没有实现）\n")
 	b.WriteString("- `internal/mongocheck`：MongoDB 侧（上游完全没有 Mongo 审核能力，\n")
 	b.WriteString("  `common.EngineSupportSQLReview(MONGODB)` 为 false，advisor 目录里也没有 mongodb 方言）\n\n")
-	b.WriteString("每条规则的开关都必须在 `enginev1.AuditRole` 里存在：否则规则页配不出来、\n")
+	b.WriteString("每条规则的开关都必须在 `api.AuditRole` 里存在：否则规则页配不出来、\n")
 	b.WriteString("`rule_levels` 里的级别也取不到（引擎按字段名查 map）。这条由\n")
 	b.WriteString("`TestSelfRuleSwitchesExistInAuditRole` 核对，反方向由 `TestMongoSwitchesAreImplemented` 兜住。\n\n")
 	b.WriteString("上游规则清单见同目录的 `RULES.md`（那份管「上游新增的有没有被漏掉」，与本文件互补）。\n")

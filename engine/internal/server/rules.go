@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/dorischeck"
 	"engine/internal/mongocheck"
 	"engine/internal/redischeck"
@@ -42,7 +42,7 @@ func (p reviewPlan) all() []*storepb.SQLReviewRule {
 }
 
 // ruleLevel 取规则集里某条规则配置的级别；未配置或无法识别时按 error 处理（保持历史行为）。
-func ruleLevel(r *enginev1.AuditRole, key string) string {
+func ruleLevel(r *api.AuditRole, key string) string {
 	switch strings.ToLower(strings.TrimSpace(r.GetRuleLevels()[key])) {
 	case "warn", "warning":
 		return ruleLevelWarn
@@ -68,7 +68,7 @@ func ruleLevel(r *enginev1.AuditRole, key string) string {
 //
 // 规则类型即 Bytebase 的 storepb.SQLReviewRule_Type 枚举；升级 Bytebase 后
 // 枚举增删会在编译期暴露，需同步调整本映射。
-func reviewRules(r *enginev1.AuditRole, engine storepb.Engine) reviewPlan {
+func reviewRules(r *api.AuditRole, engine storepb.Engine) reviewPlan {
 	var plan reviewPlan
 	if r == nil {
 		return plan
@@ -258,20 +258,20 @@ func reviewRules(r *enginev1.AuditRole, engine storepb.Engine) reviewPlan {
 //
 // 取值由 mongocheck 按名字对应关系反射完成——这里不再逐字段映射：
 // 那种写法每条规则都要补一行，漏了不报错、只是规则永远不生效。
-func mongoRulesFrom(r *enginev1.AuditRole, mode string) mongocheck.Config {
-	return mongocheck.ConfigFromProto(r, mongocheck.Mode(mode))
+func mongoRulesFrom(r *api.AuditRole, mode string) mongocheck.Config {
+	return mongocheck.ConfigFromAPI(r, mongocheck.Mode(mode))
 }
 
 // redisRulesFrom 构造 Redis 审核规则配置。
 // Redis 规则与 Mongo 一样是自研的（上游 bytebase 无 Redis advisor），
 // 但字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
-func redisRulesFrom(r *enginev1.AuditRole, mode string) redischeck.Config {
-	return redischeck.ConfigFromProto(r, redischeck.Mode(mode))
+func redisRulesFrom(r *api.AuditRole, mode string) redischeck.Config {
+	return redischeck.ConfigFromAPI(r, redischeck.Mode(mode))
 }
 
 // dorisRulesFrom 构造 Doris 建表审核规则配置。
 // Doris 的建表 DDL 是自有语法、MySQL 解析器审不了，走自研 internal/dorischeck；
 // 字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
-func dorisRulesFrom(r *enginev1.AuditRole) dorischeck.Config {
-	return dorischeck.ConfigFromProto(r)
+func dorisRulesFrom(r *api.AuditRole) dorischeck.Config {
+	return dorischeck.ConfigFromAPI(r)
 }

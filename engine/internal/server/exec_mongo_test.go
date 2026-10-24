@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // TestMongoURI 认证库（authSource）随数据源配置：默认 admin，显式配置用配置值，
@@ -29,7 +29,7 @@ func TestConnectMongoRejectsEmptyIP(t *testing.T) {
 	if _, err := connectMongo(nil); err == nil || !strings.Contains(err.Error(), "IP") {
 		t.Fatalf("nil 数据源应报 IP 为空: %v", err)
 	}
-	if _, err := connectMongo(&enginev1.DataSource{AuthDb: "appdb"}); err == nil || !strings.Contains(err.Error(), "IP") {
+	if _, err := connectMongo(&api.DataSource{AuthDb: "appdb"}); err == nil || !strings.Contains(err.Error(), "IP") {
 		t.Fatalf("空 IP 应报错: %v", err)
 	}
 }

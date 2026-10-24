@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/customrules"
 	"engine/internal/mysqlparse"
 
@@ -25,9 +25,9 @@ import (
 //
 // 其余未知 kind 显式拒绝（fail-closed）：新增数据源若引擎侧未实现，静默按
 // MySQL 审会产出误报/漏报都难察觉的假结果，宁可报「不支持」。
-func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*enginev1.CheckReply, error) {
+func (e *Engine) Check(ctx context.Context, req *api.CheckRequest) (*api.CheckReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
-		return &enginev1.CheckReply{Ok: false, Error: "SQL 不能为空"}, nil
+		return &api.CheckReply{Ok: false, Error: "SQL 不能为空"}, nil
 	}
 	switch {
 	case isMongoSource(req.Source):
@@ -40,7 +40,7 @@ func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*engine
 		return checkDoris(ctx, req), nil
 	}
 	if k := strings.TrimSpace(req.Source.GetKind()); k != "" && !strings.EqualFold(k, "mysql") {
-		return &enginev1.CheckReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
+		return &api.CheckReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
 	}
 	return checkSQL(ctx, req), nil
 }
@@ -151,7 +151,7 @@ func isDDLStatement(text string) bool {
 // 项目级工单用于跨数据源编排，与此规则不冲突：单工单内多条 DDL 的一致性管控由
 // 这里兜底，想一个工单放多条 DDL 的需在规则集里显式打开开关。
 // 违规时追加一条整单级错误记录（Level 1 阻断，检测页据此拦住提交/审批）。
-func appendMultiDDLCheck(recs []*enginev1.Record, stmts []string, rules *enginev1.AuditRole) []*enginev1.Record {
+func appendMultiDDLCheck(recs []*api.Record, stmts []string, rules *api.AuditRole) []*api.Record {
 	n := 0
 	for _, s := range stmts {
 		if isDDLStatement(s) {
@@ -161,7 +161,7 @@ func appendMultiDDLCheck(recs []*enginev1.Record, stmts []string, rules *enginev
 	if n <= 1 || rules == nil || rules.GetDdlMultiToCommit() {
 		return recs
 	}
-	return append(recs, &enginev1.Record{
+	return append(recs, &api.Record{
 		Sql:    "(整单校验)",
 		Status: "审核不通过",
 		Level:  1,
@@ -174,8 +174,8 @@ func appendMultiDDLCheck(recs []*enginev1.Record, stmts []string, rules *enginev
 // 错误组 → 降级组（警告/观察）。mysql / postgres / doris(DML) 三条路径共用，
 // 方言差异只在 engine 参数；影响行数估算等方言专属增强由调用方在返回的
 // Record 上追加。返回的 parsed 供调用方复用（避免重复解析）。
-func auditSQLStatement(ctx context.Context, engine storepb.Engine, text, schema string, rule *enginev1.AuditRole, plan reviewPlan) (*enginev1.Record, []base.ParsedStatement) {
-	rec := &enginev1.Record{Sql: text, Schema: schema, Status: "审核通过", Level: 0}
+func auditSQLStatement(ctx context.Context, engine storepb.Engine, text, schema string, rule *api.AuditRole, plan reviewPlan) (*api.Record, []base.ParsedStatement) {
+	rec := &api.Record{Sql: text, Schema: schema, Status: "审核通过", Level: 0}
 	if f, ok := runCustomRules(rule, text, schema); ok {
 		rec.Error = fmt.Sprintf("[%s] %s", f.Title, f.Content)
 		rec.Status, rec.Level = customStatus(f.Level), uint32(f.Level)
@@ -202,8 +202,8 @@ func auditSQLStatement(ctx context.Context, engine storepb.Engine, text, schema 
 // findingsRecord 把自研规则包（mongocheck / redischeck / dorischeck，三者助手
 // 同构）的命中映射成统一 Record：msgs 为空表示未命中，保持「审核通过」；
 // 命中时按 blocked 区分拦截与仅提示（警告/观察不拦提交，与 SQL 侧降级语义一致）。
-func findingsRecord(sql, schema, msgs string, severity int, blocked bool) *enginev1.Record {
-	rec := &enginev1.Record{Sql: sql, Schema: schema, Status: "审核通过", Level: 0}
+func findingsRecord(sql, schema, msgs string, severity int, blocked bool) *api.Record {
+	rec := &api.Record{Sql: sql, Schema: schema, Status: "审核通过", Level: 0}
 	if msgs == "" {
 		return rec
 	}
@@ -251,7 +251,7 @@ func downgraded(ctx context.Context, engine storepb.Engine, stmts []base.ParsedS
 //
 // 自研规则与上游规则分属两层：前者在 internal/customrules（同步不覆盖），
 // 后者在 internal/bytebase（可被 sync-bytebase.sh 整体重建）。
-func runCustomRules(role *enginev1.AuditRole, sql, schema string) (customrules.Finding, bool) {
+func runCustomRules(role *api.AuditRole, sql, schema string) (customrules.Finding, bool) {
 	if role == nil {
 		return customrules.Finding{}, false
 	}

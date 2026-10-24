@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mongodb"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -39,7 +39,7 @@ func mongoURI(username, password, ip string, port int32, authDB string) string {
 
 // connectMongo 按 DataSource 建立 MongoDB 客户端并 Ping 探活。调用方负责 Disconnect。
 // 口令是明文：主程序在发起 RPC 前已经把口令列解密好了，引擎侧不再持有主程序密钥。
-func connectMongo(ds *enginev1.DataSource) (*mongo.Client, error) {
+func connectMongo(ds *api.DataSource) (*mongo.Client, error) {
 	if ds == nil || ds.Ip == "" {
 		return nil, fmt.Errorf("数据源 IP 为空")
 	}
@@ -65,14 +65,14 @@ func connectMongo(ds *enginev1.DataSource) (*mongo.Client, error) {
 // 与 SQL 引擎不同，Mongo 的执行由引擎独立完成（前镜像抓取与回滚都在 internal/mongodb 里），
 // 结果映射回 ExecReply，与 SQL 同一形状——主程序侧的落库逻辑（Records/Rollback）
 // 因此不需要知道数据源类型。
-func (e *Engine) execMongo(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
+func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
 	var cmd bson.D
 	if err := bson.UnmarshalExtJSON([]byte(req.Order.Sql), false, &cmd); err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "工单内容不是合法的 MongoDB 命令 JSON：" + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "工单内容不是合法的 MongoDB 命令 JSON：" + err.Error()}, nil
 	}
 	// 执行前再过一遍硬保底（与提交时同一套）：提交到审批之间工单内容可能被改过
 	if _, err := mongodb.Validate(cmd); err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
 	maxAffectRows := 0
 	if req.Rules != nil {
@@ -81,7 +81,7 @@ func (e *Engine) execMongo(ctx context.Context, req *enginev1.ExecRequest) (*eng
 
 	client, err := connectMongo(req.Source)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "连接 MongoDB 失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "连接 MongoDB 失败: " + err.Error()}, nil
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
 
@@ -90,13 +90,13 @@ func (e *Engine) execMongo(ctx context.Context, req *enginev1.ExecRequest) (*eng
 	// 索引构建完成与否仍由执行结果体现。见 design.md 语义核对第 4 条。
 	out, err := mongodb.Execute(ctx, client, req.Order.DataBase, cmd, maxAffectRows)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error(),
-			Records: []*enginev1.Record{{Sql: req.Order.Sql, Status: "执行失败", Level: 1, Error: err.Error()}}}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error(),
+			Records: []*api.Record{{Sql: req.Order.Sql, Status: "执行失败", Level: 1, Error: err.Error()}}}, nil
 	}
 
-	rec := &enginev1.Record{Sql: req.Order.Sql, Status: "已执行", AffectRows: uint32(out.Affected)}
+	rec := &api.Record{Sql: req.Order.Sql, Status: "已执行", AffectRows: uint32(out.Affected)}
 	if out.Warning != "" {
 		rec.Error = out.Warning
 	}
-	return &enginev1.ExecReply{Ok: true, Records: []*enginev1.Record{rec}, Rollback: out.Rollback}, nil
+	return &api.ExecReply{Ok: true, Records: []*api.Record{rec}, Rollback: out.Rollback}, nil
 }

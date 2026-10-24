@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 func TestQuerySplitAndInsulate(t *testing.T) {
-	rep, err := NewEngine().Query(context.Background(), &enginev1.QueryRequest{
+	rep, err := NewEngine().Query(context.Background(), &api.QueryRequest{
 		Sql:              "SELECT id FROM users; SELECT * FROM orders",
 		InsulateWordList: "phone, email",
 	})
@@ -32,7 +32,7 @@ func TestQuerySplitAndInsulate(t *testing.T) {
 }
 
 func TestQuerySyntaxError(t *testing.T) {
-	rep, _ := NewEngine().Query(context.Background(), &enginev1.QueryRequest{Sql: "SELECT * FORM t"})
+	rep, _ := NewEngine().Query(context.Background(), &api.QueryRequest{Sql: "SELECT * FORM t"})
 	if !rep.Ok {
 		// 整段语法失败，返回 Ok=false。
 		return
@@ -50,7 +50,7 @@ func TestQuerySyntaxError(t *testing.T) {
 }
 
 func TestQueryEmpty(t *testing.T) {
-	rep, _ := NewEngine().Query(context.Background(), &enginev1.QueryRequest{Sql: ""})
+	rep, _ := NewEngine().Query(context.Background(), &api.QueryRequest{Sql: ""})
 	if rep.Ok {
 		t.Fatalf("expected ok=false for empty")
 	}

@@ -1,10 +1,11 @@
 package redischeck
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // allOn 打开全部开关，用于验证规则本身；参数取一个宽松值
@@ -52,7 +53,7 @@ func TestRegisteredRules(t *testing.T) {
 		if r.Category() == CategorySecurity && r.DefaultLevel() != LevelError {
 			t.Errorf("安全类规则 %s 的默认级别应为 error", r.Name())
 		}
-		// 规则名必须是 Redis 前缀，才能被 ConfigFromProto 的反射映射取到
+		// 规则名必须是 Redis 前缀，才能被 ConfigFromAPI 的反射映射取到
 		if !strings.HasPrefix(r.Name(), "Redis") {
 			t.Errorf("规则 %s 的名称应以 Redis 开头（proto 字段前缀约定）", r.Name())
 		}
@@ -233,15 +234,15 @@ func TestSwitchesOffMeansNoFinding(t *testing.T) {
 	}
 }
 
-func TestConfigFromProtoFillsSwitches(t *testing.T) {
-	role := &enginev1.AuditRole{
+func TestConfigFromAPIFillsSwitches(t *testing.T) {
+	role := &api.AuditRole{
 		RedisForbidDangerous: true,
 		RedisMaxAffectKeys:   100,
 		RedisKeyPrefix:       "app:",
 		RedisRequireTtl:      true,
 		RuleLevels:           map[string]string{"RedisForbidDangerous": "warn"},
 	}
-	cfg := ConfigFromProto(role, ModeQuery)
+	cfg := ConfigFromAPI(role, ModeQuery)
 
 	if !cfg.ForbidDangerous {
 		t.Error("redis_forbid_dangerous 未映射到 ForbidDangerous")
@@ -267,22 +268,22 @@ func TestConfigFromProtoFillsSwitches(t *testing.T) {
 	}
 }
 
-// 每个 proto 里的 redis_* 开关都必须能在 Config 里找到对应字段
+// 每个 AuditRole 里的 Redis 开关都必须能在 Config 里找到对应字段
 // （archguard 里有全局版本，这里保证本包自身可用）
-func TestConfigCoversProtoSwitches(t *testing.T) {
-	fds := (&enginev1.AuditRole{}).ProtoReflect().Descriptor().Fields()
+func TestConfigCoversContractSwitches(t *testing.T) {
+	st := reflect.TypeOf(api.AuditRole{})
 	found := 0
-	for i := 0; i < fds.Len(); i++ {
-		name := string(fds.Get(i).Name())
-		if !strings.HasPrefix(name, "redis_") {
+	for i := 0; i < st.NumField(); i++ {
+		name := st.Field(i).Name
+		if !strings.HasPrefix(name, "Redis") {
 			continue
 		}
 		found++
 		if !(Config{}).Has(name) {
-			t.Errorf("proto 字段 %s 在 Config 里没有对应字段（会导致该开关永远不生效）", name)
+			t.Errorf("契约字段 %s 在 Config 里没有对应字段（会导致该开关永远不生效）", name)
 		}
 	}
 	if found == 0 {
-		t.Fatal("proto 里没有任何 redis_* 字段，proto 是否已重新生成？")
+		t.Fatal("AuditRole 里没有任何 Redis 字段，契约包是否已同步？")
 	}
 }

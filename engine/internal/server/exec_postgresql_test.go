@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // TestPostgreSQLDatabaseCandidates 默认库候选：普通用户先 postgres 再试同名库，
@@ -44,7 +44,7 @@ func TestPostgreSQLConnectRejectsEmptyIP(t *testing.T) {
 	if _, err := connectPostgreSQL(context.Background(), nil, "public"); err == nil || !strings.Contains(err.Error(), "IP") {
 		t.Fatalf("nil 数据源应报 IP 为空: %v", err)
 	}
-	if _, err := connectPostgreSQL(context.Background(), &enginev1.DataSource{}, "public"); err == nil || !strings.Contains(err.Error(), "IP") {
+	if _, err := connectPostgreSQL(context.Background(), &api.DataSource{}, "public"); err == nil || !strings.Contains(err.Error(), "IP") {
 		t.Fatalf("空 IP 应报错: %v", err)
 	}
 }

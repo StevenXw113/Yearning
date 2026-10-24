@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // TestSplitDorisStatements 切分器对引号与注释的处理：注释里的分号属于注释文本，
@@ -46,10 +46,10 @@ func TestSplitDorisStatements(t *testing.T) {
 // 审核输出的记录数与语句真实条数一致，且不误报语法错误。
 func TestCheckDorisCommentSemicolon(t *testing.T) {
 	sql := "CREATE TABLE t1 (id INT) DISTRIBUTED BY HASH(id) BUCKETS 8 -- k; v\n;"
-	rep, err := testEngine().Check(t.Context(), &enginev1.CheckRequest{
+	rep, err := testEngine().Check(t.Context(), &api.CheckRequest{
 		Sql:    sql,
-		Rule:   &enginev1.AuditRole{},
-		Source: &enginev1.DataSource{Kind: "doris"},
+		Rule:   &api.AuditRole{},
+		Source: &api.DataSource{Kind: "doris"},
 	})
 	if err != nil {
 		t.Fatalf("err: %v", err)

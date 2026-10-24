@@ -5,15 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // dorisReq 构造 Doris 审核请求。
-func dorisReq(sql string) *enginev1.CheckRequest {
-	return &enginev1.CheckRequest{
+func dorisReq(sql string) *api.CheckRequest {
+	return &api.CheckRequest{
 		Sql:    sql,
-		Rule:   &enginev1.AuditRole{},
-		Source: &enginev1.DataSource{Kind: "doris"},
+		Rule:   &api.AuditRole{},
+		Source: &api.DataSource{Kind: "doris"},
 	}
 }
 
@@ -71,10 +71,10 @@ func TestCheckDorisCreateWithoutDistribution(t *testing.T) {
 		t.Fatalf("规则未开启时应通过: %+v", rep.Records)
 	}
 	// 规则开启：无 DISTRIBUTED BY 拦截
-	rep2, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:    "CREATE TABLE t1 (id INT)",
-		Rule:   &enginev1.AuditRole{DorisRequireDistribution: true},
-		Source: &enginev1.DataSource{Kind: "doris"},
+		Rule:   &api.AuditRole{DorisRequireDistribution: true},
+		Source: &api.DataSource{Kind: "doris"},
 	})
 	if len(rep2.Records) != 1 || rep2.Records[0].Level != 1 || !strings.Contains(rep2.Records[0].Error, "DISTRIBUTED") {
 		t.Fatalf("开启规则后无 DISTRIBUTED BY 应拦截: %+v", rep2.Records)

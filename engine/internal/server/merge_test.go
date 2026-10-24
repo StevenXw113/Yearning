@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 func TestMergeAlterSameTable(t *testing.T) {
-	rep, err := NewEngine().MergeAlterTables(context.Background(), &enginev1.MergeAlterTablesRequest{
+	rep, err := NewEngine().MergeAlterTables(context.Background(), &api.MergeAlterTablesRequest{
 		Sqls: "ALTER TABLE users ADD age INT; ALTER TABLE users ADD city VARCHAR(50)",
 	})
 	if err != nil {
@@ -25,7 +25,7 @@ func TestMergeAlterSameTable(t *testing.T) {
 }
 
 func TestMergeAlterDifferentTableKeepsOriginal(t *testing.T) {
-	rep, _ := NewEngine().MergeAlterTables(context.Background(), &enginev1.MergeAlterTablesRequest{
+	rep, _ := NewEngine().MergeAlterTables(context.Background(), &api.MergeAlterTablesRequest{
 		Sqls: "ALTER TABLE a ADD x INT; ALTER TABLE b ADD y INT",
 	})
 	if !rep.Ok {
@@ -38,7 +38,7 @@ func TestMergeAlterDifferentTableKeepsOriginal(t *testing.T) {
 }
 
 func TestMergeAlterEmpty(t *testing.T) {
-	rep, _ := NewEngine().MergeAlterTables(context.Background(), &enginev1.MergeAlterTablesRequest{Sqls: ""})
+	rep, _ := NewEngine().MergeAlterTables(context.Background(), &api.MergeAlterTablesRequest{Sqls: ""})
 	if rep.Ok {
 		t.Fatalf("expected ok=false for empty input")
 	}

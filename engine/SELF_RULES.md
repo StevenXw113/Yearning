@@ -11,7 +11,7 @@
 - `internal/mongocheck`：MongoDB 侧（上游完全没有 Mongo 审核能力，
   `common.EngineSupportSQLReview(MONGODB)` 为 false，advisor 目录里也没有 mongodb 方言）
 
-每条规则的开关都必须在 `enginev1.AuditRole` 里存在：否则规则页配不出来、
+每条规则的开关都必须在 `api.AuditRole` 里存在：否则规则页配不出来、
 `rule_levels` 里的级别也取不到（引擎按字段名查 map）。这条由
 `TestSelfRuleSwitchesExistInAuditRole` 核对，反方向由 `TestMongoSwitchesAreImplemented` 兜住。
 

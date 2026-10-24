@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 )
@@ -13,9 +13,9 @@ import (
 func testEngine() *Engine { return NewEngine() }
 
 func TestCheckSyntaxError(t *testing.T) {
-	rep, err := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "SELEC 1 FROM",
-		Rule: &enginev1.AuditRole{},
+		Rule: &api.AuditRole{},
 	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -29,9 +29,9 @@ func TestCheckSyntaxError(t *testing.T) {
 }
 
 func TestCheckMultiStatementSplit(t *testing.T) {
-	rep, err := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "SELECT 1; SELECT 2; SELECT 3",
-		Rule: &enginev1.AuditRole{},
+		Rule: &api.AuditRole{},
 	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -49,17 +49,17 @@ func TestCheckMultiStatementSplit(t *testing.T) {
 
 func TestCheckDropWhenForbidden(t *testing.T) {
 	// DDLEnableDropTable 语义为“允许删除表”，未开启即禁止。
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "DROP TABLE users",
-		Rule: &enginev1.AuditRole{},
+		Rule: &api.AuditRole{},
 	})
 	if rep.Records[0].Error == "" {
 		t.Fatalf("expected drop blocked, got %+v", rep.Records[0])
 	}
 	// 开启后放行。
-	rep2, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "DROP TABLE users",
-		Rule: &enginev1.AuditRole{DdlEnableDropTable: true},
+		Rule: &api.AuditRole{DdlEnableDropTable: true},
 	})
 	if rep2.Records[0].Error != "" {
 		t.Fatalf("expected drop allowed, got %+v", rep2.Records[0])
@@ -68,17 +68,17 @@ func TestCheckDropWhenForbidden(t *testing.T) {
 
 func TestCheckCreateTableRequirePK(t *testing.T) {
 	sql := "CREATE TABLE t (id INT, name VARCHAR(10))"
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  sql,
-		Rule: &enginev1.AuditRole{DdlEnablePrimaryKey: true},
+		Rule: &api.AuditRole{DdlEnablePrimaryKey: true},
 	})
 	if !strings.Contains(rep.Records[0].Error, "TABLE_REQUIRE_PK") {
 		t.Fatalf("expected pk rule hit, got %+v", rep.Records[0])
 	}
 
-	rep2, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR(10))",
-		Rule: &enginev1.AuditRole{DdlEnablePrimaryKey: true},
+		Rule: &api.AuditRole{DdlEnablePrimaryKey: true},
 	})
 	if rep2.Records[0].Error != "" {
 		t.Fatalf("expected pass with pk, got %+v", rep2.Records[0])
@@ -90,9 +90,9 @@ func TestCheckCreateTableRequirePK(t *testing.T) {
 // 这两个开关开启时，规则内曾 nil 解引用 panic，被 advisor 兜住后误报成「SQL 语法错误」，
 // 导致所有 DDL 审核都失败。
 func TestCheckDDLNotPanicOnMetadataRules(t *testing.T) {
-	rep, err := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql: "CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR(20))",
-		Rule: &enginev1.AuditRole{
+		Rule: &api.AuditRole{
 			DdlMaxKey:              5,
 			DdlCheckColumnNullable: true,
 		},
@@ -109,9 +109,9 @@ func TestCheckDDLNotPanicOnMetadataRules(t *testing.T) {
 }
 
 func TestCheckTableNamingPrefix(t *testing.T) {
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "CREATE TABLE bad_name (id INT PRIMARY KEY)",
-		Rule: &enginev1.AuditRole{DdlTablePrefix: "app_"},
+		Rule: &api.AuditRole{DdlTablePrefix: "app_"},
 	})
 	if !strings.Contains(rep.Records[0].Error, "NAMING_TABLE") {
 		t.Fatalf("expected naming rule hit, got %+v", rep.Records[0])
@@ -120,18 +120,18 @@ func TestCheckTableNamingPrefix(t *testing.T) {
 
 func TestCheckUpdateWithoutWhere(t *testing.T) {
 	// 规则要求 DML 必须有 where
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "UPDATE users SET name='x'",
-		Rule: &enginev1.AuditRole{DmlWhere: true},
+		Rule: &api.AuditRole{DmlWhere: true},
 	})
 	if !strings.Contains(rep.Records[0].Error, "WHERE") {
 		t.Fatalf("expected no-where blocked, got %+v", rep.Records[0])
 	}
 
 	// 合法 update 应放行
-	rep2, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "UPDATE users SET name='x' WHERE id=1",
-		Rule: &enginev1.AuditRole{DmlWhere: true},
+		Rule: &api.AuditRole{DmlWhere: true},
 	})
 	if rep2.Records[0].Error != "" {
 		t.Fatalf("expected pass with where, got %+v", rep2.Records[0])
@@ -139,9 +139,9 @@ func TestCheckUpdateWithoutWhere(t *testing.T) {
 }
 
 func TestCheckDeleteWithoutWhere(t *testing.T) {
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "DELETE FROM orders",
-		Rule: &enginev1.AuditRole{DmlWhere: true},
+		Rule: &api.AuditRole{DmlWhere: true},
 	})
 	if !strings.Contains(rep.Records[0].Error, "WHERE") {
 		t.Fatalf("expected delete blocked, got %+v", rep.Records[0])
@@ -150,7 +150,7 @@ func TestCheckDeleteWithoutWhere(t *testing.T) {
 
 // 规则级别：默认 error 拦截，warn/observe 只提示/记录（都不拦提交）。
 func TestReviewRulesLevelGroups(t *testing.T) {
-	role := &enginev1.AuditRole{
+	role := &api.AuditRole{
 		DmlWhere:            true,
 		DmlOrder:            true,
 		DdlEnablePrimaryKey: true,
@@ -192,9 +192,9 @@ func TestReviewRulesLevelGroups(t *testing.T) {
 
 // 端到端：warn 不影响通过，error 才判不通过。
 func TestCheckWarnDoesNotBlock(t *testing.T) {
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql: "DELETE FROM orders",
-		Rule: &enginev1.AuditRole{
+		Rule: &api.AuditRole{
 			DmlWhere:   true,
 			RuleLevels: map[string]string{"DMLWhere": "warn"},
 		},
@@ -207,9 +207,9 @@ func TestCheckWarnDoesNotBlock(t *testing.T) {
 		t.Fatal("warn 命中仍应给出提示文案")
 	}
 
-	rep2, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "DELETE FROM orders",
-		Rule: &enginev1.AuditRole{DmlWhere: true},
+		Rule: &api.AuditRole{DmlWhere: true},
 	})
 	if rep2.Records[0].Level != 1 {
 		t.Fatalf("未配置级别时仍应拦截（level=1），实际 %+v", rep2.Records[0])
@@ -220,30 +220,30 @@ func TestCheckWarnDoesNotBlock(t *testing.T) {
 // 未设置 source 时仍按 MySQL。这三条分支此前没有任何测试覆盖。
 func TestCheckDispatchesBySourceKind(t *testing.T) {
 	// mongodb：查询模式下只读命令通过、写命令被拒（说明没进 SQL 解析器）
-	rep, err := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:    `{"find":"users"}`,
 		Mode:   "query",
-		Source: &enginev1.DataSource{Kind: "mongodb"},
-		Rule:   &enginev1.AuditRole{},
+		Source: &api.DataSource{Kind: "mongodb"},
+		Rule:   &api.AuditRole{},
 	})
 	if err != nil || !rep.Ok {
 		t.Fatalf("mongodb 只读命令应通过: err=%v rep=%+v", err, rep)
 	}
-	rep, err = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err = testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:    `{"delete":"users","deletes":[{"q":{"a":1},"limit":0}]}`,
 		Mode:   "query",
-		Source: &enginev1.DataSource{Kind: "mongodb"},
-		Rule:   &enginev1.AuditRole{},
+		Source: &api.DataSource{Kind: "mongodb"},
+		Rule:   &api.AuditRole{},
 	})
 	if err != nil || rep.Ok || !strings.Contains(rep.Error, "只读") {
 		t.Fatalf("mongodb 写命令在查询模式下应被拒: err=%v rep=%+v", err, rep)
 	}
 
 	// redis：合法命令按命令审核，不应出现 SQL 语法错误
-	rep, err = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err = testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:    "SET a b",
-		Source: &enginev1.DataSource{Kind: "redis"},
-		Rule:   &enginev1.AuditRole{},
+		Source: &api.DataSource{Kind: "redis"},
+		Rule:   &api.AuditRole{},
 	})
 	if err != nil || !rep.Ok || len(rep.Records) != 1 {
 		t.Fatalf("redis 命令应走命令审核: err=%v rep=%+v", err, rep)
@@ -253,9 +253,9 @@ func TestCheckDispatchesBySourceKind(t *testing.T) {
 	}
 
 	// 未设置 source：仍按 MySQL（老调用方行为不变）
-	rep, err = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err = testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "SELEC 1",
-		Rule: &enginev1.AuditRole{},
+		Rule: &api.AuditRole{},
 	})
 	if err != nil || len(rep.Records) != 1 || !strings.Contains(rep.Records[0].Error, "语法错误") {
 		t.Fatalf("空 source 应仍按 MySQL 解析: err=%v rep=%+v", err, rep)
@@ -291,7 +291,7 @@ func TestFirstKeyword(t *testing.T) {
 func TestCheckMultiDDLRules(t *testing.T) {
 	multiDDL := "CREATE TABLE a(id int);\nCREATE TABLE b(id int);"
 
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{Sql: multiDDL, Rule: &enginev1.AuditRole{}})
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{Sql: multiDDL, Rule: &api.AuditRole{}})
 	if !rep.Ok {
 		t.Fatalf("ok=false: %s", rep.Error)
 	}
@@ -308,9 +308,9 @@ func TestCheckMultiDDLRules(t *testing.T) {
 		t.Fatalf("未开启 DDLMultiToCommit 时应追加整单校验错误记录, records=%+v", rep.Records)
 	}
 
-	rep, _ = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ = testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  multiDDL,
-		Rule: &enginev1.AuditRole{DdlMultiToCommit: true},
+		Rule: &api.AuditRole{DdlMultiToCommit: true},
 	})
 	for _, r := range rep.Records {
 		if r.Sql == "(整单校验)" {
@@ -319,9 +319,9 @@ func TestCheckMultiDDLRules(t *testing.T) {
 	}
 
 	// 单条 DDL + 若干 DML：不算多条 DDL，不应触发
-	rep, _ = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ = testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  "CREATE TABLE a(id int);\nINSERT INTO a VALUES(1);",
-		Rule: &enginev1.AuditRole{},
+		Rule: &api.AuditRole{},
 	})
 	for _, r := range rep.Records {
 		if r.Sql == "(整单校验)" {
@@ -332,11 +332,11 @@ func TestCheckMultiDDLRules(t *testing.T) {
 
 // TestCheckMultiDDLRulesPostgreSQL PostgreSQL 入口与 MySQL 行为一致。
 func TestCheckMultiDDLRulesPostgreSQL(t *testing.T) {
-	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:    "CREATE TABLE a(id int);\nDROP TABLE b;",
 		Schema: "public",
-		Source: &enginev1.DataSource{Kind: "postgres"},
-		Rule:   &enginev1.AuditRole{},
+		Source: &api.DataSource{Kind: "postgres"},
+		Rule:   &api.AuditRole{},
 	})
 	found := false
 	for _, r := range rep.Records {

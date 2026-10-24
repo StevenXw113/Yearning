@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/server/emetrics"
 )
 
@@ -16,12 +16,12 @@ import (
 //   - mysql / 空 kind → execSQL（exec_mysql.go；不填 kind 的历史调用方按 MySQL）
 //
 // 其余未知 kind 显式拒绝（fail-closed）：宁可报错也不能落到错误方言上执行。
-func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
+func (e *Engine) Exec(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
 	if req == nil || req.Order == nil {
-		return &enginev1.ExecReply{Ok: false, Error: "工单为空"}, nil
+		return &api.ExecReply{Ok: false, Error: "工单为空"}, nil
 	}
 	if strings.TrimSpace(req.Order.Sql) == "" {
-		return &enginev1.ExecReply{Ok: false, Error: "工单 SQL 为空"}, nil
+		return &api.ExecReply{Ok: false, Error: "工单 SQL 为空"}, nil
 	}
 
 	switch k := strings.ToLower(strings.TrimSpace(req.Source.GetKind())); k {
@@ -46,7 +46,7 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 		defer emetrics.ActiveExecs.Add(-1)
 		return e.execDoris(ctx, req)
 	default:
-		return &enginev1.ExecReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
+		return &api.ExecReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
 	}
 }
 
@@ -61,7 +61,7 @@ func orderType(t int32) string {
 // affectRowOverLimit 判断真实影响行数是否超过规则集上限（0 = 不限制）。
 // DML 工单用 MaxAffectRows，DDL 工单用 MaxDdlAffectRows，与开关文案语义一致；
 // 三条 SQL 执行路径（mysql / postgresql / doris）共用，执行期逐条语句比对。
-func affectRowOverLimit(rules *enginev1.AuditRole, tp string, rows uint32) (bool, uint32) {
+func affectRowOverLimit(rules *api.AuditRole, tp string, rows uint32) (bool, uint32) {
 	var limit uint32
 	if rules != nil {
 		if tp == "dml" {
@@ -77,7 +77,7 @@ func affectRowOverLimit(rules *enginev1.AuditRole, tp string, rows uint32) (bool
 // 状态保持「已执行/执行失败」不变、只补说明——与 Mongo 执行器的 Warning
 // 呈现方式一致（rec.Error 随执行明细落库展示）。静默吞掉会让 backup=1 的
 // 工单在审批人不知情的情况下没有回滚语句。
-func attachRollbackWarning(recs []*enginev1.Record, warn string) {
+func attachRollbackWarning(recs []*api.Record, warn string) {
 	if warn == "" || len(recs) == 0 {
 		return
 	}

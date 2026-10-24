@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // Query 将用户的查询 SQL 拆分为若干独立语句并逐条做语法/合规预检。
@@ -17,9 +17,9 @@ import (
 //   - mysql / 空 kind → querySQL（query_sql.go；不填 kind 的历史调用方按 MySQL）
 //
 // 其余未知 kind 显式拒绝（fail-closed），与 Check / Exec 保持一致。
-func (e *Engine) Query(_ context.Context, req *enginev1.QueryRequest) (*enginev1.QueryReply, error) {
+func (e *Engine) Query(_ context.Context, req *api.QueryRequest) (*api.QueryReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
-		return &enginev1.QueryReply{Ok: false, Error: "SQL 不能为空"}, nil
+		return &api.QueryReply{Ok: false, Error: "SQL 不能为空"}, nil
 	}
 	switch k := strings.ToLower(strings.TrimSpace(req.GetKind())); k {
 	case "", "mysql":
@@ -29,7 +29,7 @@ func (e *Engine) Query(_ context.Context, req *enginev1.QueryRequest) (*enginev1
 	case "doris":
 		return queryDoris(req), nil
 	default:
-		return &enginev1.QueryReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
+		return &api.QueryReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
 	}
 }
 

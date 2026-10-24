@@ -4,11 +4,11 @@ import (
 	"reflect"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
-// Config 规则开关的取值快照，由 server 从 enginev1.AuditRole 构造。
-// 字段显式类型；proto → Config 的映射用 ConfigFromProto 反射完成（对齐 mongocheck）。
+// Config 规则开关的取值快照，由 server 从 api.AuditRole 构造。
+// 字段显式类型；AuditRole → Config 的映射用 ConfigFromAPI 反射完成（对齐 mongocheck）。
 type Config struct {
 	// 建表必须有 DISTRIBUTED BY（否则 Doris 默认随机分桶，不可控）
 	RequireDistribution bool
@@ -23,36 +23,35 @@ type Config struct {
 	Levels map[string]string
 }
 
-// ConfigFromProto 从规则集构造 Config：AuditRole 里 doris_* 的字段按名字自动填进 Config。
-func ConfigFromProto(r *enginev1.AuditRole) Config {
+// ConfigFromAPI 从规则集构造 Config：AuditRole 里 doris_* 的字段按名字自动填进 Config。
+func ConfigFromAPI(r *api.AuditRole) Config {
 	var cfg Config
 	if r == nil {
 		return cfg
 	}
-	cfg.Levels = r.GetRuleLevels()
+	cfg.Levels = r.RuleLevels
 
-	ref := r.ProtoReflect()
-	fds := ref.Descriptor().Fields()
+	src := reflect.ValueOf(r).Elem()
 	dst := reflect.ValueOf(&cfg).Elem()
-	for i := 0; i < fds.Len(); i++ {
-		fd := fds.Get(i)
-		if !strings.HasPrefix(strings.ToLower(string(fd.Name())), "doris") {
+	st := src.Type()
+	for i := 0; i < st.NumField(); i++ {
+		f := st.Field(i)
+		if !strings.HasPrefix(strings.ToLower(f.Name), "doris") {
 			continue
 		}
 		field := dst.FieldByNameFunc(func(name string) bool {
-			return normSwitch(name) == protoFieldKey(string(fd.Name()))
+			return normSwitch(name) == protoFieldKey(f.Name)
 		})
 		if !field.IsValid() || !field.CanSet() {
 			continue
 		}
-		val := ref.Get(fd)
 		switch field.Kind() {
 		case reflect.Bool:
-			field.SetBool(val.Bool())
-		case reflect.Int:
-			field.SetInt(val.Int())
+			field.SetBool(src.Field(i).Bool())
+		case reflect.Int, reflect.Int32, reflect.Int64:
+			field.SetInt(src.Field(i).Int())
 		case reflect.String:
-			field.SetString(val.String())
+			field.SetString(src.Field(i).String())
 		}
 	}
 	return cfg
@@ -65,8 +64,8 @@ func (Config) Has(name string) bool {
 	}).IsValid()
 }
 
-// protoFieldKey 把 proto 字段名归一化成 Config 字段名：
-// doris_require_distribution → requiredistribution。
+// protoFieldKey 把 AuditRole 字段名归一化成 Config 字段名：
+// DorisRequireDistribution → requiredistribution。
 func protoFieldKey(protoName string) string {
 	return strings.TrimPrefix(normSwitch(protoName), "doris")
 }

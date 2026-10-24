@@ -1,26 +1,25 @@
 package server
 
 import (
-	"context"
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	enginev1 "engine/gen/engine/v1"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
+	"engine/api"
 )
 
 // 生成自签 CA / 服务端证书 / 客户端证书（测试专用，内存生成落临时目录）。
@@ -108,66 +107,54 @@ func TestMTLSEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadServerTLS: %v", err)
 	}
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsCfg)))
-	enginev1.RegisterEngineServiceServer(s, NewEngine())
-	go func() { _ = s.Serve(lis) }()
-	defer s.Stop()
+	srv := httptest.NewUnstartedServer(NewHandler(NewEngine(), ""))
+	srv.TLS = tlsCfg
+	srv.StartTLS()
+	defer srv.Close()
 
 	clientPool := x509.NewCertPool()
 	clientPool.AppendCertsFromPEM(mustRead(t, caPath))
+	body, _ := json.Marshal(&api.CheckRequest{Sql: "SELECT 1"})
 
 	// 带客户端证书：可用
 	cert, err := tls.LoadX509KeyPair(clientCert, clientKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	good, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(
-		credentials.NewTLS(&tls.Config{RootCAs: clientPool, Certificates: []tls.Certificate{cert}, ServerName: "127.0.0.1"})))
+	good := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		RootCAs:      clientPool,
+		Certificates: []tls.Certificate{cert},
+	}}, Timeout: 10 * time.Second}
+	rep, err := good.Post(srv.URL+"/v1/check", "application/json", bytes.NewReader(body))
 	if err != nil {
-		t.Fatal(err)
-	}
-	defer good.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := enginev1.NewEngineServiceClient(good).Check(ctx, &enginev1.CheckRequest{Sql: "SELECT 1"}); err != nil {
 		t.Fatalf("持有效客户端证书应可用: %v", err)
+	}
+	rep.Body.Close()
+	if rep.StatusCode != http.StatusOK {
+		t.Fatalf("持有效客户端证书应可用: status=%d", rep.StatusCode)
 	}
 
 	// 不带客户端证书：握手被拒
-	anon, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(
-		credentials.NewTLS(&tls.Config{RootCAs: clientPool, ServerName: "127.0.0.1"})))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer anon.Close()
-	if _, err := enginev1.NewEngineServiceClient(anon).Check(ctx, &enginev1.CheckRequest{Sql: "SELECT 1"}); err == nil {
+	anon := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		RootCAs: clientPool,
+	}}, Timeout: 10 * time.Second}
+	if _, err := anon.Post(srv.URL+"/v1/check", "application/json", bytes.NewReader(body)); err == nil {
 		t.Fatal("无客户端证书应被 mTLS 拒绝")
 	}
 }
 
 // TestPlainStillWorks 引擎未配 TLS 时明文客户端照常可用（内网现状兼容）。
 func TestPlainStillWorks(t *testing.T) {
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	srv := httptest.NewServer(NewHandler(NewEngine(), ""))
+	defer srv.Close()
+	body, _ := json.Marshal(&api.CheckRequest{Sql: "SELECT 1"})
+	rep, err := http.Post(srv.URL+"/v1/check", "application/json", bytes.NewReader(body))
 	if err != nil {
-		t.Fatal(err)
-	}
-	s := grpc.NewServer()
-	enginev1.RegisterEngineServiceServer(s, NewEngine())
-	go func() { _ = s.Serve(lis) }()
-	defer s.Stop()
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := enginev1.NewEngineServiceClient(conn).Check(ctx, &enginev1.CheckRequest{Sql: "SELECT 1"}); err != nil {
 		t.Fatalf("明文模式不应受影响: %v", err)
+	}
+	rep.Body.Close()
+	if rep.StatusCode != http.StatusOK {
+		t.Fatalf("明文模式不应受影响: status=%d", rep.StatusCode)
 	}
 }
 

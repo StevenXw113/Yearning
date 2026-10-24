@@ -16,7 +16,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/bytebase/plugin/parser/base"
 	mysqlparser "engine/internal/bytebase/plugin/parser/mysql"
@@ -52,7 +52,7 @@ type binlogCapture struct {
 }
 
 // newBinlogCapture 记录工单执行前的 binlog 位点；binlog 不可用时返回 false，调用方改用前镜像方案。
-func newBinlogCapture(ctx context.Context, src *enginev1.DataSource, db *sql.DB, meta *tableMeta, schema string, stmts []string) (*binlogCapture, bool) {
+func newBinlogCapture(ctx context.Context, src *api.DataSource, db *sql.DB, meta *tableMeta, schema string, stmts []string) (*binlogCapture, bool) {
 	if src == nil || src.Ip == "" {
 		return nil, false
 	}
@@ -97,7 +97,7 @@ func newBinlogCapture(ctx context.Context, src *enginev1.DataSource, db *sql.DB,
 
 // binlogTLSConfig 按 DataSource 的 CA / 客户端证书构造复制流 TLS 配置。
 // CA 或证书对非法（解析失败）时返回 nil：退回明文与旧行为一致，由抓取失败路径兜底。
-func binlogTLSConfig(src *enginev1.DataSource) *tls.Config {
+func binlogTLSConfig(src *api.DataSource) *tls.Config {
 	if src.Ca == "" && src.Cert == "" && src.Key == "" {
 		return nil
 	}

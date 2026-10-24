@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 
 	_ "github.com/go-sql-driver/mysql" // Doris 兼容 MySQL 协议，用 mysql driver 直连
 )
 
 // dorisDSN 构造 Doris 连接串。Doris 兼容 MySQL 协议（FE 的 MySQL 协议端口），
 // 用 go-sql-driver/mysql 直连即可。
-func dorisDSN(s *enginev1.DataSource, db string) (string, error) {
+func dorisDSN(s *api.DataSource, db string) (string, error) {
 	if s == nil || s.Ip == "" {
 		return "", fmt.Errorf("数据源 IP 为空")
 	}
@@ -110,40 +110,40 @@ func splitDorisStatements(sql string) []string {
 //
 // Doris 是分析型 MPP：DML 不支持事务、也没有 binlog 前镜像，
 // 与 PostgreSQL 一样接受「不可回滚」，回滚语句留空，执行结果照常写 Records。
-func (e *Engine) execDoris(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
+func (e *Engine) execDoris(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
 	stmts := splitDorisStatements(req.Order.Sql)
 	if len(stmts) == 0 {
-		return &enginev1.ExecReply{Ok: false, Error: "SQL 拆分失败"}, nil
+		return &api.ExecReply{Ok: false, Error: "SQL 拆分失败"}, nil
 	}
 
 	dsn, err := dorisDSN(req.Source, req.Order.DataBase)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
 	}
 	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
 	}
 	if req.Order.DataBase != "" {
 		if _, err = db.ExecContext(ctx, "USE `"+escapeSQLIdent(req.Order.DataBase)+"`"); err != nil {
-			return &enginev1.ExecReply{Ok: false, Error: "切换库失败: " + err.Error()}, nil
+			return &api.ExecReply{Ok: false, Error: "切换库失败: " + err.Error()}, nil
 		}
 	}
 
-	recs := make([]*enginev1.Record, 0, len(stmts))
+	recs := make([]*api.Record, 0, len(stmts))
 	for _, text := range stmts {
-		rec := &enginev1.Record{Sql: text, Status: "执行中", Level: 0}
+		rec := &api.Record{Sql: text, Status: "执行中", Level: 0}
 		res, err := db.ExecContext(ctx, text)
 		if err != nil {
 			rec.Error = err.Error()
 			rec.Status = "执行失败"
 			rec.Level = 1
 			recs = append(recs, rec)
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
+			return &api.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
 		}
 		if n, err := res.RowsAffected(); err == nil {
 			rec.AffectRows = uint32(n)
@@ -154,11 +154,11 @@ func (e *Engine) execDoris(ctx context.Context, req *enginev1.ExecRequest) (*eng
 			rec.Status = "执行失败"
 			rec.Level = 1
 			recs = append(recs, rec)
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
+			return &api.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
 		}
 		rec.Status = "已执行"
 		recs = append(recs, rec)
 	}
 	// Doris 无 binlog / 前镜像回滚，回滚语句留空
-	return &enginev1.ExecReply{Ok: true, Records: recs}, nil
+	return &api.ExecReply{Ok: true, Records: recs}, nil
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -81,7 +81,7 @@ func TestTruncationWarning(t *testing.T) {
 // TestAttachRollbackWarning 回滚告警必须挂到最后一条记录上（Status 不变），
 // 已有错误时追加而不是覆盖——静默吞掉会让 backup=1 的工单无人知晓地失去回滚。
 func TestAttachRollbackWarning(t *testing.T) {
-	recs := []*enginev1.Record{{Sql: "a", Status: "已执行"}}
+	recs := []*api.Record{{Sql: "a", Status: "已执行"}}
 	attachRollbackWarning(recs, "回滚抓取失败")
 	if recs[0].Error != "回滚抓取失败" || recs[0].Status != "已执行" {
 		t.Fatalf("应挂到末条记录且不改状态: %+v", recs[0])

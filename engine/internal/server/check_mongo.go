@@ -3,12 +3,12 @@ package server
 import (
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mongocheck"
 )
 
 // isMongoSource 判断审核目标是否为 MongoDB 数据源（kind 由主程序按 db_type 映射）。
-func isMongoSource(src *enginev1.DataSource) bool {
+func isMongoSource(src *api.DataSource) bool {
 	return src != nil && strings.EqualFold(src.GetKind(), "mongodb")
 }
 
@@ -18,12 +18,12 @@ func isMongoSource(src *enginev1.DataSource) bool {
 // req.Mode 决定审哪一种：空/write = 变更命令（申请页、工单执行前），
 // query = 只读命令（查询页，写命令直接拒绝）。
 // 记录字段与 SQL 侧对齐：Level 1 拦截 / 2 警告 / 3 观察，前端只拦 1。
-func checkMongo(req *enginev1.CheckRequest) *enginev1.CheckReply {
+func checkMongo(req *api.CheckRequest) *api.CheckReply {
 	_, findings, err := mongocheck.Check(req.Sql, mongoRulesFrom(req.Rule, req.GetMode()))
 	if err != nil {
-		return &enginev1.CheckReply{Ok: false, Error: err.Error()}
+		return &api.CheckReply{Ok: false, Error: err.Error()}
 	}
 	rec := findingsRecord(strings.TrimSpace(req.Sql), req.Schema,
 		mongocheck.Messages(findings), mongocheck.Severity(findings), mongocheck.Blocked(findings) != nil)
-	return &enginev1.CheckReply{Ok: true, Records: []*enginev1.Record{rec}}
+	return &api.CheckReply{Ok: true, Records: []*api.Record{rec}}
 }

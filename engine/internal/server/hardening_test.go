@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // TestUnknownKindFailsClosed 未知 kind 显式拒绝：新增数据源若引擎侧未实现，
 // 静默按 MySQL 审会产出误报/漏报都难察觉的假结果。三个 RPC 行为一致。
 func TestUnknownKindFailsClosed(t *testing.T) {
-	src := &enginev1.DataSource{Kind: "clickhouse"}
+	src := &api.DataSource{Kind: "clickhouse"}
 
-	rep, err := NewEngine().Check(context.Background(), &enginev1.CheckRequest{
-		Sql: "SELECT 1", Rule: &enginev1.AuditRole{}, Source: src,
+	rep, err := NewEngine().Check(context.Background(), &api.CheckRequest{
+		Sql: "SELECT 1", Rule: &api.AuditRole{}, Source: src,
 	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -23,23 +23,23 @@ func TestUnknownKindFailsClosed(t *testing.T) {
 		t.Fatalf("Check 未知 kind 应拒绝: %+v", rep)
 	}
 
-	erep, _ := NewEngine().Exec(context.Background(), &enginev1.ExecRequest{
-		Order:  &enginev1.Order{Sql: "SELECT 1", Type: 0},
+	erep, _ := NewEngine().Exec(context.Background(), &api.ExecRequest{
+		Order:  &api.Order{Sql: "SELECT 1", Type: 0},
 		Source: src,
 	})
 	if erep.Ok || !strings.Contains(erep.Error, "不支持") {
 		t.Fatalf("Exec 未知 kind 应拒绝: %+v", erep)
 	}
 
-	qrep, _ := NewEngine().Query(context.Background(), &enginev1.QueryRequest{Sql: "SELECT 1", Kind: "clickhouse"})
+	qrep, _ := NewEngine().Query(context.Background(), &api.QueryRequest{Sql: "SELECT 1", Kind: "clickhouse"})
 	if qrep.Ok || !strings.Contains(qrep.Error, "不支持") {
 		t.Fatalf("Query 未知 kind 应拒绝: %+v", qrep)
 	}
 
 	// mysql 与空 kind 仍按 MySQL（历史调用方行为不变）
 	for _, kind := range []string{"mysql", ""} {
-		mrep, _ := NewEngine().Check(context.Background(), &enginev1.CheckRequest{
-			Sql: "SELECT 1", Rule: &enginev1.AuditRole{}, Source: &enginev1.DataSource{Kind: kind},
+		mrep, _ := NewEngine().Check(context.Background(), &api.CheckRequest{
+			Sql: "SELECT 1", Rule: &api.AuditRole{}, Source: &api.DataSource{Kind: kind},
 		})
 		if !mrep.Ok {
 			t.Fatalf("kind=%q 应按 MySQL 放行: %+v", kind, mrep)
@@ -88,7 +88,7 @@ func TestIsReadOnlyQuery(t *testing.T) {
 // 主程序 PreCheck 读到 rec.Error 即拒绝，本地不会再执行。
 func TestQueryRejectsWriteStatement(t *testing.T) {
 	for _, kind := range []string{"", "mysql", "postgres", "doris"} {
-		rep, err := NewEngine().Query(context.Background(), &enginev1.QueryRequest{Sql: "DELETE FROM t WHERE id=1", Kind: kind})
+		rep, err := NewEngine().Query(context.Background(), &api.QueryRequest{Sql: "DELETE FROM t WHERE id=1", Kind: kind})
 		if err != nil {
 			t.Fatalf("kind=%q err: %v", kind, err)
 		}
@@ -111,7 +111,7 @@ func TestMergeAlterKnownUnsafeCombos(t *testing.T) {
 		"ALTER TABLE t ADD FULLTEXT INDEX f1(a); ALTER TABLE t ADD FULLTEXT INDEX f2(b)",
 	}
 	for _, sql := range cases {
-		rep, err := NewEngine().MergeAlterTables(context.Background(), &enginev1.MergeAlterTablesRequest{Sqls: sql})
+		rep, err := NewEngine().MergeAlterTables(context.Background(), &api.MergeAlterTablesRequest{Sqls: sql})
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}

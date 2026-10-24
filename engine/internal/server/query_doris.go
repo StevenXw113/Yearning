@@ -1,7 +1,7 @@
 package server
 
 import (
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	storepb "engine/internal/bytebase/generated-go/store"
 	"engine/internal/mysqlparse"
 )
@@ -10,23 +10,23 @@ import (
 //
 // Doris 的查询/DML 语法兼容 MySQL，所以这里直接用 MySQL 方言拆分与语法检查；
 // 建表 DDL 不会出现在查询页（查询页只执行只读查询），故无需处理 Doris 特有语法。
-func queryDoris(req *enginev1.QueryRequest) *enginev1.QueryReply {
+func queryDoris(req *api.QueryRequest) *api.QueryReply {
 	const engine = storepb.Engine_MYSQL
 
 	stmts, err := mysqlparse.SplitEngine(engine, req.Sql)
 	if err != nil {
-		return &enginev1.QueryReply{Ok: false, Error: err.Error()}
+		return &api.QueryReply{Ok: false, Error: err.Error()}
 	}
 	if len(stmts) == 0 {
 		if perr := mysqlparse.CheckEngine(engine, req.Sql); perr != nil {
-			return &enginev1.QueryReply{Ok: false, Error: "SQL 语法错误: " + perr.Error()}
+			return &api.QueryReply{Ok: false, Error: "SQL 语法错误: " + perr.Error()}
 		}
-		return &enginev1.QueryReply{Ok: true, Records: nil}
+		return &api.QueryReply{Ok: true, Records: nil}
 	}
 
-	recs := make([]*enginev1.Record, 0, len(stmts))
+	recs := make([]*api.Record, 0, len(stmts))
 	for _, text := range stmts {
-		rec := &enginev1.Record{
+		rec := &api.Record{
 			Sql:   text,
 			Level: 0,
 		}
@@ -44,5 +44,5 @@ func queryDoris(req *enginev1.QueryRequest) *enginev1.QueryReply {
 		}
 		recs = append(recs, rec)
 	}
-	return &enginev1.QueryReply{Ok: true, Records: recs}
+	return &api.QueryReply{Ok: true, Records: recs}
 }

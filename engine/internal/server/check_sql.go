@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mysqlparse"
 
 	"github.com/bytebase/omni/mysql/ast"
@@ -16,22 +16,22 @@ import (
 
 // checkSQL 执行 MySQL 静态审核：拆分 → 逐条 auditSQLStatement → 影响行数估算。
 // 方言固定 MySQL；估算与行数上限是 MySQL 专属增强，挂在共享审核结果之上。
-func checkSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckReply {
+func checkSQL(ctx context.Context, req *api.CheckRequest) *api.CheckReply {
 	const engine = storepb.Engine_MYSQL
 
 	stmts, err := mysqlparse.SplitEngine(engine, req.Sql)
 	if err != nil {
-		return &enginev1.CheckReply{Ok: false, Error: "SQL 拆分失败: " + err.Error()}
+		return &api.CheckReply{Ok: false, Error: "SQL 拆分失败: " + err.Error()}
 	}
 	if len(stmts) == 0 {
 		if perr := mysqlparse.CheckEngine(engine, req.Sql); perr != nil {
-			return &enginev1.CheckReply{Ok: false, Error: "SQL 语法错误: " + perr.Error()}
+			return &api.CheckReply{Ok: false, Error: "SQL 语法错误: " + perr.Error()}
 		}
-		return &enginev1.CheckReply{Ok: true}
+		return &api.CheckReply{Ok: true}
 	}
 
 	plan := reviewRules(req.Rule, engine)
-	recs := make([]*enginev1.Record, 0, len(stmts))
+	recs := make([]*api.Record, 0, len(stmts))
 	var db *sql.DB // 懒连接：仅 UPDATE/DELETE 估算影响行数时使用
 	defer func() {
 		if db != nil {
@@ -58,12 +58,12 @@ func checkSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckRe
 	}
 	// 整单级校验：多条 DDL 需规则集显式允许（见 appendMultiDDLCheck）
 	recs = appendMultiDDLCheck(recs, stmts, req.Rule)
-	return &enginev1.CheckReply{Ok: true, Records: recs}
+	return &api.CheckReply{Ok: true, Records: recs}
 }
 
 // estimateRows 估算单条语句影响行数，best-effort：连不上库或无法判断时记 0，不影响审核结果。
 // INSERT/REPLACE 按 VALUES 元组数；UPDATE/DELETE 用 EXPLAIN FORMAT=JSON 估算（与 Bytebase 同策略）。
-func estimateRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, schema string, node ast.Node, stmtText string) uint32 {
+func estimateRows(ctx context.Context, dbp **sql.DB, src *api.DataSource, schema string, node ast.Node, stmtText string) uint32 {
 	switch s := node.(type) {
 	case *ast.InsertStmt:
 		if s.Select == nil { // INSERT ... SELECT 行数取决于数据，无法静态估算
@@ -78,7 +78,7 @@ func estimateRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, s
 // explainRows 对单条 UPDATE/DELETE 执行 EXPLAIN FORMAT=JSON 估算影响行数。
 // node 是该语句的 AST：上游 3.23.0 起解析函数需要它来判断 DML 目标表
 // （旧版只吃 plan 字符串）。
-func explainRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, schema string, node ast.Node, stmtText string) uint32 {
+func explainRows(ctx context.Context, dbp **sql.DB, src *api.DataSource, schema string, node ast.Node, stmtText string) uint32 {
 	db := *dbp
 	if db == nil {
 		if src == nil || src.Ip == "" {

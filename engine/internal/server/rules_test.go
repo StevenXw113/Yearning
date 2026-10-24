@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 	bbadvisor "engine/internal/bytebase/plugin/advisor"
@@ -13,8 +13,8 @@ import (
 
 // auditRoleAllOn 返回所有规则开关都打开的 AuditRole：
 // 覆盖"强制/检查 X"类规则（开启即生效）。
-func auditRoleAllOn() *enginev1.AuditRole {
-	return &enginev1.AuditRole{
+func auditRoleAllOn() *api.AuditRole {
+	return &api.AuditRole{
 		DmlAllowLimitStmt:              true,
 		DmlInsertColumns:               true,
 		DmlMaxInsertRows:               10,
@@ -57,7 +57,7 @@ func auditRoleAllOn() *enginev1.AuditRole {
 // 都能在 Bytebase MySQL 侧找到实现。上游若删除/改名规则，这里会失败，
 // 而不是等到用户提交 SQL 时才以 "unknown advisor" 暴露。
 func TestReviewRulesAreRegisteredForMySQL(t *testing.T) {
-	cases := map[string]*enginev1.AuditRole{
+	cases := map[string]*api.AuditRole{
 		"全部开启": auditRoleAllOn(),
 		"全部关闭": {}, // 覆盖"允许 X"类开关取反得到的禁止规则
 	}

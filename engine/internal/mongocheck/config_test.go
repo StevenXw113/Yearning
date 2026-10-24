@@ -3,18 +3,18 @@ package mongocheck
 import (
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
-// TestConfigFromProto 核对反射取数这一层：它是「新增规则不必再写逐行映射」的关键，
+// TestConfigFromAPI 核对反射取数这一层：它是「新增规则不必再写逐行映射」的关键，
 // 也是最容易静默失效的一层——名字对不上不会报错，只是开关永远读到零值。
-func TestConfigFromProto(t *testing.T) {
-	role := &enginev1.AuditRole{
+func TestConfigFromAPI(t *testing.T) {
+	role := &api.AuditRole{
 		MongoForbidEmptyFilter: true,
 		MongoForbidWhere:       true,
 		RuleLevels:             map[string]string{RuleEmptyFilter: "warn"},
 	}
-	cfg := ConfigFromProto(role, ModeQuery)
+	cfg := ConfigFromAPI(role, ModeQuery)
 
 	if !cfg.ForbidEmptyFilter {
 		t.Error("mongo_forbid_empty_filter=true 应填进 Config.ForbidEmptyFilter")
@@ -36,12 +36,12 @@ func TestConfigFromProto(t *testing.T) {
 		t.Errorf("未配级别时应取默认 error, got %q", got)
 	}
 	// 配了非法级别：回落默认级别，不静默变成「不拦」
-	bad := ConfigFromProto(&enginev1.AuditRole{MongoForbidWhere: true, RuleLevels: map[string]string{RuleWhere: "bogus"}}, ModeWrite)
+	bad := ConfigFromAPI(&api.AuditRole{MongoForbidWhere: true, RuleLevels: map[string]string{RuleWhere: "bogus"}}, ModeWrite)
 	if got := bad.Level(whereRule); got != LevelError {
 		t.Errorf("非法级别应回落 error, got %q", got)
 	}
 	// 规则集为空（数据源没绑规则集）：全部关闭，不 panic
-	empty := ConfigFromProto(nil, ModeWrite)
+	empty := ConfigFromAPI(nil, ModeWrite)
 	if empty.ForbidEmptyFilter || empty.ForbidDangerous || empty.ForbidWhere || empty.ForbidDropCollection {
 		t.Error("规则集为空时不应有任何开关开启")
 	}

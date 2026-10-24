@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/mysqlparse"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -15,7 +15,7 @@ import (
 )
 
 // mysqlDSN 构造 MySQL DSN。首期支持明文 TCP；配了 CA/Cert/Key 则启用 TLS。
-func mysqlDSN(s *enginev1.DataSource, db string) (string, error) {
+func mysqlDSN(s *api.DataSource, db string) (string, error) {
 	if s == nil || s.Ip == "" {
 		return "", fmt.Errorf("数据源 IP 为空")
 	}
@@ -34,27 +34,27 @@ func mysqlDSN(s *enginev1.DataSource, db string) (string, error) {
 // execSQL 执行 MySQL 工单：连接与切库后走共享骨架 execSQLStatements
 // （事务、语法预检、影响行数上限），回滚两级方案的挂载在这里：
 // binlog 抓取优先（capture 钩子），不可用时退回前镜像（buildRollback 钩子）。
-func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
+func (e *Engine) execSQL(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
 	stmts, err := mysqlparse.Split(req.Order.Sql)
 	if err != nil || len(stmts) == 0 {
-		return &enginev1.ExecReply{Ok: false, Error: "SQL 拆分失败"}, nil
+		return &api.ExecReply{Ok: false, Error: "SQL 拆分失败"}, nil
 	}
 
 	dsn, err := mysqlDSN(req.Source, req.Order.DataBase)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
 	}
 	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
 	}
 	if req.Order.DataBase != "" {
 		if _, err = db.ExecContext(ctx, "USE `"+escapeSQLIdent(req.Order.DataBase)+"`"); err != nil {
-			return &enginev1.ExecReply{Ok: false, Error: "切换库失败: " + err.Error()}, nil
+			return &api.ExecReply{Ok: false, Error: "切换库失败: " + err.Error()}, nil
 		}
 	}
 

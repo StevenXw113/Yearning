@@ -5,24 +5,24 @@ import (
 	"strings"
 	"testing"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // TestAffectRowOverLimit 规则集影响行数上限的判定：DML 用 MaxAffectRows、
 // DDL 用 MaxDdlAffectRows，未配置（0）不限制。
 func TestAffectRowOverLimit(t *testing.T) {
-	rules := &enginev1.AuditRole{MaxAffectRows: 10, MaxDdlAffectRows: 100}
+	rules := &api.AuditRole{MaxAffectRows: 10, MaxDdlAffectRows: 100}
 	cases := []struct {
-		rules *enginev1.AuditRole
+		rules *api.AuditRole
 		tp    string
 		rows  uint32
 		over  bool
 	}{
-		{rules, "dml", 10, false},          // 等于上限不拦
-		{rules, "dml", 11, true},           // 超过拦截
-		{rules, "ddl", 101, true},          // DDL 用另一档
-		{nil, "dml", 999999, false},        // 无规则集不拦
-		{&enginev1.AuditRole{}, "dml", 1, false}, // 未配置（0）不拦
+		{rules, "dml", 10, false},           // 等于上限不拦
+		{rules, "dml", 11, true},            // 超过拦截
+		{rules, "ddl", 101, true},           // DDL 用另一档
+		{nil, "dml", 999999, false},         // 无规则集不拦
+		{&api.AuditRole{}, "dml", 1, false}, // 未配置（0）不拦
 	}
 	for _, c := range cases {
 		if over, _ := affectRowOverLimit(c.rules, c.tp, c.rows); over != c.over {
@@ -35,9 +35,9 @@ func TestAffectRowOverLimit(t *testing.T) {
 // （VALUES 元组数，无需连库）超过 MaxAffectRows 时判「审核不通过」。
 func TestCheckAffectRowLimitOnEstimate(t *testing.T) {
 	sql := "INSERT INTO t (id, name) VALUES (1,'a'),(2,'b'),(3,'c')"
-	rep, err := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep, err := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  sql,
-		Rule: &enginev1.AuditRole{MaxAffectRows: 2},
+		Rule: &api.AuditRole{MaxAffectRows: 2},
 	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -51,9 +51,9 @@ func TestCheckAffectRowLimitOnEstimate(t *testing.T) {
 	}
 
 	// 未配置上限：估算行数照记，但不拦截
-	rep2, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
 		Sql:  sql,
-		Rule: &enginev1.AuditRole{},
+		Rule: &api.AuditRole{},
 	})
 	if r2 := rep2.Records[0]; r2.AffectRows != 3 || r2.Level != 0 || r2.Error != "" {
 		t.Fatalf("未配置上限应通过且保留估算行数: %+v", r2)

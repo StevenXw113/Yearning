@@ -1,6 +1,6 @@
 # engine
 
-Yearning 的独立数据库引擎适配服务，通过 **gRPC** 替代原 Juno `net/rpc`，首期支持 MySQL。
+Yearning 的独立数据库引擎适配服务（独立进程，主服务经 **HTTP+JSON** 调用；最初以 gRPC 替代原 Juno `net/rpc`，后迁移到 stdlib HTTP），首期支持 MySQL。
 
 审核能力直接复用 Bytebase 原生实现：SQL 解析器与 MySQL 审核规则已从
 [Bytebase 官方仓库](https://github.com/bytebase/bytebase)**脚本化内化**到 `internal/bytebase/`
@@ -71,7 +71,7 @@ binlog 方案会在执行前记录位点，执行完成（含提交）后读取�
 解析器与审核规则已内化，`go.mod` 只保留运行所需的最小依赖：`github.com/bytebase/omni`
 （Bytebase 的 SQL 解析器）、`github.com/zeebo/xxh3` / `github.com/hashicorp/golang-lru/v2`
 （解析器内部缓存）、`github.com/go-mysql-org/go-mysql`（回滚语句的 binlog 抓取）、
-`protobuf` / `grpc`。不存在 `replace` 指令，也不再引入 tidb 的 SQL 解析器 / 各方言解析器 /
+`protobuf`（仅 bytebase 内部 store 结构使用）。不存在 `replace` 指令，也不再引入 tidb 的 SQL 解析器 / 各方言解析器 /
 cel-go / connectrpc / LSP 等无关依赖。
 
 > `go-mysql` 的 `client` 包间接引入 `tidb/pkg/parser` 的少量子包
@@ -161,8 +161,9 @@ docker run -d --name yearning-engine --restart always -p 13307:13307 yearning-en
 
 几点要记住：
 
-- 替换瞬间（几秒）检测会失败一次：主程序每次请求新建 gRPC 连接、`conf.toml` **不热加载**，
-  因此**换端口或换地址必须重启主程序**；同端口替换只需审核人重试一次即可。
+- 替换瞬间（几秒）检测会失败一次：幂等方法（Check/Query/Merge）会在主程序侧自动重试
+  约 4.5s 覆盖重启窗口，`conf.toml` **不热加载**，因此**换端口或换地址必须重启主程序**；
+  同端口替换只需审核人重试一次即可。Exec 不会自动重试（非幂等，防止语句二次执行）。
 - diff 用的是「当前全局规则集」，配置本身不参与比较——门禁只看引擎行为。
 - 没有元数据库权限时可先导出 SQL：`-sql-file`（每行一个工单）+ `-rule-file`（`audit_role` JSON）。
 - 发布后到「设置 → 审核规则 → 检测上游更新」核对版本号（该数字来自主程序的 `bytebaseRef` 常量，
@@ -223,26 +224,22 @@ cd engine
 
 ```
 engine/
-├── proto/engine/v1/engine.proto   # gRPC 契约
-├── gen/engine/v1/                 # 生成的 Go 代码（enginev1）
+├── api/                           # 线缆契约（手写 struct + json tag，主服务与引擎共用）
 ├── cmd/engine/                    # 服务端入口
 ├── internal/bytebase/             # 内化的 Bytebase 解析器与 MySQL 审核规则（镜像上游 backend/）
 ├── internal/mysqlparse/           # 解析器封装：语句拆分 / 语法校验
-├── internal/server/               # gRPC 实现（check.go 审核链路、rules.go 规则映射）
+├── internal/server/               # HTTP 实现（http.go 路由/认证/埋点，check.go 审核链路、rules.go 规则映射）
 ├── internal/customrules/          # 自研审核规则（同步不覆盖，可自由扩展）
 ├── internal/archguard/            # 架构护栏测试：耦合边界 + 规则映射一致性
 ├── scripts/                       # sync-bytebase.sh 同步 / trim-bytebase.py 裁剪
-├── buf.gen.yaml / buf.yaml        # proto 生成配置
 ├── Dockerfile
 └── README.md
 ```
 
-## 生成代码（改 proto 后执行）
+## 契约变更
 
-```bash
-cd engine
-buf generate        # 需 PATH 含 protoc-gen-go / protoc-gen-go-grpc
-```
+改 `api/api.go`（字段只增不改不删）后，主服务与引擎**同仓库同版本发布**即可，
+JSON 缺省零值保证向前兼容；语义级变更才开 /v2 路由。
 
 ## 运行
 
@@ -253,7 +250,7 @@ go run ./cmd/engine -addr :13307
 ### 访问认证（跨不完全可信网络部署必须启用）
 
 引擎本质是「拿到数据源凭据即可执行 SQL」的代理：任何能访问 13307 的客户端，
-自带数据源地址与口令就能通过 `Exec` RPC 直接对数据库执行语句。因此除完全
+自带数据源地址与口令就能通过 `Exec` 直接对数据库执行语句。因此除完全
 隔离的可信内网外，都应启用共享令牌认证：
 
 ```bash
@@ -262,11 +259,18 @@ go run ./cmd/engine -addr :13307 -auth-token "$(openssl rand -base64 32)"
 ENGINE_AUTH_TOKEN=... ./engine
 
 # 主程序侧：conf.toml [General].RpcToken（或环境变量 RPC_TOKEN）配同一值
-# 两端都配置 → 所有业务方法要求 metadata authorization: Bearer <token>；
-# 两端都留空 → 不认证（历史行为）；只配一端 → 全部请求被拒（401 Unauthenticated）
+# 两端都配置 → 所有业务方法要求 Header authorization: Bearer <token>；
+# 两端都留空 → 不认证（历史行为）；只配一端 → 全部请求被拒（401）
 ```
 
-健康检查（grpc.health.v1）与服务反射豁免认证——容器探针和 grpcurl 不带令牌。
+健康检查（GET /healthz）豁免认证——容器探针不带令牌。调试直接 curl：
+
+```bash
+curl -s 127.0.0.1:13307/healthz
+curl -s -X POST 127.0.0.1:13307/v1/check \
+  -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" \
+  -d '{"sql":"SELECT 1","rule":{}}'
+```
 
 ### TLS / mTLS（传输加密与双向身份）
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"engine/internal/rediscmd"
 
 	"github.com/redis/go-redis/v9"
@@ -18,7 +18,7 @@ import (
 const redisTimeout = 15 * time.Second
 
 // redisOptions 按 DataSource 构造客户端选项。口令为空表示未开认证（Redis 允许无密码）。
-func redisOptions(ds *enginev1.DataSource) *redis.Options {
+func redisOptions(ds *api.DataSource) *redis.Options {
 	opt := &redis.Options{
 		Addr:         net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port))),
 		Password:     ds.Password,
@@ -35,7 +35,7 @@ func redisOptions(ds *enginev1.DataSource) *redis.Options {
 
 // connectRedisDB 建连并选中指定逻辑库（go-redis 在建连时按 Options.DB 发 SELECT）。
 // 口令是明文：主程序在发起 RPC 前已经把口令列解密好了。
-func connectRedisDB(ds *enginev1.DataSource, db int) (*redis.Client, error) {
+func connectRedisDB(ds *api.DataSource, db int) (*redis.Client, error) {
 	if ds == nil || ds.Ip == "" {
 		return nil, fmt.Errorf("数据源 IP 为空")
 	}
@@ -73,27 +73,27 @@ func redisParseDB(name string) (int, error) {
 //
 // 与 Mongo 同属命令式引擎：前镜像抓取与回滚在 internal/rediscmd 里完成，
 // 结果映射回 ExecReply，与 SQL / Mongo 同一形状。
-func (e *Engine) execRedis(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
+func (e *Engine) execRedis(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
 	// 执行前过硬保底（与提交时同一套）
 	if _, _, err := rediscmd.Validate(req.Order.Sql); err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
 	dbNo, err := redisParseDB(req.Order.DataBase)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
 	client, err := connectRedisDB(req.Source, dbNo)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: "连接 Redis 失败: " + err.Error()}, nil
+		return &api.ExecReply{Ok: false, Error: "连接 Redis 失败: " + err.Error()}, nil
 	}
 	defer func() { _ = client.Close() }()
 
 	out, err := rediscmd.Execute(ctx, client, req.Order.Sql)
 	if err != nil {
-		return &enginev1.ExecReply{Ok: false, Error: err.Error(),
-			Records: []*enginev1.Record{{Sql: req.Order.Sql, Status: "执行失败", Level: 1, Error: err.Error()}}}, nil
+		return &api.ExecReply{Ok: false, Error: err.Error(),
+			Records: []*api.Record{{Sql: req.Order.Sql, Status: "执行失败", Level: 1, Error: err.Error()}}}, nil
 	}
 
-	rec := &enginev1.Record{Sql: req.Order.Sql, Status: "已执行", AffectRows: uint32(out.Affected)}
-	return &enginev1.ExecReply{Ok: true, Records: []*enginev1.Record{rec}, Rollback: out.Rollback}, nil
+	rec := &api.Record{Sql: req.Order.Sql, Status: "已执行", AffectRows: uint32(out.Affected)}
+	return &api.ExecReply{Ok: true, Records: []*api.Record{rec}, Rollback: out.Rollback}, nil
 }
