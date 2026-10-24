@@ -9,7 +9,22 @@ import (
 	"github.com/cookieY/yee/logger"
 	"github.com/robfig/cron/v3"
 	"sync"
+	"sync/atomic"
 	"time"
+)
+
+// cronOnce 分钟级 cron 的防重入保护：robfig/cron 每次触发起独立 goroutine
+// （startJob），上一轮没跑完下一轮照发——延迟工单执行一轮可能超过 1 分钟
+// （大工单），无保护时并发度随重入轮数无界增长。
+type cronOnce struct{ inFlight atomic.Bool }
+
+func (o *cronOnce) begin() bool { return o.inFlight.CompareAndSwap(false, true) }
+func (o *cronOnce) end()        { o.inFlight.Store(false) }
+
+var (
+	delayCronOnce    cronOnce
+	selfHealCronOnce cronOnce
+	maskQueryOnce    cronOnce
 )
 
 // cronTabDelayOrder 每分钟扫描到期的延迟执行工单(status=5)并触发执行。
@@ -22,6 +37,10 @@ import (
 func cronTabDelayOrder() {
 	crontab := cron.New()
 	if _, err := crontab.AddFunc("* * * * *", func() {
+		if !delayCronOnce.begin() {
+			return // 上一轮仍在执行，本轮跳过
+		}
+		defer delayCronOnce.end()
 		var orders []model.CoreSqlOrder
 		now := time.Now().Format("2006-01-02 15:04")
 		// delay 为 'YYYY-MM-DD HH:MM' 到点即执行；delay='manual' 是人工执行、
@@ -79,6 +98,10 @@ func cronTabDelayOrder() {
 func cronTabSelfHeal() {
 	crontab := cron.New()
 	if _, err := crontab.AddFunc("* * * * *", func() {
+		if !selfHealCronOnce.begin() {
+			return
+		}
+		defer selfHealCronOnce.end()
 		hours := model.C.General.SelfHealHours
 		if hours <= 0 {
 			return
@@ -93,8 +116,8 @@ func cronTabSelfHeal() {
 				continue // 长时 OSC 在本进程正常执行中，豁免
 			}
 			res := model.DB().Model(&model.CoreSqlOrder{}).
-				Where("work_id =? AND `status` =?", o.WorkId, 3).
-				Updates(map[string]interface{}{"status": 4})
+				Where("work_id =? AND `status` =?", o.WorkId, model.OrderStatusExecuting).
+				Updates(map[string]interface{}{"status": model.OrderStatusFailed})
 			if res.Error != nil || res.RowsAffected != 1 {
 				continue // 刚被收尾（竞态）或已被处理
 			}
@@ -116,6 +139,10 @@ func cronTabSelfHeal() {
 func cronTabMaskQuery() {
 	crontab := cron.New()
 	if _, err := crontab.AddFunc("* * * * *", func() {
+		if !maskQueryOnce.begin() {
+			return
+		}
+		defer maskQueryOnce.end()
 		var queryOrder []model.CoreQueryOrder
 		model.DB().Model(model.CoreQueryOrder{}).Where("`status` =?", 2).Find(&queryOrder)
 		for _, i := range queryOrder {

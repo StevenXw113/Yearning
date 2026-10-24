@@ -50,6 +50,9 @@ func main() {
 	limit := flag.Int("limit", 200, "最多比对多少笔工单")
 	show := flag.Int("show", 8, "最多打印多少条差异明细")
 	timeout := flag.Duration("timeout", 60*time.Second, "单笔 Check 的超时")
+	// token 引擎共享访问令牌：引擎启用认证（-auth-token）后对拍必须带同一令牌，
+	// 否则所有 Check 都被拒 Unauthenticated，发布门禁失效
+	token := flag.String("token", os.Getenv("ENGINE_AUTH_TOKEN"), "引擎共享访问令牌（默认取环境变量 ENGINE_AUTH_TOKEN；引擎未启用认证时留空）")
 	flag.Parse()
 
 	if *oldAddr == "" || *newAddr == "" {
@@ -72,13 +75,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	oldConn, err := dial(*oldAddr)
+	oldConn, err := dial(*oldAddr, *token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "连接线上引擎 %s 失败: %v\n", *oldAddr, err)
 		os.Exit(2)
 	}
 	defer oldConn.Close()
-	newConn, err := dial(*newAddr)
+	newConn, err := dial(*newAddr, *token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "连接候选引擎 %s 失败: %v\n", *newAddr, err)
 		os.Exit(2)
@@ -219,10 +222,14 @@ func loadCorpus(metaDSN, sqlFile string, limit int) ([]statement, error) {
 	return out, rows.Err()
 }
 
-func dial(addr string) (*grpc.ClientConn, error) {
+func dial(addr, token string) (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	if token != "" {
+		opts = append(opts, grpc.WithPerRPCCredentials(rpcToken(token)))
+	}
+	conn, err := grpc.NewClient(addr, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,6 +239,15 @@ func dial(addr string) (*grpc.ClientConn, error) {
 	}
 	return conn, nil
 }
+
+// rpcToken 把共享令牌注入每个请求（与主程序 src/lib/calls 同一约定）。
+type rpcToken string
+
+func (t rpcToken) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return map[string]string{"authorization": "Bearer " + string(t)}, nil
+}
+
+func (t rpcToken) RequireTransportSecurity() bool { return false }
 
 func ruleSource(ruleFile string) string {
 	if ruleFile != "" {
