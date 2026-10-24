@@ -17,7 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// DBTypeMongoDB 数据源类型：0 mysql（默认）、1 pg、2 mongodb（另见 pg.go / redis.go）
+// DBTypeMongoDB 数据源类型：0 mysql（默认）、1 PostgreSQL、2 mongodb（另见 postgresql.go / redis.go）
 const DBTypeMongoDB = 2
 
 // MongoTimeout 建立连接与探活的超时

@@ -55,8 +55,8 @@ func ruleLevel(r *enginev1.AuditRole, key string) string {
 
 // reviewRules 将 Yearning 的 AuditRole 开关映射为 Bytebase SQL 审核规则，并按配置级别分组。
 //
-// 规则 Type 枚举是 MySQL 与 pg 共用的，所以同一套开关映射可以同时服务两个方言：
-// engine 参数决定规则挂到哪个方言上。pg 没有实现的 Type（如自增/无符号/LIMIT）
+// 规则 Type 枚举是 MySQL 与 PostgreSQL 共用的，所以同一套开关映射可以同时服务两个方言：
+// engine 参数决定规则挂到哪个方言上。PostgreSQL 没有实现的 Type（如自增/无符号/LIMIT）
 // 会在 review() 执行时被跳过，见 check.go 里对 "unknown advisor" 的处理。
 //
 // 语义约定（与前端规则说明保持一致）：

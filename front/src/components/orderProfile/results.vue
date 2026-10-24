@@ -65,7 +65,7 @@
 
   const activeKey = ref('1');
 
-  // 0 mysql / 1 pg / 2 mongodb / 3 redis（与后端 model.DBType* 一致）
+  // 0 mysql / 1 PostgreSQL / 2 mongodb / 3 redis（与后端 model.DBType* 一致）
   const dbType = ref(0);
 
   const resultTable = reactive<tableRef>({

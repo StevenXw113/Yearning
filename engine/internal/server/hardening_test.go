@@ -48,7 +48,7 @@ func TestUnknownKindFailsClosed(t *testing.T) {
 }
 
 // TestIsReadOnlyQuery 只读白名单的词法判定：注释藏关键字、字符串里的 "delete"
-// 都骗不过；pg 的 WITH ... INSERT 也能识别为写。
+// 都骗不过；PostgreSQL 的 WITH ... INSERT 也能识别为写。
 func TestIsReadOnlyQuery(t *testing.T) {
 	cases := []struct {
 		sql  string
@@ -70,7 +70,7 @@ func TestIsReadOnlyQuery(t *testing.T) {
 		// 字符串里的关键字不误判
 		{"SELECT * FROM t WHERE note='please delete me'", true},
 		{"SELECT 'update' FROM t", true},
-		// WITH：只读 CTE 放行；pg 的 WITH ... INSERT 拒绝
+		// WITH：只读 CTE 放行；PostgreSQL 的 WITH ... INSERT 拒绝
 		{"WITH c AS (SELECT 1) SELECT * FROM c", true},
 		{"WITH c AS (SELECT 1) INSERT INTO t SELECT * FROM c", false},
 		{"WITH del AS (DELETE FROM t RETURNING *) SELECT * FROM del", false},

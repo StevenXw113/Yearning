@@ -12,7 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// DBTypeRedis 数据源类型：0 mysql（默认）、1 pg（未实现）、2 mongodb、3 redis
+// DBTypeRedis 数据源类型：0 mysql（默认）、1 PostgreSQL（未实现）、2 mongodb、3 redis
 const DBTypeRedis = 3
 
 // RedisTimeout 建立连接与探活的超时

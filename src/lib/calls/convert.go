@@ -8,7 +8,7 @@ import (
 
 // DataSourceKind 将数据源 DBType 映射为引擎方言标识。
 // Yearning 约定：0=mysql、1=postgres、2=mongodb、3=redis、4=doris。
-// pg 与 mysql 同是 SQL 方言、同走 Bytebase 上游规则；MongoDB 与 Redis 在引擎里
+// PostgreSQL 与 mysql 同是 SQL 方言、同走 Bytebase 上游规则；MongoDB 与 Redis 在引擎里
 // 走本仓库自研的规则（上游 bytebase 不提供这两种 advisor）；Doris 是 MySQL 协议兼容
 // 但建表 DDL 自有语法，走「MySQL 解析器 + 自研 dorischeck」的混合审核。
 // 其余类型返回空串由引擎拒绝。

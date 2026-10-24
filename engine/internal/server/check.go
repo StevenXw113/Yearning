@@ -19,7 +19,7 @@ import (
 // Check 按数据源方言分派审核。五个引擎各自独立实现、互不混用：
 //   - mongodb  → checkMongo（check_mongo.go）
 //   - redis    → checkRedis（check_redis.go）
-//   - postgres → checkPG（check_pg.go）
+//   - postgres → checkPostgreSQL（check_pg.go）
 //   - doris    → checkDoris（check_doris.go，建表走 dorischeck，DML/查询走 MySQL 解析器）
 //   - mysql / 空 kind → checkSQL（check_sql.go；不填 kind 的历史调用方按 MySQL）
 //
@@ -34,8 +34,8 @@ func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*engine
 		return checkMongo(req), nil
 	case isRedisSource(req.Source):
 		return checkRedis(req), nil
-	case isPgSource(req.Source):
-		return checkPG(ctx, req), nil
+	case isPostgreSQLSource(req.Source):
+		return checkPostgreSQL(ctx, req), nil
 	case isDorisSource(req.Source):
 		return checkDoris(ctx, req), nil
 	}
@@ -45,7 +45,7 @@ func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*engine
 	return checkSQL(ctx, req), nil
 }
 
-// ---- 以下为 SQL 审核（MySQL / pg 共用）的辅助 ----
+// ---- 以下为 SQL 审核（MySQL / PostgreSQL 共用）的辅助 ----
 
 // errText 把解析错误安全转成文案。
 func errText(err error) string {
@@ -73,7 +73,7 @@ func review(ctx context.Context, engine storepb.Engine, stmts []base.ParsedState
 		advices, err := bbadvisor.Check(ctx, engine, rule.GetType(), checkCtx)
 		if err != nil {
 			if mysqlparse.IsUnknownAdvisorError(err) {
-				// 该方言没有实现这条规则（例如 pg 没有 MySQL 的自增/无符号/LIMIT 规则）。
+				// 该方言没有实现这条规则（例如 PostgreSQL 没有 MySQL 的自增/无符号/LIMIT 规则）。
 				// 规则集是 MySQL 语义的、两方言共用，这里的缺失不是错误，跳过即可。
 				continue
 			}

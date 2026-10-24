@@ -139,7 +139,7 @@
             // 其它类型会回 WRONGTYPE 错误——提示用户这个键不是 string，再自行换命令
             ? `GET ${key}`
             : dbType.value === 1
-              // pg：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
+              // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
               ? `SELECT * FROM "${key}"`
               : `select * from ${key}`,
     });
@@ -156,7 +156,7 @@
             // Redis 的键没有字段结构，类型是最接近「结构」的信息
             ? `TYPE ${key}`
             : dbType.value === 1
-              // pg：没有 SHOW COLUMNS，用 information_schema.columns
+              // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
               ? `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
               : `SHOW COLUMNS FROM ${key}`,
     });

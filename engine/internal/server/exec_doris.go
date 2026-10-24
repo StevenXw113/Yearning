@@ -109,7 +109,7 @@ func splitDorisStatements(sql string) []string {
 // execDoris 执行 Doris 工单：按分号切分后逐条执行。
 //
 // Doris 是分析型 MPP：DML 不支持事务、也没有 binlog 前镜像，
-// 与 pg 一样接受「不可回滚」，回滚语句留空，执行结果照常写 Records。
+// 与 PostgreSQL 一样接受「不可回滚」，回滚语句留空，执行结果照常写 Records。
 func (e *Engine) execDoris(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
 	stmts := splitDorisStatements(req.Order.Sql)
 	if len(stmts) == 0 {

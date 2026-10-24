@@ -12,7 +12,7 @@ import (
 // 仅负责拆分与校验；敏感字段词表原样带回供 Yearning 本地收敛展示。
 //
 // 方言按 kind 分派，各自独立实现、互不混用：
-//   - postgres → queryPG（query_pg.go）
+//   - postgres → queryPostgreSQL（query_pg.go）
 //   - doris    → queryDoris（query_doris.go，查询语法兼容 MySQL）
 //   - mysql / 空 kind → querySQL（query_sql.go；不填 kind 的历史调用方按 MySQL）
 //
@@ -25,7 +25,7 @@ func (e *Engine) Query(_ context.Context, req *enginev1.QueryRequest) (*enginev1
 	case "", "mysql":
 		return querySQL(req), nil
 	case "postgres":
-		return queryPG(req), nil
+		return queryPostgreSQL(req), nil
 	case "doris":
 		return queryDoris(req), nil
 	default:

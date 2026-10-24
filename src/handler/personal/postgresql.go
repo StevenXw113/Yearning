@@ -2,10 +2,10 @@ package personal
 
 import "Yearning-go/src/model"
 
-// FetchPgSchemaInfo 列出 pg 的 schema（树的「库」层）。
-// pg 没有 SHOW DATABASES，「库」映射为 schema，节点结构沿用 SQL 树。
-func FetchPgSchemaInfo(u *model.CoreDataSource) ([]map[string]interface{}, error) {
-	names, err := u.PgSchemas()
+// FetchPostgreSQLSchemaInfo 列出 PostgreSQL 的 schema（树的「库」层）。
+// PostgreSQL 没有 SHOW DATABASES，「库」映射为 schema，节点结构沿用 SQL 树。
+func FetchPostgreSQLSchemaInfo(u *model.CoreDataSource) ([]map[string]interface{}, error) {
+	names, err := u.PostgreSQLSchemas()
 	if err != nil {
 		return nil, err
 	}
@@ -18,9 +18,9 @@ func FetchPgSchemaInfo(u *model.CoreDataSource) ([]map[string]interface{}, error
 	return list, nil
 }
 
-// FetchPgTableInfo 列出指定 schema 下的表（树的「表」层）。
-func FetchPgTableInfo(u *model.CoreDataSource, schema string) ([]map[string]interface{}, error) {
-	names, err := u.PgTables(schema)
+// FetchPostgreSQLTableInfo 列出指定 schema 下的表（树的「表」层）。
+func FetchPostgreSQLTableInfo(u *model.CoreDataSource, schema string) ([]map[string]interface{}, error) {
+	names, err := u.PostgreSQLTables(schema)
 	if err != nil {
 		return nil, err
 	}

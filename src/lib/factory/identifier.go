@@ -19,7 +19,7 @@ func EscapeIdentifier(s string) string {
 	return strings.ReplaceAll(s, "`", "``")
 }
 
-// EscapePgIdentifier 在标识符进入双引号前把双引号双写（pg 用双引号引用标识符）。
-func EscapePgIdentifier(s string) string {
+// EscapePostgreSQLIdentifier 在标识符进入双引号前把双引号双写（PostgreSQL 用双引号引用标识符）。
+func EscapePostgreSQLIdentifier(s string) string {
 	return strings.ReplaceAll(s, `"`, `""`)
 }

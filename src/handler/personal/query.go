@@ -148,12 +148,12 @@ func FetchQueryDatabaseInfo(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.SuccessPayload(list))
 	}
 
-	// pg 没有 SHOW DATABASES，「库」映射为 schema
+	// PostgreSQL 没有 SHOW DATABASES，「库」映射为 schema
 	if u.DBType == model.DBTypePostgreSQL {
-		list, pgErr := FetchPgSchemaInfo(&u)
-		if pgErr != nil {
-			c.Logger().Error(pgErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
+		list, postgresqlErr := FetchPostgreSQLSchemaInfo(&u)
+		if postgresqlErr != nil {
+			c.Logger().Error(postgresqlErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(postgresqlErr))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(list))
 	}
@@ -197,12 +197,12 @@ func FetchQueryTableInfo(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"table": list}))
 	}
 
-	// pg 的「表」是 schema 下的表
+	// PostgreSQL 的「表」是 schema 下的表
 	if u.DBType == model.DBTypePostgreSQL {
-		list, pgErr := FetchPgTableInfo(&u, t)
-		if pgErr != nil {
-			c.Logger().Error(pgErr.Error())
-			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(pgErr))
+		list, postgresqlErr := FetchPostgreSQLTableInfo(&u, t)
+		if postgresqlErr != nil {
+			c.Logger().Error(postgresqlErr.Error())
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(postgresqlErr))
 		}
 		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"table": list}))
 	}

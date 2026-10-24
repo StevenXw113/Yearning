@@ -176,7 +176,7 @@ func Close(db *gorm.DB) error {
 
 func InitDSN(dsn DSN) (string, error) {
 	if dsn.DBType == DBTypePostgreSQL {
-		return initPgDSN(dsn), nil
+		return initPostgreSQLDSN(dsn), nil
 	}
 	var tlsName string
 	if dsn.CA != "" && dsn.Cert != "" && dsn.Key != "" {
@@ -216,9 +216,9 @@ func InitDSN(dsn DSN) (string, error) {
 	return cfg.FormatDSN(), nil
 }
 
-// initPgDSN 生成 PostgreSQL 的 libpq 连接串（key=value 格式）。
+// initPostgreSQLDSN 生成 PostgreSQL 的 libpq 连接串（key=value 格式）。
 // ponytail: 先固定 sslmode=disable（测试库无需 TLS）；生产要 TLS 时再按 CA/Cert/Key 扩展。
-func initPgDSN(dsn DSN) string {
+func initPostgreSQLDSN(dsn DSN) string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		dsn.Host, dsn.Port, dsn.Username, dsn.Password, dsn.DBName)
 }

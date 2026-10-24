@@ -1,19 +1,19 @@
 package model
 
-// DBTypePostgreSQL 数据源类型：0 mysql（默认）、1 pg、2 mongodb、3 redis。
-// pg 与 mysql 同是 SQL 方言：查询、工单、元数据都复用 MySQL 链路，
+// DBTypePostgreSQL 数据源类型：0 mysql（默认）、1 PostgreSQL、2 mongodb、3 redis。
+// PostgreSQL 与 mysql 同是 SQL 方言：查询、工单、元数据都复用 MySQL 链路，
 // 只在驱动 / DSN / 方言专属 SQL 处按 DBType 分叉。
 const DBTypePostgreSQL = 1
 
-// pg 的「库」映射为 schema（namespace），而非 database：
-// database 固定落在 postgres（pg 默认存在的库），schema 用 SET search_path 轻量切换，
+// PostgreSQL 的「库」映射为 schema（namespace），而非 database：
+// database 固定落在 postgres（PostgreSQL 默认存在的库），schema 用 SET search_path 轻量切换，
 // 这与 MySQL 的「一次连接、use 切库」同构，复用同一条查询链路。
-const PgDefaultDatabase = "postgres"
+const PostgreSQLDefaultDatabase = "postgres"
 
-// PgSchemas 列出 pg 的 schema（作为 Yearning 树里的「库」）。
+// PostgreSQLSchemas 列出 PostgreSQL 的 schema（作为 Yearning 树里的「库」）。
 // 排除系统 schema（pg_*）与 information_schema。
-func (s *CoreDataSource) PgSchemas() ([]string, error) {
-	db, err := s.ConnectDB(PgDefaultDatabase)
+func (s *CoreDataSource) PostgreSQLSchemas() ([]string, error) {
+	db, err := s.ConnectDB(PostgreSQLDefaultDatabase)
 	if err != nil {
 		return nil, err
 	}
@@ -34,9 +34,9 @@ func (s *CoreDataSource) PgSchemas() ([]string, error) {
 	return out, nil
 }
 
-// PgTables 列出指定 schema 下的表。
-func (s *CoreDataSource) PgTables(schema string) ([]string, error) {
-	db, err := s.ConnectDB(PgDefaultDatabase)
+// PostgreSQLTables 列出指定 schema 下的表。
+func (s *CoreDataSource) PostgreSQLTables(schema string) ([]string, error) {
+	db, err := s.ConnectDB(PostgreSQLDefaultDatabase)
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +57,10 @@ func (s *CoreDataSource) PgTables(schema string) ([]string, error) {
 	return out, nil
 }
 
-// PgTableColumns 列出指定 schema 下某张表的字段名（按 ordinal_position），
+// PostgreSQLTableColumns 列出指定 schema 下某张表的字段名（按 ordinal_position），
 // 供 AI 建议感知数据结构（只取字段名、不取值）。
-func (s *CoreDataSource) PgTableColumns(schema, table string) ([]string, error) {
-	db, err := s.ConnectDB(PgDefaultDatabase)
+func (s *CoreDataSource) PostgreSQLTableColumns(schema, table string) ([]string, error) {
+	db, err := s.ConnectDB(PostgreSQLDefaultDatabase)
 	if err != nil {
 		return nil, err
 	}

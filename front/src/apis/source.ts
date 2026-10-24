@@ -22,7 +22,7 @@ export interface ISource {
   source: string;
   source_id: string;
   idc?: string;
-  // 数据源类型：0 mysql / 1 pg / 2 mongodb / 3 redis（fetch/source 会返回）
+  // 数据源类型：0 mysql / 1 PostgreSQL / 2 mongodb / 3 redis（fetch/source 会返回）
   db_type?: number;
 }
 

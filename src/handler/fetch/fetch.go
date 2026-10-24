@@ -176,7 +176,7 @@ func FetchBase(c yee.Context) (err error) {
 
 	model.DB().Where("source_id =?", unescape).First(&s)
 
-	// 非 MySQL 方言（pg / mongo / redis）的「库」列表已收敛到 dbengine；
+	// 非 MySQL 方言（PostgreSQL / mongo / redis）的「库」列表已收敛到 dbengine；
 	// MySQL 的 SHOW DATABASES + ExcludeDbList（Hide）语义保留在下面的内联路径。
 	if s.DBType != 0 {
 		names, e := dbengine.For(s.DBType).ListDatabases(context.Background(), &s)
@@ -219,7 +219,7 @@ func FetchTable(c yee.Context) (err error) {
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", unescape).First(&s)
 
-	// 非 MySQL 方言（pg / mongo / redis）的「表/集合/键」列表已收敛到 dbengine。
+	// 非 MySQL 方言（PostgreSQL / mongo / redis）的「表/集合/键」列表已收敛到 dbengine。
 	if s.DBType != 0 {
 		names, e := dbengine.For(s.DBType).ListCollections(context.Background(), &s, u.DataBase)
 		if e != nil {

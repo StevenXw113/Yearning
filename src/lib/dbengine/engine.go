@@ -33,7 +33,7 @@ type Engine interface {
 	Kind() string
 
 	// ---- 元数据 ----
-	// ListDatabases 列出库（pg 映射为 schema，redis 映射为 db0..dbN）。
+	// ListDatabases 列出库（PostgreSQL 映射为 schema，redis 映射为 db0..dbN）。
 	ListDatabases(ctx context.Context, src *model.CoreDataSource) ([]string, error)
 	// ListCollections 列出某库下的表/集合/键。
 	ListCollections(ctx context.Context, src *model.CoreDataSource, db string) ([]string, error)

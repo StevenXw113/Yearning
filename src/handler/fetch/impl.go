@@ -113,11 +113,11 @@ func (a *advisorFrom) Go() (tables []string, err error) {
 		return dataSource.MongoCollectionSchema(a.Schema, names)
 	}
 
-	// pg 没有 SHOW CREATE TABLE：改为 information_schema 汇总字段名（只取字段名不取值）
+	// PostgreSQL 没有 SHOW CREATE TABLE：改为 information_schema 汇总字段名（只取字段名不取值）
 	if dataSource.DBType == model.DBTypePostgreSQL {
 		names := a.Tables
 		if len(names) == 0 {
-			all, listErr := dataSource.PgTables(a.Schema)
+			all, listErr := dataSource.PostgreSQLTables(a.Schema)
 			if listErr != nil {
 				return nil, listErr
 			}
@@ -125,7 +125,7 @@ func (a *advisorFrom) Go() (tables []string, err error) {
 		}
 		out := make([]string, 0, len(names))
 		for _, t := range names {
-			cols, err := dataSource.PgTableColumns(a.Schema, t)
+			cols, err := dataSource.PostgreSQLTableColumns(a.Schema, t)
 			if err != nil {
 				continue
 			}
@@ -175,18 +175,18 @@ func (u *_FetchBind) FetchTableFieldsOrIndexes() error {
 		return u.fetchMongoFieldsOrIndexes(&s)
 	}
 	if s.DBType == model.DBTypePostgreSQL {
-		return u.fetchPgFieldsOrIndexes(&s)
+		return u.fetchPostgreSQLFieldsOrIndexes(&s)
 	}
 	return u.fetchSQLFieldsOrIndexes(&s)
 }
 
-// fetchPgFieldsOrIndexes PostgreSQL：information_schema.columns / pg_indexes。
+// fetchPostgreSQLFieldsOrIndexes PostgreSQL：information_schema.columns / pg_indexes。
 // 映射到与 MySQL 一致的 common.FieldInfo / common.IndexInfo 契约，前端无需改动。
-func (u *_FetchBind) fetchPgFieldsOrIndexes(s *model.CoreDataSource) error {
+func (u *_FetchBind) fetchPostgreSQLFieldsOrIndexes(s *model.CoreDataSource) error {
 	if u.DataBase == "" || u.Table == "" {
 		return errors.New(i18n.DefaultLang.Load(i18n.INFO_LIBRARY_NAME_TABLE_NAME))
 	}
-	db, err := s.ConnectDB(model.PgDefaultDatabase)
+	db, err := s.ConnectDB(model.PostgreSQLDefaultDatabase)
 	if err != nil {
 		return err
 	}
@@ -220,10 +220,10 @@ func (u *_FetchBind) fetchPgFieldsOrIndexes(s *model.CoreDataSource) error {
 		}
 	}
 
-	type pgIndex struct {
+	type postgresIndex struct {
 		Name string `gorm:"Column:indexname"`
 	}
-	var idxs []pgIndex
+	var idxs []postgresIndex
 	if err := db.Raw(`SELECT indexname FROM pg_indexes WHERE schemaname = ? AND tablename = ? ORDER BY indexname`,
 		u.DataBase, u.Table).Scan(&idxs).Error; err != nil {
 		return err
@@ -233,7 +233,7 @@ func (u *_FetchBind) fetchPgFieldsOrIndexes(s *model.CoreDataSource) error {
 			Table:     u.Table,
 			IndexName: ix.Name,
 			Seq:       i + 1,
-			IndexType: "pg",
+			IndexType: "PostgreSQL",
 		})
 	}
 	return nil

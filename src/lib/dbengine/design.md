@@ -16,7 +16,7 @@ keyed by `db_type`。
 **不统一（刻意保持）**：
 - 规则审核：已经是统一入口（引擎 gRPC `Check` 按 `kind` 分派，`audit_role` 一份配置）。
 - 规则**实现**：bytebase AST（SQL） vs `mongocheck` / `redischeck`（命令解析），永远不同。
-- 执行通道：SQL（mysql/pg）走引擎 gRPC `Exec`（binlog/OSC/前镜像），Mongo/Redis 走主程序驱动——接口里 `Execute` 对 SQL 只是"调引擎"，不强扭进同一个 DSN。
+- 执行通道：SQL（mysql/PostgreSQL）走引擎 gRPC `Exec`（binlog/OSC/前镜像），Mongo/Redis 走主程序驱动——接口里 `Execute` 对 SQL 只是"调引擎"，不强扭进同一个 DSN。
 
 ## 接口
 
@@ -68,7 +68,7 @@ func For(dbType int) Engine
 
 | 引擎 | Kind | 关键差异 |
 |---|---|---|
-| `sqlEngine{kind}` | mysql / postgres | `Execute` 调 gRPC `Exec`（`calls.DataSourceKind` + `AuditRoleToProto`）；元数据用 `information_schema`（pg 用 `pg_indexes`/`columns`）；`ValidateChange` 恒 nil |
+| `sqlEngine{kind}` | mysql / postgres | `Execute` 调 gRPC `Exec`（`calls.DataSourceKind` + `AuditRoleToProto`）；元数据用 `information_schema`（PostgreSQL 用 `pg_indexes`/`columns`）；`ValidateChange` 恒 nil |
 | `mongoEngine` | mongodb | `Execute` = `mongodb.Validate` + `ConnectMongo` + `mongodb.Execute`；`ListCollections`=`MongoCollections`；`DescribeTable`=`MongoCollectionSchema`（字段名）；`ValidateChange`=`mongodb.Validate` |
 | `redisEngine` | redis | 包一层 `rediscmd` + `model/redis.go` 现有函数；回滚能力以 `Warning` 声明（如无前镜像） |
 
@@ -95,14 +95,14 @@ func For(dbType int) Engine
     `saveRollbacks`、`writeWorkflowDetail`、`appendOSCInfo`（`oscUpdate` 语义已逐字内联）。
   - 删 `audit/mongo.go`、`audit/redis.go`；`ExecuteWorkOrder` 的两个分支退化成一行类型断言。
 - 补全：`common.Highlight` 退化成 `dbengine.For(...).Highlight(...)`；`common.mongoHighlight` 删除（已并入 `mongoEngine.Highlight`）；
-  mysql 的 information_schema 逻辑搬进 `sqlEngine.Highlight`（含 `ExcludeDbList` 的 NOT IN），pg 仍返回空（与迁移前一致）。
+  mysql 的 information_schema 逻辑搬进 `sqlEngine.Highlight`（含 `ExcludeDbList` 的 NOT IN），PostgreSQL 仍返回空（与迁移前一致）。
 - 判据：`go build ./...` ✅、`go vet` ✅、`go test ./src/...` ✅、引擎 `go test ./...` ✅、`vue-tsc` ✅。
   实机对拍待本地数据库就绪（本机仅 Redis，MySQL/Mongo 需部署）。
 
 ### 批次 3 · 元数据 + 提交硬保底 — ✅ 已完成
 - 提交硬保底：`personal/post.go`、`personal/batch.go` 的 `switch src.DBType` → `dbengine.For(...).ValidateChange(...)`；
   删除 `checkMongoOrder` / `checkRedisOrder`（逻辑即 `mongoEngine.ValidateChange` / `redisEngine.ValidateChange`）。
-- 元数据：`fetch.go` 的 `FetchBase` / `FetchTable` 里 mongo/redis/pg 三个 early-return 分支 → `dbengine.For(...).ListDatabases/ListCollections(...)`。
+- 元数据：`fetch.go` 的 `FetchBase` / `FetchTable` 里 mongo/redis/PostgreSQL 三个 early-return 分支 → `dbengine.For(...).ListDatabases/ListCollections(...)`。
 - **刻意保留内联**：MySQL 的 `SHOW DATABASES` + `ExcludeDbList(Hide)` / `SHOW TABLES` 语义与 info_schema 不同（权限视图/系统库），
   硬统一会改行为，故 mysql 路径暂不动；字段/索引（`FetchTableFieldsOrIndexes`）因 `Field/Index` 契约与 `common.FieldInfo/IndexInfo`
   未对齐、且 `ListIndexes` 还没进接口，也暂不动。

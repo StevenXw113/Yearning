@@ -11,7 +11,7 @@ import "strings"
 // "delete" 不会误判，注释里藏关键字也骗不过。
 
 // queryReadOnlyPrefixes 查询页允许的语句首关键字。WITH 单独处理：
-// pg 支持 WITH ... INSERT/UPDATE/DELETE，不能直接放行。
+// PostgreSQL 支持 WITH ... INSERT/UPDATE/DELETE，不能直接放行。
 var queryReadOnlyPrefixes = map[string]bool{
 	"select": true, "show": true, "desc": true, "describe": true,
 	"explain": true, "table": true, "values": true, "with": true,

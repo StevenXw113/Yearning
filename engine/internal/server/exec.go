@@ -10,7 +10,7 @@ import (
 // Exec 按数据源方言分派执行。五个引擎各自独立实现、互不混用：
 //   - mongodb  → execMongo（exec_mongo.go，主程序驱动 + 前镜像回滚）
 //   - redis    → execRedis（exec_redis.go）
-//   - postgres → execPG（exec_pg.go，pgx + 连接参数 search_path，无 binlog 回滚）
+//   - postgres → execPostgreSQL（exec_pg.go，pgx + 连接参数 search_path，无 binlog 回滚）
 //   - doris    → execDoris（exec_doris.go，mysql 协议直连，无事务无回滚）
 //   - mysql / 空 kind → execSQL（exec_mysql.go；不填 kind 的历史调用方按 MySQL）
 //
@@ -31,7 +31,7 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 	case "redis":
 		return e.execRedis(ctx, req)
 	case "postgres":
-		return e.execPG(ctx, req)
+		return e.execPostgreSQL(ctx, req)
 	case "doris":
 		return e.execDoris(ctx, req)
 	default:
@@ -39,7 +39,7 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 	}
 }
 
-// orderType 工单类型 → dml/ddl。SQL 引擎（MySQL / pg）判断是否包事务时用。
+// orderType 工单类型 → dml/ddl。SQL 引擎（MySQL / PostgreSQL）判断是否包事务时用。
 func orderType(t int32) string {
 	if t == 1 {
 		return "dml"
@@ -49,7 +49,7 @@ func orderType(t int32) string {
 
 // affectRowOverLimit 判断真实影响行数是否超过规则集上限（0 = 不限制）。
 // DML 工单用 MaxAffectRows，DDL 工单用 MaxDdlAffectRows，与开关文案语义一致；
-// 三条 SQL 执行路径（mysql / pg / doris）共用，执行期逐条语句比对。
+// 三条 SQL 执行路径（mysql / postgresql / doris）共用，执行期逐条语句比对。
 func affectRowOverLimit(rules *enginev1.AuditRole, tp string, rows uint32) (bool, uint32) {
 	var limit uint32
 	if rules != nil {

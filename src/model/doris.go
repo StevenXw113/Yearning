@@ -1,6 +1,6 @@
 package model
 
-// DBTypeDoris 数据源类型：0 mysql（默认）、1 pg、2 mongodb、3 redis、4 doris。
+// DBTypeDoris 数据源类型：0 mysql（默认）、1 PostgreSQL、2 mongodb、3 redis、4 doris。
 //
 // Doris 兼容 MySQL 协议（FE 的 MySQL 协议端口，mysql driver 可直连），
 // 但建表 DDL 是自有语法（DISTRIBUTED BY / PROPERTIES / DUPLICATE|UNIQUE|AGGREGATE KEY），

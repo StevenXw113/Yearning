@@ -10,15 +10,15 @@ import (
 	storepb "engine/internal/bytebase/generated-go/store"
 )
 
-// isPgSource 判断审核目标是否为 PostgreSQL 数据源（kind 由主程序按 db_type 映射）。
-func isPgSource(src *enginev1.DataSource) bool {
+// isPostgreSQLSource 判断审核目标是否为 PostgreSQL 数据源（kind 由主程序按 db_type 映射）。
+func isPostgreSQLSource(src *enginev1.DataSource) bool {
 	return src != nil && strings.EqualFold(src.GetKind(), "postgres")
 }
 
-// checkPG 执行 PostgreSQL 静态审核：拆分 → 逐条 auditSQLStatement。
-// 方言固定 PostgreSQL，与 MySQL 各走各的入口；pg 侧不做影响行数估算
+// checkPostgreSQL 执行 PostgreSQL 静态审核：拆分 → 逐条 auditSQLStatement。
+// 方言固定 PostgreSQL，与 MySQL 各走各的入口；PostgreSQL 侧不做影响行数估算
 // （AST 类型不同，留 0）。
-func checkPG(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckReply {
+func checkPostgreSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckReply {
 	const engine = storepb.Engine_POSTGRES
 
 	stmts, err := mysqlparse.SplitEngine(engine, req.Sql)
