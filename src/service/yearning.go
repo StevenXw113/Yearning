@@ -26,6 +26,7 @@ import (
 	"github.com/cookieY/yee/logger"
 	"github.com/cookieY/yee/middleware"
 	"net/http"
+	"strings"
 	"os"
 )
 
@@ -99,7 +100,23 @@ func StartYearning(port string) {
 	go cronTabArchive()
 	e := yee.New()
 	e.Pack("/front", f, "dist")
-	e.Use(middleware.Cors())
+	// CORS 收紧：配置了 CorsOrigins 就只放行这些来源（同源部署不受影响——
+	// 同源请求不触发 CORS）；留空保持通配 * 兼容存量部署。
+	if origins := strings.Split(strings.TrimSpace(model.C.General.CorsOrigins), ","); len(origins) > 0 && origins[0] != "" {
+		cleaned := origins[:0]
+		for _, o := range origins {
+			if o = strings.TrimSpace(o); o != "" {
+				cleaned = append(cleaned, o)
+			}
+		}
+		if len(cleaned) > 0 {
+			e.Use(middleware.CorsWithConfig(middleware.CORSConfig{Origins: cleaned}))
+		} else {
+			e.Use(middleware.Cors())
+		}
+	} else {
+		e.Use(middleware.Cors())
+	}
 	e.Use(middleware.Logger())
 	e.Use(middleware.Secure())
 	e.Use(middleware.Recovery())

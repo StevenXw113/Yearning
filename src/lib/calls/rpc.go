@@ -49,9 +49,20 @@ var (
 // 以 -auth-token / ENGINE_AUTH_TOKEN 启用对称校验）。
 func Client() (enginev1.EngineServiceClient, error) {
 	clientOnce.Do(func() {
+		// 传输层：配了 RpcTLSCA 即启用 TLS（校验引擎服务端身份）；再配客户端
+		// 证书即 mTLS。未配则 insecure（与引擎侧明文对应，仅限可信内网）。
+		tlsCreds, tlsErr := rpcTLSCredentials()
+		if tlsErr != nil {
+			clientErr = tlsErr
+			return
+		}
 		opts := []grpc.DialOption{
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultServiceConfig(retryPolicy),
+		}
+		if tlsCreds != nil {
+			opts = append(opts, grpc.WithTransportCredentials(tlsCreds))
+		} else {
+			opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 		if t := strings.TrimSpace(model.C.General.RpcToken); t != "" {
 			opts = append(opts, grpc.WithPerRPCCredentials(rpcToken(t)))
@@ -65,6 +76,22 @@ func Client() (enginev1.EngineServiceClient, error) {
 		sharedCli = instrumented{enginev1.NewEngineServiceClient(conn)}
 	})
 	return sharedCli, clientErr
+}
+
+// rpcTLSCredentials 按配置构造客户端 TLS 凭据；未配置 CA 时返回 nil（明文）。
+func rpcTLSCredentials() (credentials.TransportCredentials, error) {
+	g := model.C.General
+	if strings.TrimSpace(g.RpcTLSCA) == "" {
+		return nil, nil
+	}
+	cfg, err := commonTLSConfig(g.RpcTLSCA, g.RpcTLSCert, g.RpcTLSKey)
+	if err != nil {
+		return nil, err
+	}
+	if sn := strings.TrimSpace(g.RpcTLSServerName); sn != "" {
+		cfg.ServerName = sn
+	}
+	return credentials.NewTLS(cfg), nil
 }
 
 // rpcToken 把共享令牌注入每个请求的 metadata。RequireTransportSecurity=false

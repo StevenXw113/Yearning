@@ -16,6 +16,7 @@ import (
 	"engine/internal/server/emetrics"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
@@ -34,6 +35,12 @@ func main() {
 	// authorization: Bearer <token>（健康检查/服务反射豁免）。
 	// 引擎是「拿到数据源凭据即可执行 SQL」的代理，跨不完全可信网络部署必须启用。
 	authToken := flag.String("auth-token", "", "共享访问令牌（也可用环境变量 ENGINE_AUTH_TOKEN 注入）；空 = 不启用认证")
+	// TLS / mTLS：配 cert+key 即启用 TLS（口令与行数据不再明文过网）；
+	// 再配 client-ca 则同时要求客户端证书（mTLS，双向身份）。
+	// 与共享令牌可叠加：mTLS 管传输与身份，令牌管应用层授权。
+	tlsCert := flag.String("tls-cert", "", "服务端证书 PEM 路径（与 -tls-key 同配启用 TLS）")
+	tlsKey := flag.String("tls-key", "", "服务端私钥 PEM 路径")
+	tlsClientCA := flag.String("tls-client-ca", "", "客户端证书 CA PEM 路径（启用 mTLS，要求客户端证书）")
 	flag.Parse()
 
 	token := strings.TrimSpace(*authToken)
@@ -52,6 +59,14 @@ func main() {
 		// 埋点在最内层：统计的是业务处理本身的耗时（认证通过之后的）
 		grpc.ChainUnaryInterceptor(server.UnaryStatsInterceptor()),
 		grpc.ChainStreamInterceptor(server.StreamStatsInterceptor()),
+	}
+	if *tlsCert != "" && *tlsKey != "" {
+		tlsCfg, err := server.LoadServerTLS(*tlsCert, *tlsKey, *tlsClientCA)
+		if err != nil {
+			log.Fatalf("TLS 配置加载失败: %v", err)
+		}
+		log.Printf("engine TLS: enabled (client cert verification: %v)", *tlsClientCA != "")
+		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 	if token != "" {
 		log.Printf("engine auth: enabled (shared token)")

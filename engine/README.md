@@ -268,6 +268,29 @@ ENGINE_AUTH_TOKEN=... ./engine
 
 健康检查（grpc.health.v1）与服务反射豁免认证——容器探针和 grpcurl 不带令牌。
 
+### TLS / mTLS（传输加密与双向身份）
+
+令牌管应用层授权，TLS 管传输机密性与服务端身份（防口令/行数据明文过网、防中间人），
+两者可叠加，也可只用其一：
+
+```bash
+# 一键生成本地私有 CA 与三套证书（生产建议企业 CA）
+./scripts/gen-tls-certs.sh ./certs 127.0.0.1
+
+# 引擎：启用 TLS；再配 -tls-client-ca 即要求客户端证书（mTLS）
+go run ./cmd/engine -tls-cert ./certs/server.crt -tls-key ./certs/server.key \
+    [-tls-client-ca ./certs/ca.crt]
+
+# 主程序（conf.toml [General]）：配 RpcTLSCA 即启用 TLS，再配客户端证书即 mTLS
+#   RpcTLSCA = "./certs/ca.crt"
+#   RpcTLSCert = "./certs/client.crt"   # 引擎启 mTLS 时必配
+#   RpcTLSKey = "./certs/client.key"
+#   RpcTLSServerName = ""               # 留空取 RpcAddr 的 host
+```
+
+行为矩阵：引擎明文+主程序配 CA → 握手失败（fail-closed）；引擎 TLS+主程序明文 →
+同样失败——两端必须同态。mTLS 下客户端证书校验失败在握手期拒绝，不消耗业务配额。
+
 ### 指标（Prometheus）
 
 ```bash

@@ -45,9 +45,22 @@ type general struct {
 	// (-auth-token 或环境变量 ENGINE_AUTH_TOKEN) 一致；空 = 引擎未启用认证。
 	// 引擎是「拿到数据源凭据即可执行 SQL」的代理，跨不完全可信网络部署必须配置。
 	RpcToken string
+	// 引擎 gRPC 传输加密（与 RpcToken 可叠加：TLS 管传输与身份，令牌管授权）。
+	// RpcTLSCA 引擎证书的 CA PEM（启用 TLS 校验服务端身份，防中间人）；
+	// RpcTLSCert/RpcTLSKey 客户端证书（引擎配了 -tls-client-ca 时必配，即 mTLS）；
+	// RpcTLSServerName 校验引擎证书的服务器名（默认取 RpcAddr 的 host）。
+	RpcTLSCA        string
+	RpcTLSCert      string
+	RpcTLSKey       string
+	RpcTLSServerName string
 	// SuperUsers 超级管理员名单（逗号分隔），内置 admin 恒为超管无需配置。
 	// 此前管理端权限硬编码只认 admin 单账号，多管理员无法表达。
 	SuperUsers string
+	// CorsOrigins 允许的跨域来源（逗号分隔，如 https://yearning.example.com）。
+	// 空 = 保持通配 *（默认，兼容存量部署）；生产环境建议收紧到实际访问域名。
+	// 认证走 Authorization 头而非 Cookie，通配 * 的实际暴露面有限，但收紧后
+	// 连公开接口（登录页等）的跨域读取也被限制。
+	CorsOrigins string
 	// DisableInstanceLock 关闭单实例互斥（默认开启）。cron 统计、OSC 中止、
 	// 执行中超时自愈等均假设同一元数据库只有一个主实例在跑，多实例会互相破坏；
 	// 互斥基于 MySQL GET_LOCK，仅特殊部署（如主动外部调度）才应关闭。

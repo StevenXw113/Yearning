@@ -17,6 +17,9 @@
         <a-tab-pane key="query" :tab="$t('common.query')"
           ><RecordQuery
         /></a-tab-pane>
+        <a-tab-pane key="archive" :tab="$t('record.archive.tab')"
+          ><RecordArchive
+        /></a-tab-pane>
       </a-tabs>
     </template>
   </a-page-header>
@@ -32,6 +35,7 @@
   import insertCss from 'insert-css';
   import RecordOrder from './order.vue';
   import RecordQuery from './query.vue';
+  import RecordArchive from './archive.vue';
 
   const { t } = useI18n();
   const title = {

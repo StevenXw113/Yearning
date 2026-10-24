@@ -16,6 +16,14 @@ RpcAddr = "127.0.0.1:50001" # SQL checker rpc server address
 # （仅限引擎完全隔离在可信内网）；跨网络/共享内网部署必须启用。
 # 生成方式：openssl rand -base64 32
 RpcToken = ""
+# 引擎 gRPC 传输加密（与 RpcToken 可叠加）：RpcTLSCA 校验引擎服务端身份（启用 TLS），
+# 再配 RpcTLSCert/RpcTLSKey 即 mTLS（引擎侧须配 -tls-client-ca）。
+# 证书生成：engine/scripts/gen-tls-certs.sh
+RpcTLSCA = ""
+RpcTLSCert = ""
+RpcTLSKey = ""
+# 校验引擎证书的服务器名（须与签发时的 SAN 一致；留空取 RpcAddr 的 host）
+RpcTLSServerName = ""
 # 单实例互斥（默认开启）：同一元数据库只允许一个 Yearning 主实例运行，
 # 基于 MySQL GET_LOCK（实例崩溃锁自动释放；第二个实例启动直接失败）。
 # cron 统计、OSC 中止、执行超时自愈都依赖它。仅特殊部署才应置 true 关闭。
