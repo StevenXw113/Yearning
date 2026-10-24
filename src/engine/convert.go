@@ -1,15 +1,15 @@
 package engine
 
 import (
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
-// AuditRoleToProto 将本地审核规则转为引擎 proto 规则。
-func AuditRoleToProto(r *AuditRole) *enginev1.AuditRole {
+// AuditRoleToAPI 将本地审核规则转为引擎 proto 规则。
+func AuditRoleToAPI(r *AuditRole) *api.AuditRole {
 	if r == nil {
 		return nil
 	}
-	return &enginev1.AuditRole{
+	return &api.AuditRole{
 		DmlTransaction:                 r.DMLTransaction,
 		DmlAllowLimitStmt:              r.DMLAllowLimitSTMT,
 		DmlInsertColumns:               r.DMLInsertColumns,
@@ -117,8 +117,8 @@ const (
 	CheckModeQuery = "query"
 )
 
-// RecordFromProto 将引擎审核记录转为本地 engine.Record。
-func RecordFromProto(p *enginev1.Record) Record {
+// RecordFromAPI 将引擎审核记录转为本地 engine.Record。
+func RecordFromAPI(p *api.Record) Record {
 	if p == nil {
 		return Record{}
 	}

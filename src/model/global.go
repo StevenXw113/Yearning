@@ -41,11 +41,11 @@ type general struct {
 	RpcAddr   string
 	LogLevel  string
 	Lang      string
-	// RpcToken 审核引擎 gRPC 的共享访问令牌，须与引擎侧启动参数
+	// RpcToken 审核引擎的共享访问令牌，须与引擎侧启动参数
 	// (-auth-token 或环境变量 ENGINE_AUTH_TOKEN) 一致；空 = 引擎未启用认证。
 	// 引擎是「拿到数据源凭据即可执行 SQL」的代理，跨不完全可信网络部署必须配置。
 	RpcToken string
-	// 引擎 gRPC 传输加密（与 RpcToken 可叠加：TLS 管传输与身份，令牌管授权）。
+	// 引擎 HTTP 传输加密（与 RpcToken 可叠加：TLS 管传输与身份，令牌管授权）。
 	// RpcTLSCA 引擎证书的 CA PEM（启用 TLS 校验服务端身份，防中间人）；
 	// RpcTLSCert/RpcTLSKey 客户端证书（引擎配了 -tls-client-ca 时必配，即 mTLS）；
 	// RpcTLSServerName 校验引擎证书的服务器名（默认取 RpcAddr 的 host）。

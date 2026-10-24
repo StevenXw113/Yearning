@@ -8,7 +8,7 @@ import (
 	"Yearning-go/src/model"
 	"bufio"
 	"context"
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"fmt"
 	"io"
 	"os/exec"
@@ -116,10 +116,10 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	rep, err := client.Check(ctx, &enginev1.CheckRequest{
+	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:    order.SQL,
 		Schema: order.DataBase,
-		Source: &enginev1.DataSource{
+		Source: &api.DataSource{
 			Ip:       source.IP,
 			Port:     int32(source.Port),
 			Username: source.Username,
@@ -131,7 +131,7 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 			AuthDb:   source.AuthDatabase,
 		},
 		Lang: model.C.General.Lang,
-		Rule: engine.AuditRoleToProto(rule),
+		Rule: engine.AuditRoleToAPI(rule),
 		Mode: engine.CheckModeWrite,
 	})
 	if err != nil || rep == nil || !rep.Ok {

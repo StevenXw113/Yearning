@@ -9,7 +9,7 @@ import (
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
 	"context"
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"errors"
 	"github.com/cookieY/yee/logger"
 	"gorm.io/gorm"
@@ -66,10 +66,10 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
-		Order: calls.OrderToProto(order),
-		Rules: engine.AuditRoleToProto(rule),
-		Source: &enginev1.DataSource{
+	rep, err := client.Exec(ctx, &api.ExecRequest{
+		Order: calls.OrderToAPI(order),
+		Rules: engine.AuditRoleToAPI(rule),
+		Source: &api.DataSource{
 			Ip:       source.IP,
 			Port:     int32(source.Port),
 			Username: source.Username,

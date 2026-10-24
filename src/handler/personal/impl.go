@@ -9,7 +9,7 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/hex"
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"errors"
 	"fmt"
 	"github.com/cookieY/sqlx"
@@ -55,7 +55,7 @@ func (q *QueryDeal) PreCheck(insulateWordList string, dbType int) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	rep, err := client.Query(ctx, &enginev1.QueryRequest{
+	rep, err := client.Query(ctx, &api.QueryRequest{
 		Sql:              q.Ref.Sql,
 		Limit:            model.GloOther.Load().Limit,
 		InsulateWordList: insulateWordList,
@@ -66,7 +66,7 @@ func (q *QueryDeal) PreCheck(insulateWordList string, dbType int) error {
 		return calls.CombineReplyErr(rep, err)
 	}
 	for _, i := range rep.Records {
-		rec := engine.RecordFromProto(i)
+		rec := engine.RecordFromAPI(i)
 		if rec.Error != "" {
 			return errors.New(rec.Error)
 		}

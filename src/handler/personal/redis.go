@@ -18,7 +18,7 @@ import (
 	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 
 	"github.com/cookieY/yee"
 	"github.com/redis/go-redis/v9"
@@ -157,12 +157,12 @@ func checkRedisQuery(source *model.CoreDataSource, schema, command string) (stri
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), redisQueryCheckTimeout)
 	defer cancel()
-	rep, err := client.Check(ctx, &enginev1.CheckRequest{
+	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:    command,
 		Schema: schema,
-		Source: &enginev1.DataSource{Kind: calls.DataSourceKind(source.DBType)},
+		Source: &api.DataSource{Kind: calls.DataSourceKind(source.DBType)},
 		Lang:   model.C.General.Lang,
-		Rule:   engine.AuditRoleToProto(rule),
+		Rule:   engine.AuditRoleToAPI(rule),
 		Mode:   engine.CheckModeQuery,
 	})
 	if err != nil {

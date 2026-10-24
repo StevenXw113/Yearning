@@ -14,22 +14,22 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"Yearning-go/src/engine"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 
 	_ "github.com/go-sql-driver/mysql"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type statement struct {
@@ -75,18 +75,16 @@ func main() {
 		os.Exit(2)
 	}
 
-	oldConn, err := dial(*oldAddr, *token)
+	oldCaller, err := dial(*oldAddr, *token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "连接线上引擎 %s 失败: %v\n", *oldAddr, err)
 		os.Exit(2)
 	}
-	defer oldConn.Close()
-	newConn, err := dial(*newAddr, *token)
+	newCaller, err := dial(*newAddr, *token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "连接候选引擎 %s 失败: %v\n", *newAddr, err)
 		os.Exit(2)
 	}
-	defer newConn.Close()
 
 	fmt.Printf("线上 %s  vs  候选 %s\n", *oldAddr, *newAddr)
 	fmt.Printf("比对 %d 笔工单（规则取 %s）\n\n", len(corpus), ruleSource(*ruleFile))
@@ -94,9 +92,9 @@ func main() {
 	diffs := 0
 	for _, st := range corpus {
 		ctx, cancel := context.WithTimeout(context.Background(), *timeout)
-		req := &enginev1.CheckRequest{Sql: st.sql, Schema: st.schema, Rule: rule, Lang: "zh_CN"}
-		o, oerr := enginev1.NewEngineServiceClient(oldConn).Check(ctx, req)
-		n, nerr := enginev1.NewEngineServiceClient(newConn).Check(ctx, req)
+		req := &api.CheckRequest{Sql: st.sql, Schema: st.schema, Rule: rule, Lang: "zh_CN"}
+		o, oerr := oldCaller.Check(ctx, req)
+		n, nerr := newCaller.Check(ctx, req)
 		cancel()
 
 		lines := compare(o, oerr, n, nerr)
@@ -131,36 +129,36 @@ func main() {
 }
 
 // compare 返回两边结果的差异描述（空表示一致）。
-func compare(o *enginev1.CheckReply, oerr error, n *enginev1.CheckReply, nerr error) []string {
+func compare(o *api.CheckReply, oerr error, n *api.CheckReply, nerr error) []string {
 	if (oerr == nil) != (nerr == nil) {
 		return []string{fmt.Sprintf("线上 err=%v / 候选 err=%v", oerr, nerr)}
 	}
 	if oerr != nil {
 		return nil // 两边都连不上或都报错，不算行为差异
 	}
-	if o.GetOk() != n.GetOk() {
-		return []string{fmt.Sprintf("整体结果不同：线上 ok=%v / 候选 ok=%v", o.GetOk(), n.GetOk())}
+	if o.Ok != n.Ok {
+		return []string{fmt.Sprintf("整体结果不同：线上 ok=%v / 候选 ok=%v", o.Ok, n.Ok)}
 	}
 	var out []string
-	or, nr := o.GetRecords(), n.GetRecords()
+	or, nr := o.Records, n.Records
 	if len(or) != len(nr) {
 		out = append(out, fmt.Sprintf("记录条数不同：线上 %d / 候选 %d", len(or), len(nr)))
 	}
 	for i := 0; i < len(or) && i < len(nr); i++ {
 		a, b := or[i], nr[i]
-		if a.GetLevel() == b.GetLevel() && a.GetStatus() == b.GetStatus() && a.GetError() == b.GetError() {
+		if a.Level == b.Level && a.Status == b.Status && a.Error == b.Error {
 			continue
 		}
 		out = append(out,
-			fmt.Sprintf("线上 level=%d status=%s %s", a.GetLevel(), a.GetStatus(), oneLine(a.GetError())),
-			fmt.Sprintf("候选 level=%d status=%s %s", b.GetLevel(), b.GetStatus(), oneLine(b.GetError())),
+			fmt.Sprintf("线上 level=%d status=%s %s", a.Level, a.Status, oneLine(a.Error)),
+			fmt.Sprintf("候选 level=%d status=%s %s", b.Level, b.Status, oneLine(b.Error)),
 		)
 	}
 	return out
 }
 
 // loadRule 读取审核规则：优先用文件，其次取元数据库里的全局规则。
-func loadRule(metaDSN, ruleFile string) (*enginev1.AuditRole, error) {
+func loadRule(metaDSN, ruleFile string) (*api.AuditRole, error) {
 	var raw []byte
 	if ruleFile != "" {
 		b, err := os.ReadFile(ruleFile)
@@ -182,7 +180,7 @@ func loadRule(metaDSN, ruleFile string) (*enginev1.AuditRole, error) {
 	if err := json.Unmarshal(raw, &role); err != nil {
 		return nil, err
 	}
-	return engine.AuditRoleToProto(&role), nil
+	return engine.AuditRoleToAPI(&role), nil
 }
 
 // loadCorpus 读取待比对语句：优先用文件（每行一个工单），否则取元数据库最近 N 笔工单。
@@ -222,32 +220,55 @@ func loadCorpus(metaDSN, sqlFile string, limit int) ([]statement, error) {
 	return out, rows.Err()
 }
 
-func dial(addr, token string) (*grpc.ClientConn, error) {
+// engineCaller 引擎 HTTP 客户端(对拍工具只需 Check,不引入主服务的单例/配置)。
+type engineCaller struct {
+	base  string
+	token string
+	http  *http.Client
+}
+
+// dial 连接引擎并做一次探活 Check(与旧 gRPC 版语义一致:连不上即退出码 2)。
+func dial(addr, token string) (*engineCaller, error) {
+	base := strings.TrimSuffix(strings.TrimSpace(addr), "/")
+	if !strings.Contains(base, "://") {
+		base = "http://" + base
+	}
+	c := &engineCaller{base: base, token: token, http: &http.Client{}}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	if token != "" {
-		opts = append(opts, grpc.WithPerRPCCredentials(rpcToken(token)))
+	if _, err := c.Check(ctx, &api.CheckRequest{Sql: "SELECT 1"}); err != nil {
+		return nil, err
 	}
-	conn, err := grpc.NewClient(addr, opts...)
+	return c, nil
+}
+
+func (c *engineCaller) Check(ctx context.Context, req *api.CheckRequest) (*api.CheckReply, error) {
+	b, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := enginev1.NewEngineServiceClient(conn).Check(ctx, &enginev1.CheckRequest{Sql: "SELECT 1"}); err != nil {
-		conn.Close()
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/v1/check", bytes.NewReader(b))
+	if err != nil {
 		return nil, err
 	}
-	return conn, nil
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var rep api.CheckReply
+	if err := json.NewDecoder(resp.Body).Decode(&rep); err != nil {
+		return nil, err
+	}
+	return &rep, nil
 }
-
-// rpcToken 把共享令牌注入每个请求（与主程序 src/lib/calls 同一约定）。
-type rpcToken string
-
-func (t rpcToken) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
-	return map[string]string{"authorization": "Bearer " + string(t)}, nil
-}
-
-func (t rpcToken) RequireTransportSecurity() bool { return false }
 
 func ruleSource(ruleFile string) string {
 	if ruleFile != "" {

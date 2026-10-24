@@ -26,7 +26,7 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"errors"
 	"fmt"
 	"github.com/cookieY/yee"
@@ -287,10 +287,10 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	rep, err := client.Check(ctx, &enginev1.CheckRequest{
+	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:    u.SQL,
 		Schema: u.Database,
-		Source: &enginev1.DataSource{
+		Source: &api.DataSource{
 			Ip:       s.IP,
 			Port:     int32(s.Port),
 			Username: s.Username,
@@ -302,7 +302,7 @@ func FetchSQLTest(c yee.Context) (err error) {
 			AuthDb:   s.AuthDatabase,
 		},
 		Lang: model.C.General.Lang,
-		Rule: engine.AuditRoleToProto(rule),
+		Rule: engine.AuditRoleToAPI(rule),
 		// 申请页检测：显式声明按变更命令审核，Mongo 数据源填 find 会报「不是变更命令」
 		Mode: engine.CheckModeWrite,
 	})
@@ -311,7 +311,7 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	rs := make([]engine.Record, 0, len(rep.Records))
 	for _, r := range rep.Records {
-		rs = append(rs, engine.RecordFromProto(r))
+		rs = append(rs, engine.RecordFromAPI(r))
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayload(rs))
 }
@@ -355,7 +355,7 @@ func FetchMergeDDL(c yee.Context) error {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		rep, err := client.MergeAlterTables(ctx, &enginev1.MergeAlterTablesRequest{Sqls: req.SQLs})
+		rep, err := client.MergeAlterTables(ctx, &api.MergeAlterTablesRequest{Sqls: req.SQLs})
 		if rep == nil || !rep.Ok {
 			return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 		}

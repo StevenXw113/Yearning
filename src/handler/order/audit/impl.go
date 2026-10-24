@@ -15,7 +15,7 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 	"errors"
 	"fmt"
 	"github.com/cookieY/yee/logger"
@@ -197,10 +197,10 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	start := time.Now()
 	ctx, cancel := execContext()
 	defer cancel()
-	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
-		Order: calls.OrderToProto(order),
-		Rules: engine.AuditRoleToProto(rule),
-		Source: &enginev1.DataSource{
+	rep, err := client.Exec(ctx, &api.ExecRequest{
+		Order: calls.OrderToAPI(order),
+		Rules: engine.AuditRoleToAPI(rule),
+		Source: &api.DataSource{
 			Ip:       source.IP,
 			Port:     int32(source.Port),
 			Username: source.Username,
@@ -221,7 +221,7 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	records := make([]model.CoreSqlRecord, 0, len(rep.Records))
 	rollbacks := make([]model.CoreRollback, 0, len(rep.Rollback))
 	for _, r := range rep.Records {
-		rec := engine.RecordFromProto(r)
+		rec := engine.RecordFromAPI(r)
 		records = append(records, model.CoreSqlRecord{
 			WorkId:    order.WorkId,
 			SQL:       rec.SQL,

@@ -3,7 +3,7 @@ package calls
 import (
 	"Yearning-go/src/model"
 
-	enginev1 "engine/gen/engine/v1"
+	"engine/api"
 )
 
 // DataSourceKind 将数据源 DBType 映射为引擎方言标识。
@@ -28,12 +28,12 @@ func DataSourceKind(dbType int) string {
 	return ""
 }
 
-// OrderToProto 将本地工单转为引擎 proto 工单。
-func OrderToProto(o *model.CoreSqlOrder) *enginev1.Order {
+// OrderToAPI 将本地工单转为引擎 proto 工单。
+func OrderToAPI(o *model.CoreSqlOrder) *api.Order {
 	if o == nil {
 		return nil
 	}
-	return &enginev1.Order{
+	return &api.Order{
 		WorkId:      o.WorkId,
 		Username:    o.Username,
 		Status:      uint32(o.Status),
