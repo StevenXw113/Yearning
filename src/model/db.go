@@ -31,6 +31,7 @@ import (
 	pgdrive "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -67,6 +68,13 @@ func initConfig(cPath string) {
 	}
 	if lang != "" {
 		C.General.Lang = lang
+	}
+	// 引擎接入相关：容器部署用环境变量注入比挂载 conf.toml 顺手（SECRET_KEY 同款惯例）
+	if v := os.Getenv("RPC_ADDR"); v != "" {
+		C.General.RpcAddr = v
+	}
+	if v := strings.TrimSpace(os.Getenv("RPC_TOKEN")); v != "" {
+		C.General.RpcToken = v
 	}
 	// 主密钥同时用于签发令牌和加密数据源口令，强度不足或沿用示例值必须拒绝启动
 	if _, ok := defaultSecretKeys[C.General.SecretKey]; ok || len(C.General.SecretKey) < 16 {

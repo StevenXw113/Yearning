@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	enginev1 "engine/gen/engine/v1"
@@ -23,17 +24,36 @@ const maxMsgSize = 64 << 20
 
 func main() {
 	addr := flag.String("addr", ":13307", "gRPC 监听地址，如 0.0.0.0:13307")
+	// authToken 共享访问令牌：非空时所有业务方法要求 metadata
+	// authorization: Bearer <token>（健康检查/服务反射豁免）。
+	// 引擎是「拿到数据源凭据即可执行 SQL」的代理，跨不完全可信网络部署必须启用。
+	authToken := flag.String("auth-token", "", "共享访问令牌（也可用环境变量 ENGINE_AUTH_TOKEN 注入）；空 = 不启用认证")
 	flag.Parse()
+
+	token := strings.TrimSpace(*authToken)
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("ENGINE_AUTH_TOKEN"))
+	}
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %v", *addr, err)
 	}
 
-	s := grpc.NewServer(
+	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
-	)
+	}
+	if token != "" {
+		log.Printf("engine auth: enabled (shared token)")
+		opts = append(opts,
+			grpc.ChainUnaryInterceptor(server.UnaryAuthInterceptor(token)),
+			grpc.ChainStreamInterceptor(server.StreamAuthInterceptor(token)),
+		)
+	} else {
+		log.Printf("engine auth: DISABLED (no token configured; safe only on fully trusted networks)")
+	}
+	s := grpc.NewServer(opts...)
 	enginev1.RegisterEngineServiceServer(s, server.NewEngine())
 	// 标准健康检查：容器探针 / 编排系统就绪检测用（grpc_healthProbe / k8s grpc 探针）
 	healthpb.RegisterHealthServer(s, health.NewServer())

@@ -5,8 +5,11 @@ import (
 
 	enginev1 "engine/gen/engine/v1"
 
+	"context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"strings"
 	"sync"
 )
 
@@ -42,12 +45,18 @@ var (
 // NewClient 新建连接再 Close，高频执行/检测场景白付一次拨号握手。
 // 连接生命周期与进程一致，调用方不再持有 *grpc.ClientConn、也不需要 Close。
 // RpcAddr 语义为审核引擎的 gRPC 监听地址，如 0.0.0.0:13307。
+// RpcToken 非空时每个请求自动携带 authorization: Bearer <token>（引擎侧
+// 以 -auth-token / ENGINE_AUTH_TOKEN 启用对称校验）。
 func Client() (enginev1.EngineServiceClient, error) {
 	clientOnce.Do(func() {
-		conn, err := grpc.NewClient(model.C.General.RpcAddr,
+		opts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultServiceConfig(retryPolicy),
-		)
+		}
+		if t := strings.TrimSpace(model.C.General.RpcToken); t != "" {
+			opts = append(opts, grpc.WithPerRPCCredentials(rpcToken(t)))
+		}
+		conn, err := grpc.NewClient(model.C.General.RpcAddr, opts...)
 		if err != nil {
 			clientErr = err
 			return
@@ -56,3 +65,16 @@ func Client() (enginev1.EngineServiceClient, error) {
 	})
 	return sharedCli, clientErr
 }
+
+// rpcToken 把共享令牌注入每个请求的 metadata。RequireTransportSecurity=false
+// 是因为当前传输是内网明文（引擎启用令牌时建议确保网络隔离，mTLS 属后续演进）。
+type rpcToken string
+
+func (t rpcToken) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
+	return map[string]string{"authorization": "Bearer " + string(t)}, nil
+}
+
+func (t rpcToken) RequireTransportSecurity() bool { return false }
+
+// 确保 rpcToken 实现 PerRPCCredentials（编译期约束）。
+var _ credentials.PerRPCCredentials = rpcToken("")

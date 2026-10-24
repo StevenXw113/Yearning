@@ -250,6 +250,24 @@ buf generate        # 需 PATH 含 protoc-gen-go / protoc-gen-go-grpc
 go run ./cmd/engine -addr :13307
 ```
 
+### 访问认证（跨不完全可信网络部署必须启用）
+
+引擎本质是「拿到数据源凭据即可执行 SQL」的代理：任何能访问 13307 的客户端，
+自带数据源地址与口令就能通过 `Exec` RPC 直接对数据库执行语句。因此除完全
+隔离的可信内网外，都应启用共享令牌认证：
+
+```bash
+# 引擎侧：启动参数或环境变量任选其一
+go run ./cmd/engine -addr :13307 -auth-token "$(openssl rand -base64 32)"
+ENGINE_AUTH_TOKEN=... ./engine
+
+# 主程序侧：conf.toml [General].RpcToken（或环境变量 RPC_TOKEN）配同一值
+# 两端都配置 → 所有业务方法要求 metadata authorization: Bearer <token>；
+# 两端都留空 → 不认证（历史行为）；只配一端 → 全部请求被拒（401 Unauthenticated）
+```
+
+健康检查（grpc.health.v1）与服务反射豁免认证——容器探针和 grpcurl 不带令牌。
+
 ## 构建（amd64 / arm64）
 
 ```bash

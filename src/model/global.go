@@ -41,6 +41,14 @@ type general struct {
 	RpcAddr   string
 	LogLevel  string
 	Lang      string
+	// RpcToken 审核引擎 gRPC 的共享访问令牌，须与引擎侧启动参数
+	// (-auth-token 或环境变量 ENGINE_AUTH_TOKEN) 一致；空 = 引擎未启用认证。
+	// 引擎是「拿到数据源凭据即可执行 SQL」的代理，跨不完全可信网络部署必须配置。
+	RpcToken string
+	// DisableInstanceLock 关闭单实例互斥（默认开启）。cron 统计、OSC 中止、
+	// 执行中超时自愈等均假设同一元数据库只有一个主实例在跑，多实例会互相破坏；
+	// 互斥基于 MySQL GET_LOCK，仅特殊部署（如主动外部调度）才应关闭。
+	DisableInstanceLock bool
 	// GhOstPath gh-ost 可执行文件路径；留空则从 PATH 中查找 gh-ost
 	GhOstPath string
 	// OscMinRows 触发在线表结构变更(OSC)的表行数估算下限；<=0 表示关闭 OSC（全部走引擎执行）

@@ -18,6 +18,7 @@ import (
 	"Yearning-go/src/model"
 	_ "Yearning-go/src/model"
 	"Yearning-go/src/router"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -76,6 +77,16 @@ func StartYearning(port string) {
 		logger.DefaultLogger.Errorf("全局配置加载失败: %v", err)
 		os.Exit(1)
 		return
+	}
+	// 单实例互斥（默认开启）：cron 统计、OSC 中止、执行自愈等均假设单实例。
+	// 抢不到锁说明另一实例在跑，直接拒绝启动，由运维排查。
+	if !model.C.General.DisableInstanceLock {
+		if err := AcquireInstanceLock(context.Background()); err != nil {
+			logger.DefaultLogger.Errorf("单实例互斥: %v", err)
+			os.Exit(1)
+			return
+		}
+		logger.DefaultLogger.Info("已获取单实例锁（MySQL GET_LOCK）")
 	}
 	go cronTabMaskQuery()
 	go cronTabTotalTickets()

@@ -27,6 +27,10 @@ services:
            # ⚠️ 生产必改：设为随机串（openssl rand -base64 32）。以下仅为“能启动的演示值”，切勿生产使用。
            SECRET_KEY: please-replace-this-secret-key-0000
            IS_DOCKER: is_docker
+           # 审核引擎 gRPC 地址与共享令牌（引擎侧用 ENGINE_AUTH_TOKEN 注入同一值）。
+           # RPC_TOKEN 两侧都配置时启用引擎认证；都留空则不认证（仅限完全可信内网）。
+           RPC_ADDR: "127.0.0.1:50001"
+           RPC_TOKEN: ""
         ports:
            - 8000:8000
         # 首次使用请先初始化（生产建议去掉 install，单独执行 init 后再 up -d）
