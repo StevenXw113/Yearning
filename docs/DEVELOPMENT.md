@@ -72,7 +72,7 @@ Copy-Item conf.toml.template conf.toml
 
 | 配置 | 默认 | 说明 |
 |---|---|---|
-| `RpcToken` | 空 | 引擎 gRPC 共享令牌；与引擎 `-auth-token`/`ENGINE_AUTH_TOKEN` 一致即启用认证（跨不完全可信网络部署必须启用） |
+| `RpcToken` | 空 | 引擎共享访问令牌；与引擎 `-auth-token`/`ENGINE_AUTH_TOKEN` 一致即启用认证（跨不完全可信网络部署必须启用） |
 | `RpcTLSCA` / `RpcTLSCert` / `RpcTLSKey` | 空 | 引擎通道 TLS / mTLS（证书生成：`engine/scripts/gen-tls-certs.sh`） |
 | `SuperUsers` | 空 | 额外超管名单（逗号分隔；`admin` 恒为超管） |
 | `CorsOrigins` | 空 | CORS 允许来源（逗号分隔；空 = 通配 *） |
@@ -223,15 +223,15 @@ Yearning is running on port:  8000
 
 ## 8. 审核引擎（可选但功能必需）
 
-SQL 解析 / 审核 / 执行引擎**源码在本仓库 `engine/`**（独立 Go module，`go.mod` 通过 `replace engine => ./engine` 引用，grpc 定义见 `engine/proto/engine/v1/engine.proto`）。它是**独立进程**，单独编译部署后，后端经 `[General].RpcAddr` 指明的地址（默认 `127.0.0.1:50001`）调用其方法：
+SQL 解析 / 审核 / 执行引擎**源码在本仓库 `engine/`**（独立 Go module，`go.mod` 通过 `replace engine => ./engine` 引用，线缆契约见 `engine/api/api.go` 手写 struct）。它是**独立进程**，单独编译部署后，后端经 `[General].RpcAddr` 指明的地址（默认 `127.0.0.1:50001`）以 HTTP+JSON 调用其端点：
 
-| RPC 方法 | 用途 |
+| 端点（POST，JSON） | 用途 |
 |---|---|
-| `Engine.Check` | 提交前 SQL 语法 / 规则检查 |
-| `Engine.Query` | 查询语句预检、拆条、LIMIT 注入、敏感列识别 |
-| `Engine.Exec` | 工单执行 |
-| `Engine.MergeAlterTables` | 合并多条 ALTER |
-| `Engine.StopDelay` | 停止定时执行 |
+| `/v1/check` | 提交前 SQL 语法 / 规则检查 |
+| `/v1/query` | 查询语句预检、拆条、LIMIT 注入、敏感列识别 |
+| `/v1/exec` | 工单执行 |
+| `/v1/merge-alter-tables` | 合并多条 ALTER |
+| `/v1/stop-delay` | 停止定时执行 |
 
 ### 8.1 编译并启动引擎
 
@@ -245,8 +245,8 @@ go build -o ../bin/engine ./cmd/engine   # 产出引擎可执行文件
 
 | 参数 | 说明 |
 |---|---|
-| `-addr :13307` | gRPC 监听地址 |
-| `-auth-token <token>` / 环境变量 `ENGINE_AUTH_TOKEN` | 共享访问令牌：非空时业务方法要求 `authorization: Bearer <token>`（健康检查/反射豁免）。主程序侧配 `[General].RpcToken` 同值即启用 |
+| `-addr :13307` | HTTP 监听地址 |
+| `-auth-token <token>` / 环境变量 `ENGINE_AUTH_TOKEN` | 共享访问令牌：非空时业务方法要求 `authorization: Bearer <token>`（/healthz 豁免）。主程序侧配 `[General].RpcToken` 同值即启用 |
 | `-tls-cert` / `-tls-key` / `-tls-client-ca` | TLS / mTLS（证书一键生成：`engine/scripts/gen-tls-certs.sh`；详见 `engine/README.md`） |
 | `-metrics-addr :13308` | 独立 Prometheus /metrics HTTP 口（空 = 关闭） |
 
@@ -288,7 +288,7 @@ Yearning --help         # 帮助
 
 ## 11. 功能测试（对已部署环境跑一遍）
 
-`tools/ftest` 是端到端功能测试：走真实链路（主程序 HTTP/WS → 审核引擎 gRPC → 目标库），
+`tools/ftest` 是端到端功能测试：走真实链路（主程序 HTTP/WS → 审核引擎 HTTP → 目标库），
 断言直接读元数据库与目标库核对，不只看接口返回码。适合每次发版后对目标环境跑一遍。
 
 ```bash
