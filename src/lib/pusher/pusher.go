@@ -62,6 +62,17 @@ func NewMessagePusher(orderId string) *Msg {
 	return &Msg{orderId: orderId}
 }
 
+// SystemAlert 基础设施级告警（引擎不可用/自愈动作等），与工单无关、没有明确的
+// 单个收件人，走钉钉群 WebHook（配置了才发）+ 日志。不随工单邮件骚扰个人。
+// 防风暴由调用方负责（健康翻转只各告警一次）。
+func SystemAlert(subject, content string) {
+	msg := *model.GloMessage.Load()
+	if msg.Ding && msg.WebHook != "" {
+		go PusherMessages(msg, fmt.Sprintf("【%s】\n%s", subject, content))
+	}
+	logger.DefaultLogger.Errorf("系统告警: %s: %s", subject, content)
+}
+
 func (m *Msg) Order() *Msg {
 	var user model.CoreAccount
 	var order model.CoreSqlOrder

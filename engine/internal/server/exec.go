@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	enginev1 "engine/gen/engine/v1"
+	"engine/internal/server/emetrics"
 )
 
 // Exec 按数据源方言分派执行。五个引擎各自独立实现、互不混用：
@@ -25,14 +26,24 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 
 	switch k := strings.ToLower(strings.TrimSpace(req.Source.GetKind())); k {
 	case "", "mysql":
+		emetrics.ActiveExecs.Add(1)
+		defer emetrics.ActiveExecs.Add(-1)
 		return e.execSQL(ctx, req)
 	case "mongodb":
+		emetrics.ActiveExecs.Add(1)
+		defer emetrics.ActiveExecs.Add(-1)
 		return e.execMongo(ctx, req)
 	case "redis":
+		emetrics.ActiveExecs.Add(1)
+		defer emetrics.ActiveExecs.Add(-1)
 		return e.execRedis(ctx, req)
 	case "postgres":
+		emetrics.ActiveExecs.Add(1)
+		defer emetrics.ActiveExecs.Add(-1)
 		return e.execPostgreSQL(ctx, req)
 	case "doris":
+		emetrics.ActiveExecs.Add(1)
+		defer emetrics.ActiveExecs.Add(-1)
 		return e.execDoris(ctx, req)
 	default:
 		return &enginev1.ExecReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil

@@ -5,6 +5,7 @@ import (
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/metrics"
 	"Yearning-go/src/model"
 	"context"
 	"encoding/hex"
@@ -107,6 +108,7 @@ func (m *MultiSQLRunner) Run(db *sqlx.DB, schema string, dbType int) (*Query, er
 	if err != nil {
 		return nil, err
 	}
+	metrics.QueryStatementsTotal.Inc()
 
 	cols, err := rows.Columns()
 

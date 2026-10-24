@@ -61,7 +61,8 @@ func Client() (enginev1.EngineServiceClient, error) {
 			clientErr = err
 			return
 		}
-		sharedCli = enginev1.NewEngineServiceClient(conn)
+		// 包装一层埋点客户端：全部 RPC 自动记耗时/成败/健康状态（含引擎不可用告警）
+		sharedCli = instrumented{enginev1.NewEngineServiceClient(conn)}
 	})
 	return sharedCli, clientErr
 }

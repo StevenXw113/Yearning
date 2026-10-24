@@ -102,6 +102,8 @@ func AddRouter(e *yee.Core) {
 	e.GET("/lang", login.SystemLang)
 	e.GET("/oidc/_token-login", login.OidcLogin)
 	e.GET("/oidc/state", login.OidcState)
+	// 探针与指标：JWT 之外（探针/Prometheus 不带用户令牌），仅暴露状态与聚合计数
+	apis.RegisterProbeRoutes(e)
 	// 校验 key 必须与 factory.JwtAuth 的签名 key 一致：两者都用派生自 SecretKey 的
 	// JwtSigningKey()，否则登录签发的 token 会被判 signature is invalid，导致所有 /api/v2 请求 401
 	r := e.Group("/api/v2", middleware.JWTWithConfig(middleware.JwtConfig{SigningKey: model.JwtSigningKey(), TokenLookup: []string{yee.HeaderAuthorization, yee.HeaderSecWebSocketProtocol}}))

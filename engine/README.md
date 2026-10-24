@@ -268,6 +268,22 @@ ENGINE_AUTH_TOKEN=... ./engine
 
 健康检查（grpc.health.v1）与服务反射豁免认证——容器探针和 grpcurl 不带令牌。
 
+### 指标（Prometheus）
+
+```bash
+go run ./cmd/engine -addr :13307 -metrics-addr :13308
+# curl 127.0.0.1:13308/metrics
+```
+
+暴露：`engine_rpc_total{method,result}`（调用量与成败）、`engine_rpc_duration_seconds`（count/sum/max）、
+`engine_active_execs`（正在执行的工单数）、进程 uptime/goroutines。独立 HTTP 口、
+无业务数据；不配 `-metrics-addr` 则关闭。
+
+主程序侧对应端点：`/health`（进程+引擎健康，JSON）与 `/metrics`
+（`yearning_orders_total{type,result}`、`yearning_engine_rpc_duration_seconds`、
+`yearning_engine_unavailable_total` 等）；引擎不可用会经钉钉 WebHook 告警一次
+（恢复时再通知一次），无需轮询。
+
 ## 构建（amd64 / arm64）
 
 ```bash

@@ -8,8 +8,10 @@ import (
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
+	"Yearning-go/src/lib/metrics"
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
+	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
@@ -202,6 +204,7 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	if err != nil {
 		return false, err
 	}
+	start := time.Now()
 	ctx, cancel := execContext()
 	defer cancel()
 	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
@@ -263,6 +266,17 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 			logger.DefaultLogger.Errorf("工单 %s 执行明细/回滚语句落库失败: %v", order.WorkId, txErr)
 		}
 	}
+	// 执行指标：成败与耗时（OSC 后台路径不计——耗时在其 goroutine 内不可测）
+	tp := "ddl"
+	if order.Type == vars.DML {
+		tp = "dml"
+	}
+	if rep.Ok {
+		metrics.OrdersTotal.With(tp, "success").Inc()
+	} else {
+		metrics.OrdersTotal.With(tp, "failed").Inc()
+	}
+	metrics.OrderExecDuration.Observe(time.Since(start))
 	if !rep.Ok {
 		return false, calls.CombineReplyErr(rep, err)
 	}
