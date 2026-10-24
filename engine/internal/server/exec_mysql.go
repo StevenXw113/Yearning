@@ -101,19 +101,26 @@ func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*engin
 			}
 			continue
 		}
+		var rwarn string
 		if rb != nil {
-			rec.Rollback = rb.build(ctx, text)
+			rec.Rollback, rwarn = rb.build(ctx, text)
 		}
 		res, err := run(text)
 		if err != nil {
 			rec.Error = err.Error()
 			rec.Status = "执行失败"
 			rec.Level = 1
+			if rwarn != "" {
+				rec.Error += "\n" + rwarn
+			}
 			recs = append(recs, rec)
 			if dmlTx {
 				_ = tx.Rollback()
 			}
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: captureRollback(ctx, blc, db)}, nil
+			// 与执行失败路径一致：已生效的部分改动仍要抓回滚语句
+			rbStmts, rbWarn := captureRollback(ctx, blc, db)
+			attachRollbackWarning(recs, rbWarn)
+			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: rbStmts}, nil
 		}
 		if n, err := res.RowsAffected(); err == nil {
 			rec.AffectRows = uint32(n)
@@ -127,8 +134,12 @@ func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*engin
 			if dmlTx {
 				_ = tx.Rollback()
 			}
-			// 与执行失败路径一致：已生效的部分改动仍要抓回滚语句
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: captureRollback(ctx, blc, db)}, nil
+			rbStmts, rbWarn := captureRollback(ctx, blc, db)
+			attachRollbackWarning(recs, rbWarn)
+			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: rbStmts}, nil
+		}
+		if rwarn != "" { // 前镜像回滚的不完整提示（状态仍为已执行）
+			rec.Error = rwarn
 		}
 		rec.Status = "已执行"
 		recs = append(recs, rec)
@@ -139,17 +150,20 @@ func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*engin
 			return &enginev1.ExecReply{Ok: false, Error: "提交事务失败: " + err.Error(), Records: recs}, nil
 		}
 	}
-	return &enginev1.ExecReply{Ok: true, Records: recs, Rollback: captureRollback(ctx, blc, db)}, nil
+	rbStmts, rbWarn := captureRollback(ctx, blc, db)
+	attachRollbackWarning(recs, rbWarn)
+	return &enginev1.ExecReply{Ok: true, Records: recs, Rollback: rbStmts}, nil
 }
 
 // captureRollback 执行完成（含提交）后读取 binlog 位点并抓取整单回滚语句。
-func captureRollback(ctx context.Context, blc *binlogCapture, db *sql.DB) []string {
+// 返回的 warning 非空表示回滚缺失/不完整，调用方必须呈现给审批人。
+func captureRollback(ctx context.Context, blc *binlogCapture, db *sql.DB) ([]string, string) {
 	if blc == nil {
-		return nil
+		return nil, ""
 	}
 	end, ok := masterStatus(ctx, db)
 	if !ok {
-		return nil
+		return nil, "回滚抓取失败：执行后无法读取 binlog 位点，本工单没有自动回滚语句"
 	}
 	return blc.rollback(ctx, end)
 }

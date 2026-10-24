@@ -27,40 +27,78 @@ func dorisDSN(s *enginev1.DataSource, db string) (string, error) {
 // splitDorisStatements 按分号切分 Doris 语句。
 //
 // Doris 的建表 DDL 是自有语法（DISTRIBUTED BY / PROPERTIES / KEY 模型），
-// MySQL 解析器拆不了，所以这里不做语法解析、只按分号切分（字符串字面量里的
-// 分号与反斜杠转义跳过）；每条语句的语法对错交给 Doris 在执行时报。
+// MySQL 解析器拆不了，所以这里不做语法解析、只按分号切分；每条语句的语法对错
+// 交给 Doris 在执行时报。引号内的分号跳过，注释里的分号也跳过——
+// `-- xx;` / `# xx;` / `/* xx; */` 里的分号属于注释文本，切开会拼出残缺语句。
 func splitDorisStatements(sql string) []string {
 	var (
-		stmts   []string
-		buf     strings.Builder
-		quote   rune
-		escaped bool
+		stmts []string
+		buf   strings.Builder
+		quote byte
 	)
-	for _, r := range sql {
-		if escaped {
-			buf.WriteRune(r)
-			escaped = false
-			continue
-		}
-		if quote == 0 {
-			switch r {
-			case '\'', '"', '`':
-				quote = r
-			case ';':
-				if s := strings.TrimSpace(buf.String()); s != "" {
-					stmts = append(stmts, s)
-				}
-				buf.Reset()
+	for i := 0; i < len(sql); i++ {
+		c := sql[i]
+		if quote != 0 {
+			// 反斜杠转义只在字符串内有效（反引号标识符内 '\' 是普通字符）
+			if c == '\\' && quote != '`' && i+1 < len(sql) {
+				i++
+				buf.WriteByte(c)
+				buf.WriteByte(sql[i])
 				continue
 			}
-		} else {
-			if r == '\\' {
-				escaped = true
-			} else if r == quote {
+			if c == quote {
+				// 引号双写（'' / "" / ``）是转义，不结束引号
+				if i+1 < len(sql) && sql[i+1] == quote {
+					i++
+					buf.WriteByte(c)
+					buf.WriteByte(sql[i])
+					continue
+				}
 				quote = 0
 			}
+			buf.WriteByte(c)
+			continue
 		}
-		buf.WriteRune(r)
+		// 行注释：-- 后须跟空白/行尾（与 MySQL 词法一致，不误伤 --x 这类负号表达式）
+		if c == '-' && i+1 < len(sql) && sql[i+1] == '-' &&
+			(i+2 >= len(sql) || sql[i+2] == ' ' || sql[i+2] == '\t' || sql[i+2] == '\r' || sql[i+2] == '\n') {
+			for ; i < len(sql) && sql[i] != '\n'; i++ {
+			}
+			if i < len(sql) {
+				buf.WriteByte('\n')
+			}
+			continue
+		}
+		if c == '#' {
+			for ; i < len(sql) && sql[i] != '\n'; i++ {
+			}
+			if i < len(sql) {
+				buf.WriteByte('\n')
+			}
+			continue
+		}
+		// 块注释 /* ... */（含 /*! ... */ 版本注释，切分层面一律按注释对待）
+		if c == '/' && i+1 < len(sql) && sql[i+1] == '*' {
+			end := strings.Index(sql[i+2:], "*/")
+			buf.WriteByte(' ')
+			if end < 0 { // 未闭合：吞掉剩余全部
+				break
+			}
+			i = i + 2 + end + 1 // 指向 "*/" 的 '/'，随 for 的 i++ 落到注释后
+			continue
+		}
+		switch c {
+		case '\'', '"', '`':
+			quote = c
+			buf.WriteByte(c)
+		case ';':
+			if s := strings.TrimSpace(buf.String()); s != "" {
+				stmts = append(stmts, s)
+			}
+			buf.Reset()
+		default:
+			buf.WriteByte(c)
+		}
 	}
 	if s := strings.TrimSpace(buf.String()); s != "" {
 		stmts = append(stmts, s)

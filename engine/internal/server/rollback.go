@@ -43,15 +43,16 @@ func newRollbackBuilder(q rowQueryer, schema string) *rollbackBuilder {
 	return &rollbackBuilder{tableMeta: newTableMeta(q, schema)}
 }
 
-// build 返回单条语句的回滚 SQL；任何异常都返回空串，绝不影响执行本身。
-func (b *rollbackBuilder) build(ctx context.Context, text string) string {
+// build 返回单条语句的回滚 SQL 与告警；任何异常都返回空串，绝不影响执行本身。
+// 告警非空表示回滚语句缺失或不完整（如前镜像被行数上限截断），由调用方呈现给审批人。
+func (b *rollbackBuilder) build(ctx context.Context, text string) (string, string) {
 	parsed, err := base.ParseStatements(storepb.Engine_MYSQL, text)
 	if err != nil || len(parsed) == 0 {
-		return ""
+		return "", ""
 	}
 	node, ok := mysqlparser.GetOmniNode(parsed[0].AST)
 	if !ok {
-		return ""
+		return "", ""
 	}
 	switch n := node.(type) {
 	case *ast.UpdateStmt:
@@ -63,31 +64,31 @@ func (b *rollbackBuilder) build(ctx context.Context, text string) string {
 		// 按显式主键生成 DELETE 回滚会把那行旧行删掉（数据丢失），宁可不给回滚。
 		// binlog 路径能精确还原这类改写，不经过这里。
 		if n.IsReplace || len(n.OnDuplicateKey) > 0 {
-			return ""
+			return "", ""
 		}
 		return b.insert(ctx, n)
 	}
-	return ""
+	return "", ""
 }
 
 // update 生成 UPDATE 的回滚：按前镜像逐行还原为改动前的值。
-func (b *rollbackBuilder) update(ctx context.Context, text string, n *ast.UpdateStmt) string {
+func (b *rollbackBuilder) update(ctx context.Context, text string, n *ast.UpdateStmt) (string, string) {
 	tbl, ok := singleTable(n.Tables)
 	if !ok || n.Where == nil {
-		return ""
+		return "", ""
 	}
 	db, pks := b.primaryKeysOf(ctx, tbl)
 	if db == "" || len(pks) == 0 {
-		return ""
+		return "", ""
 	}
 	for _, a := range n.SetList { // 主键被改写后旧主键定位不到原行，放弃
 		if a.Column != nil && containsFold(pks, a.Column.Column) {
-			return ""
+			return "", ""
 		}
 	}
 	rows, cols, ok := b.preImage(ctx, text, db, tbl)
 	if !ok {
-		return ""
+		return "", ""
 	}
 	var out []string
 	for _, row := range rows {
@@ -96,53 +97,53 @@ func (b *rollbackBuilder) update(ctx context.Context, text string, n *ast.Update
 			if containsFold(pks, c) {
 				continue
 			}
-			sets = append(sets, fmt.Sprintf("`%s` = %s", c, literal(row[i])))
+			sets = append(sets, fmt.Sprintf("%s = %s", quoteIdent(c), literal(row[i])))
 		}
 		if len(sets) == 0 {
 			continue
 		}
-		out = append(out, fmt.Sprintf("UPDATE `%s`.`%s` SET %s WHERE %s;",
-			db, tbl.Name, strings.Join(sets, ", "), pkWhere(pks, cols, row)))
+		out = append(out, fmt.Sprintf("UPDATE %s SET %s WHERE %s;",
+			quoteIdent(db)+"."+quoteIdent(tbl.Name), strings.Join(sets, ", "), pkWhere(pks, cols, row)))
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), truncationWarning(len(rows))
 }
 
 // delete 生成 DELETE 的回滚：把前镜像逐行重新 INSERT 回去。
-func (b *rollbackBuilder) delete(ctx context.Context, text string, n *ast.DeleteStmt) string {
+func (b *rollbackBuilder) delete(ctx context.Context, text string, n *ast.DeleteStmt) (string, string) {
 	tbl, ok := singleTable(n.Tables)
 	if !ok || n.Where == nil || len(n.Using) > 0 {
-		return ""
+		return "", ""
 	}
 	db, pks := b.primaryKeysOf(ctx, tbl)
 	if db == "" || len(pks) == 0 {
-		return ""
+		return "", ""
 	}
 	rows, cols, ok := b.preImage(ctx, text, db, tbl)
 	if !ok {
-		return ""
+		return "", ""
 	}
 	var out []string
 	for _, row := range rows {
 		names := make([]string, 0, len(cols))
 		vals := make([]string, 0, len(cols))
 		for i, c := range cols {
-			names = append(names, "`"+c+"`")
+			names = append(names, quoteIdent(c))
 			vals = append(vals, literal(row[i]))
 		}
-		out = append(out, fmt.Sprintf("INSERT INTO `%s`.`%s` (%s) VALUES (%s);",
-			db, tbl.Name, strings.Join(names, ", "), strings.Join(vals, ", ")))
+		out = append(out, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);",
+			quoteIdent(db)+"."+quoteIdent(tbl.Name), strings.Join(names, ", "), strings.Join(vals, ", ")))
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), truncationWarning(len(rows))
 }
 
 // insert 生成 INSERT 的回滚：按语句里显式给出的主键字面量删除这些新行。
-func (b *rollbackBuilder) insert(ctx context.Context, n *ast.InsertStmt) string {
+func (b *rollbackBuilder) insert(ctx context.Context, n *ast.InsertStmt) (string, string) {
 	if n.Select != nil || n.TableSource != nil || len(n.SetList) > 0 || len(n.Values) == 0 || len(n.Columns) == 0 {
-		return ""
+		return "", ""
 	}
 	db, pks := b.primaryKeysOf(ctx, n.Table)
 	if db == "" || len(pks) == 0 {
-		return ""
+		return "", ""
 	}
 	idx := map[string]int{}
 	for i, c := range n.Columns {
@@ -152,7 +153,7 @@ func (b *rollbackBuilder) insert(ctx context.Context, n *ast.InsertStmt) string 
 	}
 	for _, pk := range pks {
 		if _, ok := idx[strings.ToLower(pk)]; !ok { // 主键没显式写，取不到新行主键
-			return ""
+			return "", ""
 		}
 	}
 	var out []string
@@ -161,17 +162,27 @@ func (b *rollbackBuilder) insert(ctx context.Context, n *ast.InsertStmt) string 
 		for _, pk := range pks {
 			i := idx[strings.ToLower(pk)]
 			if i >= len(row) {
-				return ""
+				return "", ""
 			}
 			v, ok := literalFromExpr(row[i])
 			if !ok { // 函数调用/子查询等拼不出安全的定位条件
-				return ""
+				return "", ""
 			}
-			conds = append(conds, fmt.Sprintf("`%s` = %s", pk, v))
+			conds = append(conds, fmt.Sprintf("%s = %s", quoteIdent(pk), v))
 		}
-		out = append(out, fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", db, n.Table.Name, strings.Join(conds, " AND ")))
+		out = append(out, fmt.Sprintf("DELETE FROM %s WHERE %s;",
+			quoteIdent(db)+"."+quoteIdent(n.Table.Name), strings.Join(conds, " AND ")))
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), ""
+}
+
+// truncationWarning 前镜像抓满行数上限时提示：回滚只覆盖了命中行里的前 N 行，
+// 超出部分没有任何回滚语句，审批人必须知情。
+func truncationWarning(n int) string {
+	if n >= rollbackMaxRows {
+		return fmt.Sprintf("回滚语句仅覆盖 WHERE 命中的前 %d 行，超出部分未生成回滚，请人工确认", rollbackMaxRows)
+	}
+	return ""
 }
 
 // preImage 用原语句 WHERE 起的原文作为条件，抓取将被改动的行。
@@ -299,9 +310,9 @@ func singleTable(exprs []ast.TableExpr) (*ast.TableRef, bool) {
 }
 
 func tableRefSQL(db string, tbl *ast.TableRef) string {
-	q := fmt.Sprintf("`%s`.`%s`", db, tbl.Name)
+	q := quoteIdent(db) + "." + quoteIdent(tbl.Name)
 	if tbl.Alias != "" {
-		q += fmt.Sprintf(" AS `%s`", tbl.Alias)
+		q += " AS " + quoteIdent(tbl.Alias)
 	}
 	return q
 }
@@ -313,7 +324,7 @@ func pkWhere(pks, cols []string, row []any) string {
 		if i < 0 {
 			continue
 		}
-		conds = append(conds, fmt.Sprintf("`%s` = %s", pk, literal(row[i])))
+		conds = append(conds, fmt.Sprintf("%s = %s", quoteIdent(pk), literal(row[i])))
 	}
 	return strings.Join(conds, " AND ")
 }
@@ -447,8 +458,21 @@ func literalFromExpr(n ast.ExprNode) (string, bool) {
 	return "", false
 }
 
+// quote 渲染字符串字面量。含单引号或反斜杠的值改用十六进制字面量：
+// 引号用 '' 双写在两种 sql_mode 下都成立，但反斜杠无论转不转义都必踩一种模式
+// （默认模式不转义会丢反斜杠；NO_BACKSLASH_ESCAPES 下转义会写坏）。
+// 十六进制与 sql_mode 无关：MySQL 按二进制串接受，按列字符集落库。
 func quote(s string) string {
-	return "'" + strings.NewReplacer("\\", "\\\\", "'", "\\'").Replace(s) + "'"
+	if strings.ContainsAny(s, "'\\") {
+		return "0x" + hex.EncodeToString([]byte(s))
+	}
+	return "'" + s + "'"
+}
+
+// quoteIdent 渲染标识符：内部反引号双写。语句里允许出现带反引号的标识符
+// （CREATE TABLE `we``ird`），不双写会闭合引用、把回滚文本拼出注入面。
+func quoteIdent(s string) string {
+	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
 }
 
 func containsFold(list []string, s string) bool { return indexFold(list, s) >= 0 }
@@ -462,10 +486,36 @@ func indexFold(list []string, s string) int {
 	return -1
 }
 
+// hasLimit 判断条件尾部是否存在顶层 LIMIT：引号内文本与括号内子查询的 LIMIT 不算——
+// 子查询的 LIMIT 约束不了外层 UPDATE/DELETE，不能据此跳过保护性行数上限。
+// （原实现按空白切词，`WHERE note='no limit here'` 会误判成带 LIMIT，
+// 导致大表前镜像全量拉取。）
 func hasLimit(s string) bool {
-	for _, f := range strings.Fields(s) {
-		if strings.EqualFold(f, "limit") {
-			return true
+	depth, quote := 0, byte(0)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if quote != 0 {
+			switch {
+			case c == '\\' && quote != '`' && i+1 < len(s):
+				i++
+			case c == quote:
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"', '`':
+			quote = c
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if depth == 0 && keywordAt(s, i, "LIMIT") {
+				return true
+			}
 		}
 	}
 	return false

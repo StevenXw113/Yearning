@@ -17,6 +17,33 @@ func TestDeleteByImage(t *testing.T) {
 	if !strings.Contains(got, "`id` <=> 7") || !strings.Contains(got, "`name` <=> 'a'") || !strings.HasSuffix(got, "LIMIT 1;") {
 		t.Fatalf("无主键时回滚语句不符预期: %s", got)
 	}
+	// 含单引号的值走十六进制字面量（NO_BACKSLASH_ESCAPES 下安全）：无主键时全列进 WHERE
+	got = deleteByImage("demo", "t", cols, []any{int64(7), "a'b"}, nil)
+	if !strings.Contains(got, "0x612762") {
+		t.Fatalf("含单引号的值应渲染为十六进制: %s", got)
+	}
+	// 带反引号的标识符双写，不闭合引用
+	got = deleteByImage("de`mo", "t", []string{"id"}, []any{int64(7)}, []string{"id"})
+	if !strings.Contains(got, "`de``mo`.`t`") {
+		t.Fatalf("含反引号的标识符应双写: %s", got)
+	}
+}
+
+// TestNextBinlogServerID 回归：复制 server_id 进程内必须唯一。此前用纳秒时间戳
+// 取模，同源库并发工单撞号后 MySQL 踢掉先建立的复制连接，回滚静默丢失。
+func TestNextBinlogServerID(t *testing.T) {
+	seen := map[uint32]struct{}{}
+	prev := nextBinlogServerID()
+	for i := 0; i < 1000; i++ {
+		id := nextBinlogServerID()
+		if _, dup := seen[id]; dup {
+			t.Fatalf("server_id 撞号: %d", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if next := nextBinlogServerID(); next == prev {
+		t.Fatal("连续分配的 server_id 不应相同")
+	}
 }
 
 func TestInsertByImage(t *testing.T) {

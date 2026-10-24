@@ -57,3 +57,19 @@ func affectRowOverLimit(rules *enginev1.AuditRole, tp string, rows uint32) (bool
 	}
 	return limit > 0 && rows > limit, limit
 }
+
+// attachRollbackWarning 把回滚抓取/生成的异常挂到最后一条执行记录上。
+// 状态保持「已执行/执行失败」不变、只补说明——与 Mongo 执行器的 Warning
+// 呈现方式一致（rec.Error 随执行明细落库展示）。静默吞掉会让 backup=1 的
+// 工单在审批人不知情的情况下没有回滚语句。
+func attachRollbackWarning(recs []*enginev1.Record, warn string) {
+	if warn == "" || len(recs) == 0 {
+		return
+	}
+	last := recs[len(recs)-1]
+	if last.Error == "" {
+		last.Error = warn
+		return
+	}
+	last.Error += "\n" + warn
+}
