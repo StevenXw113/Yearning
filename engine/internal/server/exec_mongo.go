@@ -20,14 +20,19 @@ import (
 const mongoTimeout = 15 * time.Second
 
 // mongoURI 拼 MongoDB 连接串。用户名与口令走 url.UserPassword 转义，
-// 否则口令里的 @ : / % 会把连接串拆坏；认证库固定 admin。
-func mongoURI(username, password, ip string, port int32) string {
+// 否则口令里的 @ : / % 会把连接串拆坏；认证库（authSource）来自数据源配置，
+// 未配置时用 MongoDB 默认的 admin——账号建在业务库上的部署必须显式指定，
+// 否则认证必失败（此前硬编码 admin，这类部署连不上）。
+func mongoURI(username, password, ip string, port int32, authDB string) string {
+	if authDB == "" {
+		authDB = "admin"
+	}
 	u := &url.URL{
 		Scheme:   "mongodb",
 		User:     url.UserPassword(username, password),
 		Host:     net.JoinHostPort(ip, strconv.Itoa(int(port))),
 		Path:     "/",
-		RawQuery: "authSource=admin",
+		RawQuery: "authSource=" + url.QueryEscape(authDB),
 	}
 	return u.String()
 }
@@ -41,7 +46,7 @@ func connectMongo(ds *enginev1.DataSource) (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mongoTimeout)
 	defer cancel()
 	client, err := mongo.Connect(ctx, options.Client().
-		ApplyURI(mongoURI(ds.Username, ds.Password, ds.Ip, ds.Port)).
+		ApplyURI(mongoURI(ds.Username, ds.Password, ds.Ip, ds.Port, ds.AuthDb)).
 		SetConnectTimeout(mongoTimeout).
 		SetServerSelectionTimeout(mongoTimeout))
 	if err != nil {

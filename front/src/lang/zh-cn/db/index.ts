@@ -3,6 +3,8 @@ export default {
   'db.kind': '连接模式',
   'db.addr': '地址',
   'db.principal': '负责人',
+  'db.authDatabase': '认证库',
+  'db.authDatabaseTips': 'MongoDB 认证库（authSource），留空默认 admin',
   'db.rw': '读写',
   'db.w': '写',
   'db.r': '读',

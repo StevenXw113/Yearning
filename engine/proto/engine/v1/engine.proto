@@ -28,7 +28,10 @@ message DataSource {
   string ca = 5;
   string cert = 6;
   string key = 7;
-  string kind = 8; // "mysql" / "mongodb" / "redis"
+  string kind = 8; // "mysql" / "mongodb" / "redis" / "postgres" / "doris"
+  // auth_db MongoDB 认证库（连接串 authSource）。空 = 默认 admin；
+  // 账号建在业务库上的部署（authSource=业务库名）必须显式指定，否则连不上。
+  string auth_db = 9;
 }
 
 // 审核规则，与 Yearning engine.AuditRole 对齐。

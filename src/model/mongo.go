@@ -27,14 +27,19 @@ const MongoTimeout = 15 * time.Second
 var MongoSystemDB = map[string]struct{}{"admin": {}, "config": {}, "local": {}}
 
 // MongoURI 拼 MongoDB 连接串。用户名与口令走 url.UserPassword 做转义，
-// 否则口令里的 @ : / % 会把连接串拆坏；认证库固定 admin（Mongo 账号通常建在 admin 库）。
+// 否则口令里的 @ : / % 会把连接串拆坏；认证库（authSource）取数据源的
+// AuthDatabase，未配置时用 MongoDB 默认的 admin（账号通常建在 admin 库）。
 func MongoURI(s *CoreDataSource, password string) string {
+	authDB := strings.TrimSpace(s.AuthDatabase)
+	if authDB == "" {
+		authDB = "admin"
+	}
 	u := &url.URL{
 		Scheme:   "mongodb",
 		User:     url.UserPassword(s.Username, password),
 		Host:     net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
 		Path:     "/",
-		RawQuery: "authSource=admin",
+		RawQuery: "authSource=" + url.QueryEscape(authDB),
 	}
 	return u.String()
 }

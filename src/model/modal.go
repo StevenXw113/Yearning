@@ -131,7 +131,10 @@ type CoreDataSource struct {
 	Cert             string `gorm:"type:longtext;default ''" json:"cert"`
 	KeyFile          string `gorm:"type:longtext;default ''" json:"key_file"`
 	DBType           int    `gorm:"type:int(5);not null;default 0" json:"db_type"` // 0 mysql 1 PostgreSQL 2 mongodb 3 redis
-	RuleId           int    `gorm:"type:int(100);not null;default 0" json:"rule_id"`
+	// AuthDatabase 认证库：MongoDB 的 authSource（空 = 默认 admin）。
+	// 账号建在业务库上的部署必须显式配置，否则认证失败。列由 AutoMigrate 自动添加。
+	AuthDatabase string `gorm:"type:varchar(64);not null;default ''" json:"auth_database"`
+	RuleId       int    `gorm:"type:int(100);not null;default 0" json:"rule_id"`
 }
 
 type CoreGrained struct {

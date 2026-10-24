@@ -57,6 +57,16 @@
     <a-form-item :label="$t('user.password')" name="password">
       <a-input-password v-model:value="dbForm.password"></a-input-password>
     </a-form-item>
+    <a-form-item
+      v-if="dbForm.db_type === 2"
+      :label="$t('db.authDatabase')"
+      name="auth_database"
+    >
+      <a-input
+        v-model:value="dbForm.auth_database"
+        :placeholder="$t('db.authDatabaseTips')"
+      ></a-input>
+    </a-form-item>
     <a-form-item :label="$t('menu.manage.flow')" name="flow_id">
       <a-select v-model:value="dbForm.flow_id">
         <a-select-option v-for="i in flow" :key="i.id" :value="i.id">{{
@@ -240,6 +250,7 @@
     cert: '',
     key_file: '',
     db_type: 0,
+    auth_database: '',
   } as Source);
 
   const formRef = ref();

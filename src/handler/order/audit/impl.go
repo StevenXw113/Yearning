@@ -108,6 +108,7 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) error {
 			Cert:     source.Cert,
 			Key:      source.KeyFile,
 			Kind:     calls.DataSourceKind(source.DBType),
+			AuthDb:   source.AuthDatabase,
 		},
 	})
 	if rep == nil {

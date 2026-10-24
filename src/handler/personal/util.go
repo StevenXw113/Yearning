@@ -76,6 +76,7 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 			Cert:     source.Cert,
 			Key:      source.KeyFile,
 			Kind:     calls.DataSourceKind(source.DBType),
+			AuthDb:   source.AuthDatabase,
 		},
 		MaxAffectRows: uint32(autoTask.Affectrow),
 	})

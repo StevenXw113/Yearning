@@ -122,6 +122,7 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 			Cert:     source.Cert,
 			Key:      source.KeyFile,
 			Kind:     calls.DataSourceKind(source.DBType),
+			AuthDb:   source.AuthDatabase,
 		},
 		Lang: model.C.General.Lang,
 		Rule: engine.AuditRoleToProto(rule),

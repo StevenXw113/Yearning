@@ -18,6 +18,8 @@ export interface Source {
   key_file: string;
   rule_id: number;
   db_type: number;
+  // MongoDB 认证库（authSource），空 = 默认 admin；账号建在业务库上时必填
+  auth_database: string;
 }
 
 export interface DBParams {

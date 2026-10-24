@@ -3,6 +3,8 @@ export default {
   'db.kind': 'Mode',
   'db.addr': 'Addr',
   'db.principal': 'Principal',
+  'db.authDatabase': 'Auth database',
+  'db.authDatabaseTips': 'MongoDB authSource, empty = admin',
   'db.rw': 'read/write',
   'db.w': 'write',
   'db.r': 'read',

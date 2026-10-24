@@ -300,6 +300,7 @@ func FetchSQLTest(c yee.Context) (err error) {
 			Cert:     s.Cert,
 			Key:      s.KeyFile,
 			Kind:     calls.DataSourceKind(s.DBType),
+			AuthDb:   s.AuthDatabase,
 		},
 		Lang: model.C.General.Lang,
 		Rule: engine.AuditRoleToProto(rule),
