@@ -122,6 +122,9 @@ func AddRouter(e *yee.Core) {
 	re := r.Group("/record", SuperRecorderGroup())
 	re.GET("/axis", record.RecordDashAxis)
 	re.GET("/list", record.RecordOrderList)
+	// 归档数据追溯（ArchiveDays 归档 cron 迁入 *_archive 表的数据）
+	re.GET("/archive", record.ArchiveOrderList)
+	re.GET("/archive_detail", record.ArchiveOrderDetail)
 
 	manager := r.Group("/manage", SuperManageGroup())
 	manager.POST("/board/post", manage.GeneralPostBoard)

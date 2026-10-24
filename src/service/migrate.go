@@ -206,6 +206,14 @@ func Migrate() {
 		_ = model.DB().AutoMigrate(&model.CoreOrderComment{})
 		_ = model.DB().AutoMigrate(&model.CoreRules{})
 		_ = model.DB().AutoMigrate(&model.CoreTotalTickets{})
+		// 归档表（与原表同构，见 model/archive.go）：随主表一并创建，
+		// 未开启归档时只是空表，无成本
+		_ = model.DB().AutoMigrate(&model.CoreSqlOrderArchive{})
+		_ = model.DB().AutoMigrate(&model.CoreSqlRecordArchive{})
+		_ = model.DB().AutoMigrate(&model.CoreRollbackArchive{})
+		_ = model.DB().AutoMigrate(&model.CoreOrderCommentArchive{})
+		_ = model.DB().AutoMigrate(&model.CoreWorkflowDetailArchive{})
+		_ = model.DB().AutoMigrate(&model.CoreQueryRecordArchive{})
 		o := engine.AuditRole{
 			DMLInsertColumns:               false,
 			DMLMaxInsertRows:               10,

@@ -56,6 +56,11 @@ type general struct {
 	// 进程崩溃会留下永远「执行中」的工单；超过阈值且 gh-ost 不在本进程运行
 	// （豁免长时 OSC）即置为失败并留痕。0 = 关闭自愈。
 	SelfHealHours int
+	// ArchiveDays 历史归档阈值（天），0 = 关闭（默认）。
+	// 终态（驳回/完成/失败/撤销）且创建时间早于 N 天的工单连同全部明细、
+	// 以及早于 N 天的查询审计日志，由每日归档 cron 迁移到同构 *_archive 表。
+	// 列表因此只保留活跃数据；归档数据经审计记录的归档接口查询。
+	ArchiveDays int
 	// GhOstPath gh-ost 可执行文件路径；留空则从 PATH 中查找 gh-ost
 	GhOstPath string
 	// OscMinRows 触发在线表结构变更(OSC)的表行数估算下限；<=0 表示关闭 OSC（全部走引擎执行）

@@ -94,6 +94,9 @@ func StartYearning(port string) {
 	// 僵尸工单自愈：依赖单实例互斥（上方 AcquireInstanceLock 已先行完成），
 	// 多实例场景该 cron 会误杀其他实例正在执行的工单
 	go cronTabSelfHeal()
+	// 历史归档（ArchiveDays>0 时生效）：同样依赖单实例互斥（双实例会重复
+	// 迁移同一批工单，DELETE 幂等但会互相干扰批次计数）
+	go cronTabArchive()
 	e := yee.New()
 	e.Pack("/front", f, "dist")
 	e.Use(middleware.Cors())

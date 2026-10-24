@@ -27,6 +27,12 @@ ExecTimeoutMinutes = 5
 # 「执行中」的工单，超过阈值自动置为失败并留痕，可再用重试/跳过接管。
 # 正在运行的 gh-ost 自动豁免。0 = 关闭自愈。依赖单实例互斥开启。
 SelfHealHours = 6
+# 历史归档阈值（天），0 = 关闭（默认）。终态（驳回/完成/失败/撤销）且创建早于
+# N 天的工单连同执行明细/回滚语句/评论/流水、以及早于 N 天的查询审计日志，
+# 每日 03:30 迁移到同构 *_archive 表——列表只保留活跃数据。
+# 归档数据经 API 追溯：GET /api/v2/record/archive（需审计记录权限），参数
+# page/size/date_from/date_to/work_id；明细 GET /api/v2/record/archive_detail?work_id=
+ArchiveDays = 0
 LogLevel = "info"  # debug,info,warn,error
 Lang = "en_US"  # en_US,zh_CN
 
