@@ -24,7 +24,7 @@
           </a-space>
         </template>
         <template v-if="column.dataIndex === 'db_type'">
-          <span>{{ text == 0 ? 'mysql' : text == 1 ? 'pg' : text == 2 ? 'mongodb' : text == 3 ? 'redis' : 'doris' }}</span>
+          <span>{{ text == 0 ? 'mysql' : text == 1 ? 'PostgreSQL' : text == 2 ? 'mongodb' : text == 3 ? 'redis' : 'doris' }}</span>
         </template>
         <template v-if="column.dataIndex === 'is_query'">
           <a-tag v-if="text === 2" color="#43A687">{{ $t('db.rw') }}</a-tag>

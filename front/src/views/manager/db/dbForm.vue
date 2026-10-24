@@ -210,7 +210,7 @@
     },
     {
       value: 1,
-      label: 'pg',
+      label: 'PostgreSQL',
     },
     {
       value: 2,
