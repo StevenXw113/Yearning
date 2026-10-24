@@ -68,6 +68,8 @@ export default {
   'order.exec.now': '立即执行',
   'order.exec.schedule': '定时执行',
   'order.exec.manual': '人工执行',
+  'order.exec.manual.tips':
+    '审批通过后由人工择机触发系统执行；如在平台外自行处理 SQL，完成后用「标记完成」收口（需填处理说明）。',
   'order.exec.handled': '人工处理',
   'order.exec.handled.tips':
     '审批通过后不由系统执行：DBA 自行在数据库处理该工单的 SQL，完成后在工单详情点「标记完成」并填写处理说明（必须留痕）。',

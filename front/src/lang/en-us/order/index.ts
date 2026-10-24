@@ -71,6 +71,8 @@ export default {
   'order.exec.now': 'Execute now',
   'order.exec.schedule': 'Scheduled execution',
   'order.exec.manual': 'Manual execution',
+  'order.exec.manual.tips':
+    'After approval a human triggers the system execution; if you handle the SQL outside the platform, close the order with "Mark finished" (note required).',
   'order.exec.handled': 'Handle manually',
   'order.exec.handled.tips':
     'The system will NOT execute this order: the DBA handles the SQL on the database directly, then marks the order finished in the detail page with a mandatory note.',

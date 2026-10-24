@@ -137,6 +137,12 @@ func wrapperPostOrderInfo(order *model.CoreSqlOrder, y yee.Context) (length int,
 	order.Date = time.Now().Format("2006-01-02 15:04")
 	order.Status = 2
 	order.CurrentStep = 1
+	// 「人工处理」执行方式已并入「人工执行」：平台外自行处理的场景 =
+	// 人工执行 + 完成后「标记完成」（必填说明留痕），不再单独设模式。
+	// 提交侧归一化旧值，存量 handled 工单的读路径（审批分支/cron 排除/展示）保留兼容。
+	if order.Delay == "handled" {
+		order.Delay = "manual"
+	}
 	order.Assigned = strings.Join(step[1].Auditor, ",")
 	order.Relevant = factory.JsonStringify(decodeRelation(order.SourceId))
 	order.File = sanitizeFileName(order.File)

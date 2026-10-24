@@ -62,8 +62,9 @@
             <a-radio-group v-model:value="execMode" name="execMode">
               <a-radio value="now">{{ $t('order.exec.now') }}</a-radio>
               <a-radio value="schedule">{{ $t('order.exec.schedule') }}</a-radio>
-              <a-radio value="manual">{{ $t('order.exec.manual') }}</a-radio>
-              <a-radio value="handled">{{ $t('order.exec.handled') }}</a-radio>
+              <a-tooltip :title="$t('order.exec.manual.tips')" placement="top">
+                <a-radio value="manual">{{ $t('order.exec.manual') }}</a-radio>
+              </a-tooltip>
             </a-radio-group>
             <a-date-picker
               v-if="execMode === 'schedule'"
@@ -368,7 +369,6 @@
     (v) => {
       if (v === 'now') orderItems.delay = 'none';
       else if (v === 'manual') orderItems.delay = 'manual';
-      else if (v === 'handled') orderItems.delay = 'handled';
       else orderItems.delay = ''; // 选完时间后再由 delayTime 填
     },
     { immediate: true }

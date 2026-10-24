@@ -491,8 +491,9 @@ func MultiAuditOrder(req *Confirm, user string) common.Resp {
 			case od.Delay == "manual":
 				return waitingOrConflict(req.WorkId, i18n.ORDER_AGREE_WAIT_MANUAL)
 			case od.Delay == "handled":
-				// 人工处理模式：审批通过后不由系统执行，DBA 自行处理 SQL，
-				// 完成后用「标记完成」收口（必须填处理说明留痕）
+				// 兼容路径：「人工处理」模式已并入「人工执行」（提交侧归一化），
+				// 仅服务归一化前创建的存量工单；行为与 manual 一致（DBA 平台外
+				// 处理后用「标记完成」收口）
 				return waitingOrConflict(req.WorkId, i18n.ORDER_AGREE_WAIT_HANDLED)
 			case od.Delay != "" && od.Delay != "none":
 				// 定时执行：等延迟调度 cron 到点触发

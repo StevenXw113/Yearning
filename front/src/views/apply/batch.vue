@@ -43,8 +43,12 @@
                 <a-radio-group v-model:value="execMode">
                   <a-radio value="now">立即执行</a-radio>
                   <a-radio value="schedule">定时执行</a-radio>
-                  <a-radio value="manual">人工执行</a-radio>
-                  <a-radio value="handled">人工处理</a-radio>
+                  <a-tooltip
+                    title="审批通过后由人工择机触发系统执行；如在平台外自行处理，完成后用「标记完成」收口"
+                    placement="top"
+                  >
+                    <a-radio value="manual">人工执行</a-radio>
+                  </a-tooltip>
                 </a-radio-group>
                 <a-date-picker
                   v-if="execMode === 'schedule'"
@@ -298,7 +302,6 @@
     v => {
       if (v === 'now') delay.value = 'none';
       else if (v === 'manual') delay.value = 'manual';
-      else if (v === 'handled') delay.value = 'handled';
       else delay.value = '';
     },
     { immediate: true }
