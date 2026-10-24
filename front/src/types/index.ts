@@ -46,6 +46,8 @@ export interface OrderTableData {
   current_step: number;
   relevant: [];
   source_id?: string;
+  // 工单级事务模式（1=开启）：执行时强制 DML 走事务
+  tx_mode?: number;
   sql?: string;
   file?: string;
   tables?: string[];
@@ -66,6 +68,8 @@ export interface OrderItem {
   delay: string;
   text: string;
   backup: number;
+  // 工单级事务模式（1=开启）：仅对 SQL 类数据源的 DML 生效，执行时强制走事务
+  tx_mode?: number;
   sql?: string;
   // 上传 SQL 文件时记录的文件名，随工单保存便于追溯
   file?: string;

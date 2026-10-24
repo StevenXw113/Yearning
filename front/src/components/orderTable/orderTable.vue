@@ -30,6 +30,8 @@
               ? $t('order.table.delay')
               : text === 'manual'
               ? $t('order.exec.manual')
+              : text === 'handled'
+              ? $t('order.exec.handled')
               : text
           }}</template>
           <template v-if="column.dataIndex === 'status'">

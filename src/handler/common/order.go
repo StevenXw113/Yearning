@@ -63,8 +63,9 @@ func HasAnySourcePermission(user, sourceId string) bool {
 // 否则前端按 batch_id 聚合时会在两页里各显示一组项目。
 // 本页各批次的全部子工单会一并查出（因此返回行数可能多于每页条数），前端聚合即得完整项目。
 // 筛选条件只决定「哪些项目进本页」，项目内的子工单一律给全。
-// ponytail: 分组键是表达式，COUNT/GROUP BY 用不上索引（全表扫 + 临时表）；
-// 工单量上万后再物化一个 group_key 列（batch_id 或 id）并加索引。
+// 分组键是提交时写入的物化列 group_key（普通工单=工单号、批次工单=批次号，
+// 历史行由 UpdateData 启动迁移回填），建有索引；别退回 IF(batch_id=”,id,batch_id)
+// 表达式分组——表达式无法走索引，工单量上来后每条列表请求都是全表扫+临时表。
 func GroupedOrderPage(p *PageList[[]model.CoreSqlOrder], fields string, scopes ...func(*gorm.DB) *gorm.DB) {
 	pageSize := p.PageSize
 	if pageSize <= 0 {
@@ -74,10 +75,8 @@ func GroupedOrderPage(p *PageList[[]model.CoreSqlOrder], fields string, scopes .
 	if offset < 0 {
 		offset = 0
 	}
-	// 分组键：batch_id 为空按自身 id 各成一组（普通工单），否则整批一组
-	const groupKey = "IF(batch_id = '', id, batch_id)"
 	_ = model.DB().Model(model.CoreSqlOrder{}).
-		Select("COUNT(DISTINCT " + groupKey + ")").Scopes(scopes...).Row().Scan(&p.Page)
+		Select("COUNT(DISTINCT group_key)").Scopes(scopes...).Row().Scan(&p.Page)
 
 	// 别名排序：待审批的项目排前面，与列表默认排序保持一致
 	var groups []struct {
@@ -87,7 +86,7 @@ func GroupedOrderPage(p *PageList[[]model.CoreSqlOrder], fields string, scopes .
 	}
 	model.DB().Model(model.CoreSqlOrder{}).
 		Select("MIN(id) AS mid, MIN(batch_id) AS bid, MAX(`status` = 2) AS pending").
-		Scopes(scopes...).Group(groupKey).Order("pending DESC, mid DESC").
+		Scopes(scopes...).Group("group_key").Order("pending DESC, mid DESC").
 		Offset(offset).Limit(pageSize).Scan(&groups)
 
 	p.Data = nil

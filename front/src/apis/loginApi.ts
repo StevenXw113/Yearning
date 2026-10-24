@@ -22,3 +22,8 @@ export function systemLang() {
 export function getOIDCState() {
   return request.get('/oidc/state');
 }
+
+// MFA 登录第二步：携带第一步返回的 ticket + 认证器动态码换取正式 JWT
+export function mfaSignIn(ticket: string, code: string) {
+  return request.post('/login/mfa', { ticket, code });
+}

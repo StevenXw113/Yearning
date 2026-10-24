@@ -7,7 +7,6 @@ import (
 	"Yearning-go/src/model"
 	"github.com/cookieY/yee"
 	"net/http"
-	"time"
 )
 
 type batchExecuteResult struct {
@@ -20,6 +19,7 @@ type batchExecuteResult struct {
 
 // BatchExecute 项目级工单批量执行：按提交顺序串行执行批次内所有
 // 已审批通过、等待执行(status=5)的子工单；任一失败即停止（后续 SQL 可能依赖前面的变更）。
+// 每条子工单执行前先原子抢占(5→3)，并发触发的批次/人工执行不会重复落库。
 func BatchExecute(c yee.Context) (err error) {
 	u := new(Confirm)
 	user := new(factory.Token).JwtParse(c)
@@ -49,15 +49,27 @@ func BatchExecute(c yee.Context) (err error) {
 			results = append(results, r)
 			continue
 		}
-		if err := ExecuteWorkOrder(o, user.Username); err != nil {
+		// 抢占失败=其他会话正在执行或状态已变化，跳过该条继续（并非 SQL 失败）
+		if !claimExecution(o.WorkId, orderStatusWaiting) {
+			r.Msg = "已跳过（并发执行或状态已变化）"
+			results = append(results, r)
+			continue
+		}
+		oscAsync, err := ExecuteWorkOrder(o, user.Username)
+		if err != nil {
+			FinalizeExecution(o.WorkId, err)
 			r.Ok = false
 			r.Msg = err.Error()
 			results = append(results, r)
 			// 失败即停：版本迭代的 SQL 往往存在前后依赖
 			break
 		}
-		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", o.WorkId).
-			Updates(map[string]interface{}{"status": 1, "execute_time": time.Now().Format("2006-01-02 15:04")})
+		if !oscAsync {
+			FinalizeExecution(o.WorkId, nil)
+		} else {
+			// OSC 在后台跑，状态由其 goroutine 收尾；批次继续下一条
+			r.Msg = "OSC(gh-ost) 已在后台启动，进度见该工单详情「OSC」面板"
+		}
 		results = append(results, r)
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayload(results))

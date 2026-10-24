@@ -96,6 +96,7 @@ func SuperRecorderGroup() yee.HandlerFunc {
 
 func AddRouter(e *yee.Core) {
 	e.POST("/login", login.UserGeneralLogin)
+	e.POST("/login/mfa", login.MfaLogin)
 	e.POST("/register", login.UserRegister)
 	e.GET("/fetch", login.UserReqSwitch)
 	e.GET("/lang", login.SystemLang)
@@ -106,6 +107,7 @@ func AddRouter(e *yee.Core) {
 	r := e.Group("/api/v2", middleware.JWTWithConfig(middleware.JwtConfig{SigningKey: model.JwtSigningKey(), TokenLookup: []string{yee.HeaderAuthorization, yee.HeaderSecWebSocketProtocol}}))
 	r.POST("/chat", fetch.AiChat)
 	r.Restful("/common/:tp", personal.PersonalRestFulAPis())
+	r.Restful("/mfa/:tp", login.MfaRestFulAPis())
 	r.Restful("/dash/:tp", apis.YearningDashApis())
 	r.Restful("/fetch/:tp", apis.YearningFetchApis())
 	r.Restful("/query/:tp", apis.YearningQueryApis())

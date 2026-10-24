@@ -92,6 +92,39 @@ export function executeOrder(work_id: string) {
   });
 }
 
+// 重试预览：失败明细 + 将要重跑的剩余 SQL（重试弹窗的调试视图）
+export function retryPreview(work_id: string) {
+  return request.get<Res<RetryPreview>>(
+    `${COMMON_URI}/audit/order/retry_preview`,
+    { params: { work_id } }
+  );
+}
+
+// 失败工单重试：只重执未成功执行过的语句，不需要新建工单
+export function retryOrder(work_id: string) {
+  return request.post(`${COMMON_URI}/audit/order/state`, {
+    tp: 'retry',
+    work_id,
+  });
+}
+
+// 跳过失败语句继续执行后续语句（人工已在库上处理完失败部分的数据订正场景）
+export function skipAndContinue(work_id: string) {
+  return request.post(`${COMMON_URI}/audit/order/state`, {
+    tp: 'skip',
+    work_id,
+  });
+}
+
+// 手动标记完成：SQL 在平台外人工处理（如引擎不支持的特殊库）后回填状态，text 为处理说明
+export function markOrderFinished(work_id: string, text: string) {
+  return request.post(`${COMMON_URI}/audit/order/state`, {
+    tp: 'mark',
+    work_id,
+    text,
+  });
+}
+
 export function changeOrderStateUndo(args: SQLAuditOrder) {
   return request.post(`${COMMON_URI}/audit/order/state`, args);
 }
@@ -110,8 +143,20 @@ export interface BatchOrderItem {
   table?: string;
 }
 
+export interface RetryPreview {
+  remaining: string;
+  // 「跳过并继续」视图：失败语句视为已人工处理后，其后将执行的语句
+  remaining_skip: string;
+  skip_available: boolean;
+  executed: { sql: string; state: string; affect_row: number }[];
+  failed: { sql: string; state: string; error: string }[];
+  error?: string;
+}
+
 export interface BatchOrderParams {
   type: number;
+  // 工单级事务模式（1=开启）：整批统一，作用于每个子工单
+  tx_mode?: number;
   backup: number;
   delay: string;
   text: string;

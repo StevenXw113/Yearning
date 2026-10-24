@@ -48,11 +48,10 @@ type Query struct {
 }
 
 func (q *QueryDeal) PreCheck(insulateWordList string, dbType int) error {
-	client, conn, err := calls.NewClient()
+	client, err := calls.Client()
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	rep, err := client.Query(ctx, &enginev1.QueryRequest{

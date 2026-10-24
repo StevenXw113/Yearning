@@ -71,6 +71,9 @@ export default {
   'order.exec.now': 'Execute now',
   'order.exec.schedule': 'Scheduled execution',
   'order.exec.manual': 'Manual execution',
+  'order.exec.handled': 'Handle manually',
+  'order.exec.handled.tips':
+    'The system will NOT execute this order: the DBA handles the SQL on the database directly, then marks the order finished in the detail page with a mandatory note.',
 
   'order.assistant.empty':
     'Ask the assistant, e.g. "optimize this SQL" or "is this index necessary". The source/schema/tables selected above and the SQL are sent as context.',
@@ -92,6 +95,26 @@ export default {
   'order.execute': 'Execute',
   'order.execute.tips':
     'Execute the SQL of this order now? (with manual execution the order waits here)',
+  'order.retry': 'Retry',
+  'order.retry.tips':
+    'Retry executes only the statements that did not succeed last time; already-executed statements will not run again. Confirm retry?',
+  'order.retry.title': 'Retry (preview)',
+  'order.retry.failed': 'Failed statements',
+  'order.retry.remaining': 'Statements to retry',
+  'order.retry.remaining_skip': 'Statements after skipping',
+  'order.retry.skip': 'Skip and continue',
+  'order.retry.skip.tips':
+    'Confirm the failed statement has been handled on the database (or abandoned) and continue with the following statements?',
+  'order.retry.nofailed': 'No failed records (the order may not have run at all)',
+  'order.tx': 'Transaction',
+  'order.tx.tips':
+    'With this on, DML of this order runs in a transaction: all-or-nothing rollback on failure (MySQL DDL implicitly commits and cannot be transactional). Takes precedence over the DML-transaction rule.',
+  'order.mark': 'Mark finished',
+  'order.mark.title': 'Mark order as finished',
+  'order.mark.tips':
+    'For cases where the SQL was handled manually outside the platform (e.g. databases the engine does not support yet). The order is closed immediately; a note is required for audit.',
+  'order.mark.placeholder':
+    'Required: describe how this SQL was handled outside the platform (who, how, result) for audit traceability',
   'order.end': 'End',
   'order.roll.tips': 'SQL must not be empty',
   'order.order.title': 'Order Audit',

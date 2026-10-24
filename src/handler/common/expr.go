@@ -8,7 +8,7 @@ import (
 
 // QueryField 工单列表字段。id 用于把项目的子工单按创建顺序排列；
 // batch_id 供前端按项目（批次）聚合展示：先看项目，展开后逐条查看/审核。
-const QueryField = "id, work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`,`id_c`,`data_base`,`table`,`execute_time`,source_id,assigned,current_step,relevant,`file`,batch_id"
+const QueryField = "id, work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`,`id_c`,`data_base`,`table`,`execute_time`,source_id,assigned,current_step,relevant,`file`,batch_id,tx_mode"
 
 func AccordingToWorkId(workId string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {

@@ -56,6 +56,12 @@ type CoreAccount struct {
 	RealName   string `gorm:"type:varchar(50);" json:"real_name"`
 	Email      string `gorm:"type:varchar(50);" json:"email"`
 	IsRecorder uint   `gorm:"type:tinyint(2) not null default 2" json:"is_recorder"`
+	// MFA 二级认证（TOTP）。Secret 为 AES-GCM 加密存储（enc 包，与数据源密码同密钥派生），
+	// 任何接口不得将其原文返回前端（json:"-"）。MfaEnabled 启用后登录走两步验证；
+	// MfaLastStep 记录最近一次成功使用的 TOTP 步长，防同一验证码重放。列由 AutoMigrate 添加。
+	MfaSecret   string `gorm:"type:varchar(255);not null;default ''" json:"-"`
+	MfaEnabled  uint   `gorm:"type:tinyint(2);not null;default 0" json:"mfa_enabled"`
+	MfaLastStep int64  `gorm:"type:bigint;not null;default 0" json:"-"`
 }
 
 type CoreGlobalConfiguration struct {
@@ -105,6 +111,18 @@ type CoreSqlOrder struct {
 	// 项目级工单（批量提交）批次号 = 项目工单号（项目内第一条子工单的自增 id），
 	// 同一批次的子工单共享它；空字符串表示普通单工单，向后兼容
 	BatchId string `gorm:"type:varchar(50);not null;default '';index:batch_idx" json:"batch_id"`
+	// GroupKey 列表分组键：普通工单=自身工单号（自增 id），项目级工单=批次号。
+	// 由提交链路在回填 work_id 的同一事务里写入，历史行由启动迁移回填。
+	// 「我的工单/工单审核/记录」三处列表按它 GROUP BY 分页（common.GroupedOrderPage），
+	// 取代原 IF(batch_id='',id,batch_id) 表达式分组（无法走索引，工单量大后全表扫+临时表）。
+	//
+	// 注意部署顺序：滚动发布时旧实例写入的新行该列为空，在新实例启动回填前会从分组列表
+	// 中缺失；换完实例重启一次即恢复（与 AuthDatabase 列同类 caveat）。
+	GroupKey string `gorm:"type:varchar(64);not null;default '';index:group_key_idx" json:"group_key"`
+	// TxMode 工单级事务模式：1=开启。开启后执行时强制该工单的 DML 走事务
+	//（引擎按规则集 DmlTransaction 开事务，此处按工单覆写，优先级高于规则集）。
+	// MySQL 的 DDL 语句隐式提交、无法纳入事务，引擎仅对 DML 工单开事务。
+	TxMode uint `gorm:"type:tinyint(2);not null;default 0" json:"tx_mode"`
 }
 
 type CoreRollback struct {

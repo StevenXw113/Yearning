@@ -50,6 +50,7 @@ type userProfile struct {
 	RealName   string `gorm:"type:varchar(50);" json:"real_name"`
 	Username   string `gorm:"type:varchar(50);not null;index:user_idx" json:"username"`
 	Email      string `gorm:"type:varchar(50);" json:"email"`
+	MfaEnabled bool   `json:"mfa_enabled"`
 }
 
 type referOrder struct {

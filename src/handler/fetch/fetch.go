@@ -281,11 +281,10 @@ func FetchSQLTest(c yee.Context) (err error) {
 	if p == "" {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED)))
 	}
-	client, conn, err := calls.NewClient()
+	client, err := calls.Client()
 	if err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	rep, err := client.Check(ctx, &enginev1.CheckRequest{
@@ -350,11 +349,10 @@ func FetchMergeDDL(c yee.Context) error {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
 	if req.SQLs != "" {
-		client, conn, err := calls.NewClient()
+		client, err := calls.Client()
 		if err != nil {
 			return c.JSON(http.StatusOK, common.ERR_SOAR_ALTER_MERGE())
 		}
-		defer conn.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		rep, err := client.MergeAlterTables(ctx, &enginev1.MergeAlterTablesRequest{Sqls: req.SQLs})
@@ -477,13 +475,14 @@ func FetchUserInfo(c yee.Context) (err error) {
 	t := new(factory.Token).JwtParse(c)
 	var userInfo model.CoreAccount
 	var sources []model.CoreDataSource
-	model.DB().Select("department,username,real_name,email").Model(model.CoreAccount{}).Where("username =?", t.Username).First(&userInfo)
+	model.DB().Select("department,username,real_name,email,mfa_enabled").Model(model.CoreAccount{}).Where("username =?", t.Username).First(&userInfo)
 	model.DB().Model(model.CoreDataSource{}).Select("source_id,source").Where("source_id IN ?", permission.NewPermissionService(model.DB()).CreatePermissionList(t.Username).QuerySource).Find(&sources)
 	p := userProfile{
 		Department: userInfo.Department,
 		RealName:   userInfo.RealName,
 		Username:   userInfo.Username,
 		Email:      userInfo.Email,
+		MfaEnabled: userInfo.MfaEnabled == 1,
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"user": p, "source": sources}))
 }

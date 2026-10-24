@@ -48,6 +48,20 @@ func UserGeneralLogin(c yee.Context) (err error) {
 		}
 		if factory.DjangoCheckPassword(&account, u.Password) {
 			resetAttempts(key)
+			// MFA 启用：第一步到此为止，只发 5 分钟的 mfa ticket，
+			// 前端带动态码调 /login/mfa 换正式 JWT（两步验证）
+			if account.MfaEnabled == 1 {
+				ticket, terr := mfaTicket(u.Username)
+				if terr != nil {
+					c.Logger().Error(terr.Error())
+					return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(terr))
+				}
+				return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{
+					"mfa_required": true,
+					"ticket":       ticket,
+					"user":         u.Username,
+				}))
+			}
 			token, tokenErr := factory.JwtAuth(factory.Token{
 				Username: u.Username,
 				RealName: account.RealName,

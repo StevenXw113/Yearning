@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"github.com/cookieY/yee"
 	"github.com/cookieY/yee/logger"
+	"gorm.io/gorm"
 	"net/http"
 	"strings"
 	"time"
@@ -72,16 +73,31 @@ func sqlOrderPost(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
 	order.ID = 0
-	model.DB().Create(order)
-	// 工单编号 = 自增 id：先落库拿到 id 再回填，保证唯一
-	order.WorkId = factory.OrderNo(order.ID, 0)
-	model.DB().Model(order).Update("work_id", order.WorkId)
-	model.DB().Create(&model.CoreWorkflowDetail{
-		WorkId:   order.WorkId,
-		Username: user,
-		Action:   i18n.DefaultLang.Load(i18n.INFO_SUBMITTED),
-		Time:     time.Now().Format("2006-01-02 15:04"),
+	// 创建 + 编号回填 + 流水写入放同一事务：工单编号 = 自增 id，必须先落库拿到 id 再回填，
+	// 两步分离的话中途失败会留下没有编号的孤儿工单（列表/详情都找不到它）
+	err = model.DB().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(order).Error; err != nil {
+			return err
+		}
+		order.WorkId = factory.OrderNo(order.ID, 0)
+		if err := tx.Model(order).Updates(map[string]interface{}{
+			"work_id":   order.WorkId,
+			"group_key": order.WorkId, // 普通工单分组键=自身工单号，见 CoreSqlOrder.GroupKey
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.CoreWorkflowDetail{
+			WorkId:   order.WorkId,
+			Username: user,
+			Action:   i18n.DefaultLang.Load(i18n.INFO_SUBMITTED),
+			Time:     time.Now().Format("2006-01-02 15:04"),
+		}).Error
 	})
+	if err != nil {
+		c.Logger().Error(err.Error())
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	// 邮件推送 / autoTask 是外部副作用，不参与事务回滚，放在提交之后
 	pusher.NewMessagePusher(order.WorkId).Order().OrderBuild(pusher.SummitStatus).Push()
 
 	if order.Type == vars.DML {

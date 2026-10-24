@@ -2,6 +2,7 @@ package user
 
 import (
 	"Yearning-go/src/handler/common"
+	"Yearning-go/src/handler/login"
 	"Yearning-go/src/handler/manage/flow"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/factory"
@@ -70,6 +71,8 @@ func ManageUserCreateOrEdit(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
 	switch c.QueryParam("tp") {
+	case "mfa_reset":
+		return login.SuperResetMFA(c)
 	case "principal":
 		// 只返回负责人下拉需要的字段，不得带出口令哈希
 		var account []model.CoreAccount

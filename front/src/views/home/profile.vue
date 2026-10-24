@@ -72,6 +72,7 @@
       </a-col>
     </a-row>
   </a-card>
+  <MfaCard></MfaCard>
 </template>
 
 <script lang="ts" setup>
@@ -79,6 +80,7 @@
   import { onMounted, ref } from 'vue';
   import CommonMixins from '@/mixins/common';
   import PageHeader from '@/components/pageHeader/pageHeader.vue';
+  import MfaCard from '@/components/mfa/mfaCard.vue';
   import { RuleObject } from 'ant-design-vue/lib/form/interface';
   import { getUserInfo, RegisterForm, updateUserInfo } from '@/apis/user';
   import { useI18n } from 'vue-i18n';

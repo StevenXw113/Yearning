@@ -11,6 +11,7 @@ import (
 	"Yearning-go/src/model"
 	"fmt"
 	"github.com/cookieY/yee"
+	"gorm.io/gorm"
 	"net/http"
 	"time"
 )
@@ -26,7 +27,9 @@ type batchItem struct {
 }
 
 type batchOrderReq struct {
-	Type   int         `json:"type"`
+	Type int `json:"type"`
+	// TxMode 工单级事务模式（1=开启）：整批统一，作用于每个子工单
+	TxMode uint        `json:"tx_mode"`
 	Backup uint        `json:"backup"`
 	Delay  string      `json:"delay"`
 	Text   string      `json:"text"`
@@ -44,6 +47,9 @@ func BatchOrderPost(c yee.Context) (err error) {
 	}
 	if len(req.Items) == 0 {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("工单明细不能为空")))
+	}
+	if len(req.Items) > maxBatchItems {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("项目级工单最多 %d 条明细，请拆分为多个项目", maxBatchItems)))
 	}
 	// 先整批预检（权限 + 审批流），全部通过才落库，避免提交一半
 	orders := make([]*model.CoreSqlOrder, 0, len(req.Items))
@@ -66,6 +72,7 @@ func BatchOrderPost(c yee.Context) (err error) {
 		order := &model.CoreSqlOrder{
 			Type:     req.Type,
 			Backup:   req.Backup,
+			TxMode:   req.TxMode,
 			Delay:    req.Delay,
 			Text:     req.Text,
 			SourceId: item.SourceId,
@@ -81,22 +88,43 @@ func BatchOrderPost(c yee.Context) (err error) {
 		orders = append(orders, order)
 		steps = append(steps, step)
 	}
-	// 先整批落库拿到自增 id（此时编号留空）：第一条子工单的 id 即项目工单号，
-	// 各子工单编号为「项目号-序号」，如 123-1、123-2
-	for _, order := range orders {
-		model.DB().Create(order)
+	// 整批落库放同一事务：先批量 Create 拿到自增 id（此时编号留空），第一条子工单的 id 即
+	// 项目工单号，各子工单编号为「项目号-序号」（如 123-1、123-2），编号/批次号回填与
+	// 流水写入也进事务——循环中途失败不会留下一半有编号一半没有的批次
+	var projectNo string
+	err = model.DB().Transaction(func(tx *gorm.DB) error {
+		for _, order := range orders {
+			if err := tx.Create(order).Error; err != nil {
+				return err
+			}
+		}
+		projectNo = factory.OrderNo(orders[0].ID, 0)
+		for i, order := range orders {
+			order.BatchId = projectNo
+			order.WorkId = factory.OrderNo(orders[0].ID, i+1)
+			if err := tx.Model(order).Updates(map[string]interface{}{
+				"work_id":   order.WorkId,
+				"batch_id":  projectNo,
+				"group_key": projectNo,
+			}).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&model.CoreWorkflowDetail{
+				WorkId:   order.WorkId,
+				Username: user,
+				Action:   i18n.DefaultLang.Load(i18n.INFO_SUBMITTED),
+				Time:     time.Now().Format("2006-01-02 15:04"),
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	projectNo := factory.OrderNo(orders[0].ID, 0)
+	// 事务外：推送 / autoTask 是外部副作用，不参与回滚；顺序保持提交顺序
 	for i, order := range orders {
-		order.BatchId = projectNo
-		order.WorkId = factory.OrderNo(orders[0].ID, i+1)
-		model.DB().Model(order).Updates(map[string]interface{}{"work_id": order.WorkId, "batch_id": projectNo})
-		model.DB().Create(&model.CoreWorkflowDetail{
-			WorkId:   order.WorkId,
-			Username: user,
-			Action:   i18n.DefaultLang.Load(i18n.INFO_SUBMITTED),
-			Time:     time.Now().Format("2006-01-02 15:04"),
-		})
 		pusher.NewMessagePusher(order.WorkId).Order().OrderBuild(pusher.SummitStatus).Push()
 		if order.Type == vars.DML {
 			autoTask(order, steps[i])
@@ -105,15 +133,39 @@ func BatchOrderPost(c yee.Context) (err error) {
 	return c.JSON(http.StatusOK, common.SuccessPayload(projectNo))
 }
 
-// BatchOrders 查询一个项目级工单（批次）下的所有子工单状态
+// maxBatchItems 项目级工单的明细数量上限：一个事务里整批落库（每条还有编号回填与流水
+// 写入），不设上限的话一次请求就能制造任意大的事务；项目发布的规模也用不到更多
+const maxBatchItems = 50
+
+// BatchOrders 查询一个项目级工单（批次）下的所有子工单状态。
+// 批次号是连续编号，不设权限校验等于任何登录用户都能枚举读到全公司的变更计划
+// （提交人/数据源/目标库/状态）。跨数据源批次只有部分子工单与查询人相关，
+// 这里按「任一子工单的相关人（提交人/审批链）或超管」放行——与审核列表对
+// 批次的可见口径一致。
 func BatchOrders(c yee.Context) (err error) {
 	batchId := c.QueryParam("batch_id")
 	if batchId == "" {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}
+	user := new(factory.Token).JwtParse(c).Username
 	var orders []model.CoreSqlOrder
 	model.DB().
-		Select("work_id, username, real_name, text, assigned, current_step, `status`, `type`, `source`, `source_id`, `data_base`, `date`, `execute_time`, `delay`, batch_id").
+		Select("work_id, username, real_name, text, assigned, current_step, `status`, `type`, `source`, `source_id`, `data_base`, `date`, `execute_time`, `delay`, batch_id, tx_mode").
 		Where("batch_id =?", batchId).Order("id").Find(&orders)
+	if len(orders) == 0 {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH)))
+	}
+	if !permission.IsSuperUser(user) {
+		related := false
+		for i := range orders {
+			if common.IsOrderRelated(orders[i].WorkId, user) {
+				related = true
+				break
+			}
+		}
+		if !related {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
+		}
+	}
 	return c.JSON(http.StatusOK, common.SuccessPayload(orders))
 }

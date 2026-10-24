@@ -151,11 +151,10 @@ func checkRedisQuery(source *model.CoreDataSource, schema, command string) (stri
 	if rerr != nil {
 		return "规则集加载失败，未做查询侧规则审核：" + rerr.Error(), nil
 	}
-	client, conn, err := calls.NewClient()
+	client, err := calls.Client()
 	if err != nil {
 		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
 	}
-	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), redisQueryCheckTimeout)
 	defer cancel()
 	rep, err := client.Check(ctx, &enginev1.CheckRequest{

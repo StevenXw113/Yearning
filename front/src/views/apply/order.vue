@@ -63,6 +63,7 @@
               <a-radio value="now">{{ $t('order.exec.now') }}</a-radio>
               <a-radio value="schedule">{{ $t('order.exec.schedule') }}</a-radio>
               <a-radio value="manual">{{ $t('order.exec.manual') }}</a-radio>
+              <a-radio value="handled">{{ $t('order.exec.handled') }}</a-radio>
             </a-radio-group>
             <a-date-picker
               v-if="execMode === 'schedule'"
@@ -78,6 +79,19 @@
               <a-radio :value="1">{{ $t('common.yes') }}</a-radio>
               <a-radio :value="0">{{ $t('common.no') }}</a-radio>
             </a-radio-group>
+          </a-form-item>
+          <!-- 工单级事务模式：开启后本工单 DML 强制走事务（整体提交/回滚），
+               优先级高于规则集配置。仅 SQL 类数据源的 DML 工单可选 -->
+          <a-form-item
+            v-if="orderItems.type === 1 && (dbType === 0 || dbType === 1)"
+            :label="$t('order.tx')"
+          >
+            <a-tooltip :title="$t('order.tx.tips')" placement="right">
+              <a-radio-group v-model:value="txMode" name="txMode">
+                <a-radio :value="1">{{ $t('common.yes') }}</a-radio>
+                <a-radio :value="0">{{ $t('common.no') }}</a-radio>
+              </a-radio-group>
+            </a-tooltip>
           </a-form-item>
         </a-form>
         <!-- 动作区：左栏卡片只有 ~260px，三个按钮同排会挤出卡片，
@@ -346,11 +360,15 @@
   // 后端只认 orderItems.delay：'none' / 'YYYY-MM-DD HH:mm' / 'manual'
   const execMode = ref('now');
 
+  // 工单级事务模式（默认关闭）：仅 DML + SQL 类数据源显示，提交时随工单落库
+  const txMode = ref(0);
+
   watch(
     execMode,
     (v) => {
       if (v === 'now') orderItems.delay = 'none';
       else if (v === 'manual') orderItems.delay = 'manual';
+      else if (v === 'handled') orderItems.delay = 'handled';
       else orderItems.delay = ''; // 选完时间后再由 delayTime 填
     },
     { immediate: true }
@@ -503,6 +521,7 @@
       .then(async () => {
         let wrapper = Object.assign({}, orderItems);
         wrapper.sql = editor.value.GetValue();
+        wrapper.tx_mode = txMode.value;
         // 命令式数据源：工单的「表」字段用命令里的集合名 / 键名，
         // 便于详情页与审计日志辨识（Redis 取的是键名，不是真实的表）
         if (dbType.value === 2 && !wrapper.table) {

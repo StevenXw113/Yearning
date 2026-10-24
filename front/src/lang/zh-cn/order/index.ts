@@ -68,6 +68,9 @@ export default {
   'order.exec.now': '立即执行',
   'order.exec.schedule': '定时执行',
   'order.exec.manual': '人工执行',
+  'order.exec.handled': '人工处理',
+  'order.exec.handled.tips':
+    '审批通过后不由系统执行：DBA 自行在数据库处理该工单的 SQL，完成后在工单详情点「标记完成」并填写处理说明（必须留痕）。',
 
   'order.assistant.empty':
     '向助手提问，例如「帮我优化这段 SQL」「这个索引有必要吗」；上方选中的数据源/库/表与 SQL 会一并作为上下文发送',
@@ -86,6 +89,26 @@ export default {
   'order.reject.tips': '确认驳回工单?',
   'order.execute': '执行',
   'order.execute.tips': '立即执行该工单的 SQL？（人工执行模式下工单会停在此处等待）',
+  'order.retry': '重试',
+  'order.retry.tips':
+    '重试只会执行上次未成功的语句，已执行成功的语句不会重复执行。确认重试？',
+  'order.retry.title': '失败重试（预览）',
+  'order.retry.failed': '失败语句',
+  'order.retry.remaining': '将重试的语句',
+  'order.retry.remaining_skip': '跳过后将执行的语句',
+  'order.retry.skip': '跳过并继续',
+  'order.retry.skip.tips':
+    '确认失败语句已在数据库侧人工处理（或放弃），从其后的语句继续执行？',
+  'order.retry.nofailed': '没有失败记录（可能整单未执行）',
+  'order.tx': '事务模式',
+  'order.tx.tips':
+    '开启后本工单的 DML 将在事务中执行：任一语句失败整体回滚（MySQL 的 DDL 语句隐式提交、无法纳入事务）。优先级高于规则集中的「DML 事务执行」配置。',
+  'order.mark': '标记完成',
+  'order.mark.title': '手动标记完成',
+  'order.mark.tips':
+    '适用于 SQL 已在平台外人工处理的场景（如引擎暂不支持的特殊数据库）。标记后工单直接置为完成，需填写处理说明留痕。',
+  'order.mark.placeholder':
+    '必填：说明在平台外如何处理的这份 SQL（处理人、方式、结果），便于审计追溯',
   'order.end': '结束',
   'order.roll.tips': '回滚语句提交不得为空',
 

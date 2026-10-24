@@ -46,6 +46,16 @@
             }}</a-button>
           </a-popconfirm>
         </template>
+        <!-- 失败重试：先看预览（失败明细 + 将重跑的剩余语句）再确认，不需要再建一个工单 -->
+        <template v-if="order.status === 4">
+          <a-button key="2" type="primary" @click="turnRetry">{{
+            $t('order.retry')
+          }}</a-button>
+        </template>
+        <!-- 手动标记完成：SQL 已在平台外人工处理（特殊库等场景），由当前审批人/管理员回填状态 -->
+        <template v-if="[2, 4, 5].includes(order.status)">
+          <a-button key="3" @click="turnMark">{{ $t('order.mark') }}</a-button>
+        </template>
       </template>
 
       <a-row type="flex" justify="center" align="middle">
@@ -66,9 +76,17 @@
             <a-descriptions-item :label="$t('order.profile.roll')">{{
               order.backup ? $t('common.yes') : $t('common.no')
             }}</a-descriptions-item>
+            <a-descriptions-item
+              v-if="order.type === 1 && order.tx_mode === 1"
+              :label="$t('order.tx')"
+            >
+              <a-tag color="geekblue">{{ $t('common.yes') }}</a-tag>
+            </a-descriptions-item>
             <a-descriptions-item :label="$t('order.profile.timing')">{{
               order.delay === 'manual'
                 ? $t('order.exec.manual')
+                : order.delay === 'handled'
+                ? $t('order.exec.handled')
                 : order.delay === 'none'
                 ? $t('order.table.delay')
                 : order.delay
@@ -191,10 +209,24 @@
     @spin="() => (spinning = !spinning)"
     @close="() => emit('close')"
   ></RejectModal>
+
+  <MarkModal
+    ref="m"
+    :work-id="order.work_id"
+    @close="() => emit('close')"
+  ></MarkModal>
+
+  <RetryModal
+    ref="rw"
+    :work-id="order.work_id"
+    @close="() => emit('close')"
+  ></RetryModal>
 </template>
 
 <script lang="ts" setup>
   import RejectModal from './rejectModal.vue';
+  import MarkModal from './markModal.vue';
+  import RetryModal from './retryModal.vue';
   import Comment from './comment.vue';
   import Results from './results.vue';
   import Step from '@/components/steps/steps.vue';
@@ -328,6 +360,20 @@
     }
     spinning.value = !spinning.value;
   }, 200);
+
+  // 重试弹窗（打开即加载失败明细与剩余 SQL 预览，提交逻辑在 retryModal 内）
+  const rw = ref();
+
+  const turnRetry = () => {
+    rw.value?.turnState();
+  };
+
+  // 手动标记完成弹窗（说明必填，提交逻辑在 markModal 内）
+  const m = ref();
+
+  const turnMark = () => {
+    m.value?.turnState();
+  };
 
   const fetchState = async () => {
     useWebSocket(

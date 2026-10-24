@@ -31,4 +31,25 @@ export default {
   'user.password.old': '原密码',
   'user.password.new': '新密码',
   'user.password.confirm': '确认新密码',
+  'user.mfa.title': 'MFA 二级认证',
+  'user.mfa.on': '已启用',
+  'user.mfa.off': '未启用',
+  'user.mfa.intro':
+    '为账号启用 TOTP 动态码二级认证（Google Authenticator / 1Password 等认证器 App），密码泄露时仍能挡住登录。',
+  'user.mfa.start': '开始绑定',
+  'user.mfa.setup.tips':
+    '用认证器 App 扫描左侧二维码（或手动录入密钥），然后输入 App 显示的 6 位动态码完成绑定。',
+  'user.mfa.manual': '手动录入密钥',
+  'user.mfa.code': '6 位动态码',
+  'user.mfa.enable': '确认启用',
+  'user.mfa.regen': '重新生成密钥',
+  'user.mfa.bound.tips':
+    '登录时需在密码之后输入认证器动态码。如需更换认证器，请先解绑再重新绑定。',
+  'user.mfa.disable': '解绑',
+  'user.mfa.disable.tips': '解绑后登录将不再需要动态码，确认解绑？',
+  'user.mfa.login.tips': '请输入认证器中的 6 位动态码完成登录',
+  'user.mfa.back': '返回重新登录',
+  'user.mfa.reset': '重置MFA',
+  'user.mfa.reset.tips':
+    '确认重置该用户的 MFA 绑定？重置后该用户下次登录仅需密码（认证器丢失时的解锁出口）。',
 };

@@ -307,6 +307,10 @@ func UpdateData() {
 	_ = model.DB().AutoMigrate(&model.CoreRules{})
 	_ = model.DB().AutoMigrate(&model.CoreTotalTickets{})
 	_ = model.DB().AutoMigrate(&model.CoreRuleSetHistory{})
+	// 回填工单列表分组键（CoreSqlOrder.GroupKey）：普通工单=工单号(自增 id)，
+	// 项目级工单=批次号。列表分页由 GroupedOrderPage 按该列分组走索引，
+	// 见 common.GroupedOrderPage 的注释。
+	_ = model.DB().Exec("UPDATE core_sql_orders SET group_key = IF(batch_id = '', CAST(id AS CHAR), batch_id) WHERE group_key = ''").Error
 	if model.DB().Migrator().HasColumn(&model.CoreAutoTask{}, "base") {
 		_ = model.DB().Migrator().RenameColumn(&model.CoreAutoTask{}, "base", "data_base")
 	}

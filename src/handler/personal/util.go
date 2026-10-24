@@ -35,13 +35,16 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	// 与「审批后执行」完全同构，避免在自动任务里再维护一份执行逻辑。
 	// 行数上限取规则集的 MongoMaxAffectRows（自动任务自己的 Affectrow 只对 SQL 生效）。
 	if source.DBType == model.DBTypeMongoDB {
-		if err := audit.ExecuteWorkOrder(order, autoTaskActor); err != nil {
+		// Mongo 工单不走 OSC，忽略 oscAsync 返回值
+		if _, err := audit.ExecuteWorkOrder(order, autoTaskActor); err != nil {
 			logger.DefaultLogger.Error(err)
 			return
 		}
-		// ExecuteWorkOrder 已经写过流程明细，这里只把工单推进到执行完成，不再重复写
+		// ExecuteWorkOrder 已经写过流程明细，这里只把工单推进到执行完成，不再重复写。
+		// 必须连同 status 一起置为完成：留 2（审核中）的话，该工单之后仍会被
+		// 末级审批「同意」再次执行，同一批 SQL 落库两遍。
 		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", order.WorkId).
-			Updates(&model.CoreSqlOrder{CurrentStep: length})
+			Updates(&model.CoreSqlOrder{CurrentStep: length, Status: 1, ExecuteTime: time.Now().Format("2006-01-02 15:04")})
 		return
 	}
 
@@ -56,12 +59,11 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 		return
 	}
 	var isCall bool
-	client, conn, err := calls.NewClient()
+	client, err := calls.Client()
 	if err != nil {
 		logger.DefaultLogger.Error(err)
 		return
 	}
-	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	rep, err := client.Exec(ctx, &enginev1.ExecRequest{
@@ -92,7 +94,9 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 			Time:     time.Now().Format("2006-01-02 15:04"),
 			Action:   i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE),
 		})
-		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", order.WorkId).Updates(&model.CoreSqlOrder{CurrentStep: length})
+		// 同上：SQL 已在提交时执行，工单直接置完成，防止后续审批通过时重复执行
+		model.DB().Model(model.CoreSqlOrder{}).Where("work_id =?", order.WorkId).
+			Updates(&model.CoreSqlOrder{CurrentStep: length, Status: 1, ExecuteTime: time.Now().Format("2006-01-02 15:04")})
 	}
 
 }

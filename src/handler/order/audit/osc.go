@@ -103,11 +103,10 @@ func tableReachesThreshold(database, table string, source *model.CoreDataSource)
 // gh-ost 绕开了引擎的执行路径，规则校验不能一并绕过：存在错误级(critical/error)问题时返回 false，
 // 交回引擎执行链路，由引擎按既有逻辑拒绝。
 func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, password string, rule *engine.AuditRole) (ok bool, reason string) {
-	client, conn, err := calls.NewClient()
+	client, err := calls.Client()
 	if err != nil {
 		return false, fmt.Sprintf("引擎不可用: %v", err)
 	}
-	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	rep, err := client.Check(ctx, &enginev1.CheckRequest{
@@ -143,7 +142,14 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 
 // RunOSC 让 gh-ost 接管大表 ALTER 的在线变更，执行进度实时写入 core_sql_orders.osc_info，
 // 工单详情页的「OSC」面板通过 WebSocket 读取该字段展示。
-// handled=true 表示本次执行已由 gh-ost 接管（不再调用引擎 Exec），err 为其执行结果。
+// gh-ost 是小时级任务，这里在后台 goroutine 里执行并负责收尾（结果经 FinalizeExecution
+// 落工单状态），HTTP 调用方立即返回，不再同步等完整个迁移：
+//   - handled=true 且 err=nil：OSC 已在后台启动，调用方不得再动工单状态；
+//   - handled=true 且 err!=nil：接管后同步失败（目前仅 checkAlter 后启动前的错误路径），按普通失败收尾；
+//   - handled=false：不满足接管条件，交回引擎执行链路。
+//
+// 主进程崩溃时后台 OSC 会停在「执行中」(status=3)，与同步执行的风险一致；
+// gh-ost 带 --initially-drop-ghost-table，重提工单即可重试。
 func RunOSC(order *model.CoreSqlOrder, source *model.CoreDataSource, password, actor string, rule *engine.AuditRole) (handled bool, err error) {
 	path, table, alter, reason, ok := oscPlan(order, source)
 	if !ok {
@@ -157,6 +163,22 @@ func RunOSC(order *model.CoreSqlOrder, source *model.CoreDataSource, password, a
 		return false, nil
 	}
 
+	// goroutine 生命周期长于本次请求，按值拷贝工单与数据源，避免引用请求作用域内被复用的对象
+	o, src := *order, *source
+	go func() {
+		execErr := runOSCGhost(&o, &src, password, actor, path, table, alter)
+		if execErr != nil {
+			model.DefaultLogger.Errorf("OSC(gh-ost) 执行失败(work_id=%s): %v", o.WorkId, execErr)
+		}
+		// 收尾由本 goroutine 负责：成功置 1、失败置 4（工单此刻为「执行中」3）
+		FinalizeExecution(o.WorkId, execErr)
+	}()
+	return true, nil
+}
+
+// runOSCGhost 拉起并盯完一次 gh-ost 进程：进度/输出尾部落 osc_info 面板，
+// 成功写执行明细与流程流水，返回进程执行结果（状态收尾在调用方 goroutine）。
+func runOSCGhost(order *model.CoreSqlOrder, source *model.CoreDataSource, password, actor, path, table, alter string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// 密码只能通过命令行参数传给 gh-ost（gh-ost 不支持从文件/环境变量读取密码），
@@ -189,7 +211,7 @@ func RunOSC(order *model.CoreSqlOrder, source *model.CoreDataSource, password, a
 
 	if err := cmd.Start(); err != nil {
 		_ = pw.Close()
-		return true, err
+		return err
 	}
 	oscRunning.Store(order.WorkId, cmd)
 	defer oscRunning.Delete(order.WorkId)
@@ -220,10 +242,10 @@ func RunOSC(order *model.CoreSqlOrder, source *model.CoreDataSource, password, a
 	if werr := <-waitErr; werr != nil {
 		// 失败时把输出尾部落到面板，便于直接看到 gh-ost 的报错原因
 		oscUpdate(order.WorkId, strings.Join(tail, "\n"))
-		return true, fmt.Errorf("OSC(gh-ost) 执行失败: %v\n%s", werr, strings.Join(tail, "\n"))
+		return fmt.Errorf("OSC(gh-ost) 执行失败: %v\n%s", werr, strings.Join(tail, "\n"))
 	}
 
-	// 与引擎执行保持一致：写执行明细与操作流水（工单状态由调用方置为成功）
+	// 与引擎执行保持一致：写执行明细与操作流水（状态收尾在调用方 goroutine）
 	model.DB().Create(&model.CoreSqlRecord{
 		WorkId: order.WorkId,
 		SQL:    order.SQL,
@@ -237,7 +259,7 @@ func RunOSC(order *model.CoreSqlOrder, source *model.CoreDataSource, password, a
 		Action:   i18n.DefaultLang.Load(i18n.ORDER_EXECUTE_STATE),
 	})
 	oscUpdate(order.WorkId, "OSC 执行完成\n"+strings.Join(tail, "\n"))
-	return true, nil
+	return nil
 }
 
 // oscUpdate 更新工单的 OSC 面板内容（工单详情的 osc 面板通过 WS 轮询该字段）

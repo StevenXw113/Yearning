@@ -26,6 +26,17 @@
                 </a-radio-group>
               </a-form-item>
             </a-col>
+            <!-- 工单级事务模式：整批统一，作用于每个子工单的 DML（整体提交/回滚） -->
+            <a-col v-if="type === 1" :xs="24" :sm="12" :xl="6">
+              <a-form-item label="事务模式">
+                <a-tooltip :title="$t('order.tx.tips')" placement="right">
+                  <a-radio-group v-model:value="txMode">
+                    <a-radio :value="1">是</a-radio>
+                    <a-radio :value="0">否</a-radio>
+                  </a-radio-group>
+                </a-tooltip>
+              </a-form-item>
+            </a-col>
             <a-col :xs="24" :sm="24" :xl="12">
               <!-- 12/24 留给执行方式：定时执行时的日期选择器要和单选组并排 -->
               <a-form-item label="执行方式">
@@ -33,6 +44,7 @@
                   <a-radio value="now">立即执行</a-radio>
                   <a-radio value="schedule">定时执行</a-radio>
                   <a-radio value="manual">人工执行</a-radio>
+                  <a-radio value="handled">人工处理</a-radio>
                 </a-radio-group>
                 <a-date-picker
                   v-if="execMode === 'schedule'"
@@ -101,6 +113,7 @@
                   class="block-select"
                   show-search
                   placeholder="选择目标库"
+                  @change="() => recheckBlock(b)"
                 >
                   <a-select-option v-for="d in b.dbList" :key="d">{{
                     d
@@ -269,6 +282,8 @@
 
   const text = ref('');
   const backup = ref(0);
+  // 工单级事务模式（默认关闭）：整批统一，随提交作用于每个子工单
+  const txMode = ref(0);
   const execMode = ref('now');
   const delay = ref('none');
   const posting = ref(false);
@@ -283,6 +298,7 @@
     v => {
       if (v === 'now') delay.value = 'none';
       else if (v === 'manual') delay.value = 'manual';
+      else if (v === 'handled') delay.value = 'handled';
       else delay.value = '';
     },
     { immediate: true }
@@ -339,6 +355,19 @@
     dbTypeMap.value = map;
   };
 
+  // 切换工单类型：数据源列表按类型重新拉取（dml/ddl 权限不同），已选数据源可能
+  // 不在新列表里（如某库只授了 DDL 权限），连带目标库与检测状态一起重置，
+  // 避免带着旧类型下的检测结论提交
+  watch(type, () => {
+    fetchSources();
+    blocks.value.forEach(b => {
+      b.source_id = '';
+      b.data_base = '';
+      b.dbList = [];
+      b.errCount = 0;
+    });
+  });
+
   // MongoDB 数据源类型（与后端 model.DBTypeMongoDB 一致）
   const isMongoBlock = (b: Block) => dbTypeMap.value[b.source_id] === 2;
 
@@ -383,7 +412,7 @@
   // 与单工单一致：错误级规则（level===1）阻断提交
   const checkBlock = async (uid: number, sql: string) => {
     const b = findBlock(uid);
-    if (!b || !sql || sql.replace(/\s/g, '').length === 0) return;
+    if (!b || !sql || sql.replace(/\s/g, '').length == 0) return;
     const { data } = await checkSQLS({
       source_id: b.source_id,
       data_base: b.data_base,
@@ -393,6 +422,14 @@
     b.errCount = (data.payload || []).filter(
       (x: any) => x.level === 1
     ).length;
+  };
+
+  // 换目标库后对已有 SQL 重新检测：审核/影响行数估算是按库算的，
+  // 先写 SQL 再选库的场景此前会带着空检测结论直接放行
+  const recheckBlock = (b: Block) => {
+    if (!b.source_id || !b.data_base) return;
+    const sql = editorRefs.value[b.uid]?.GetValue() || '';
+    if (sql.trim()) checkBlock(b.uid, sql);
   };
 
   const postBatch = async () => {
@@ -419,6 +456,7 @@
     try {
       const { data } = await userPostBatchOrder({
         type: type.value,
+        tx_mode: txMode.value,
         backup: backup.value,
         delay: delay.value,
         text: text.value,
@@ -437,6 +475,12 @@
     loadingBatch.value = true;
     try {
       const { data } = await getBatchOrders(batchId.value);
+      if (data.code !== 1200) {
+        // 批次不存在 / 无权限（跨数据源批次仅相关人可查）：给原因，别只显示空表
+        message.error(data.text);
+        batchRef.data = [];
+        return;
+      }
       batchRef.data = data.payload || [];
       execResults.value = [];
     } finally {

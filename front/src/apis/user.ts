@@ -85,6 +85,38 @@ export function updatePassword(params: IUpdatePassword) {
   });
 }
 
+// ---- MFA 二级认证（TOTP）----
+
+export interface MfaSetupResp {
+  secret: string;
+  uri: string;
+}
+
+// 生成待绑定密钥（返回 base32 密钥与 otpauth:// URI，前端渲染二维码）
+export function mfaSetup() {
+  return request.get<Res<MfaSetupResp>>(`${COMMON_URI}/mfa/setup`);
+}
+
+// 绑定状态
+export function mfaStatus() {
+  return request.get<Res<{ enabled: boolean }>>(`${COMMON_URI}/mfa/status`);
+}
+
+// 用认证器动态码确认启用
+export function mfaEnable(code: string) {
+  return request.post(`${COMMON_URI}/mfa/enable`, { code });
+}
+
+// 解绑（需当前动态码）
+export function mfaDisable(code: string) {
+  return request.post(`${COMMON_URI}/mfa/disable`, { code });
+}
+
+// 管理员重置用户 MFA（认证器丢失的解锁出口）
+export function resetUserMfa(username: string) {
+  return request.post(`${COMMON_URI}/manage/user?tp=mfa_reset`, { username });
+}
+
 export function getUserGroups(user: string) {
   return request.get(`${COMMON_URI}/fetch/groups`, {
     params: { user: user },

@@ -7,14 +7,14 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"sync"
 )
 
 // retryPolicy 让 gRPC 自动重试「引擎瞬时不可用」。
 //
-// 引擎是独立容器，滚动/替换容器的那一两秒里请求会拿到 UNAVAILABLE；
-// 主程序每次请求都新建连接，重试时会重新拨号，正好覆盖这个窗口，
-// 否则审核人得自己再点一次「SQL检测」。这里用 gRPC 原生的重试策略，
-// 不需要在调用点写重试循环。
+// 引擎是独立容器，滚动/替换容器的那一两秒里请求会拿到 UNAVAILABLE。
+// 连接是进程级单例（见 Client），grpc.ClientConn 自带断线重连，配合这里的
+// UNAVAILABLE 重试即可覆盖容器重启窗口，不需要在调用点写重试循环。
 //
 // maxAttempts=5 + 指数退避（0.3s 起、上限 2s）≈ 4.5s 重试窗口：
 // 足够覆盖容器重启，又不会在引擎真的挂掉时让人干等太久。
@@ -31,16 +31,28 @@ const retryPolicy = `{
   }]
 }`
 
-// NewClient 返回到审核引擎的 gRPC 客户端与连接。
-// 调用方必须在使用结束后 conn.Close()，否则会泄漏一条 gRPC 连接。
+var (
+	clientOnce sync.Once
+	sharedCli  enginev1.EngineServiceClient
+	clientErr  error
+)
+
+// Client 返回进程级共享的引擎 gRPC 客户端。
+// grpc.ClientConn 线程安全且多路复用，懒连接、断线自动重连——此前每次调用
+// NewClient 新建连接再 Close，高频执行/检测场景白付一次拨号握手。
+// 连接生命周期与进程一致，调用方不再持有 *grpc.ClientConn、也不需要 Close。
 // RpcAddr 语义为审核引擎的 gRPC 监听地址，如 0.0.0.0:13307。
-func NewClient() (enginev1.EngineServiceClient, *grpc.ClientConn, error) {
-	conn, err := grpc.NewClient(model.C.General.RpcAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(retryPolicy),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	return enginev1.NewEngineServiceClient(conn), conn, nil
+func Client() (enginev1.EngineServiceClient, error) {
+	clientOnce.Do(func() {
+		conn, err := grpc.NewClient(model.C.General.RpcAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultServiceConfig(retryPolicy),
+		)
+		if err != nil {
+			clientErr = err
+			return
+		}
+		sharedCli = enginev1.NewEngineServiceClient(conn)
+	})
+	return sharedCli, clientErr
 }

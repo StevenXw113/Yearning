@@ -38,6 +38,14 @@
               {{ $t('common.policy') }}</a-button
             >
             <a-popconfirm
+              :title="$t('user.mfa.reset.tips')"
+              @confirm="resetMfa(record.username)"
+            >
+              <a-button size="small" ghost>
+                {{ $t('user.mfa.reset') }}
+              </a-button>
+            </a-popconfirm>
+            <a-popconfirm
               :title="$t('user.form.delete.tips')"
               @confirm="deleteUser(record.username)"
             >
@@ -113,9 +121,11 @@
     deleteUserAccount,
     getUserList,
     updateUserInfo,
+    resetUserMfa,
   } from '@/apis/user';
   import { EventBus } from '@/lib';
   import ChangePassword from '@/components/user/changePassword.vue';
+  import { message } from 'ant-design-vue';
   import { useI18n } from 'vue-i18n';
   import { tableRef } from '@/components/table';
   import { CommonPage } from '@/types';
@@ -183,6 +193,15 @@
   };
 
   const is_edit = ref(false);
+
+  const resetMfa = async (user: string) => {
+    const { data } = await resetUserMfa(user);
+    if (data.code === 1200) {
+      message.success(data.text);
+    } else {
+      message.error(data.text);
+    }
+  };
 
   const deleteUser = async (user: string) => {
     await deleteUserAccount(user);
