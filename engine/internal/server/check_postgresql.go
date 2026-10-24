@@ -38,5 +38,8 @@ func checkPostgreSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.
 		rec, _ := auditSQLStatement(ctx, engine, text, req.Schema, req.Rule, plan)
 		recs = append(recs, rec)
 	}
+	// 整单级校验：多条 DDL 需规则集显式允许（PostgreSQL 的 DDL 可事务化，但
+	// 「一个工单一条 DDL」是产品一致性策略，两方言行为保持一致）
+	recs = appendMultiDDLCheck(recs, stmts, req.Rule)
 	return &enginev1.CheckReply{Ok: true, Records: recs}
 }

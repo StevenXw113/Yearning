@@ -103,6 +103,73 @@ func customStatus(l customrules.Level) string {
 	}
 }
 
+// firstKeyword 返回语句跳过前导空白与注释（-- 行注释 / # 行注释 / /* */ 块注释）
+// 后的首个单词（大写）；无法取到时返回空串。拆分器产出的语句是干净的原文切片，
+// 首个关键字足以可靠区分语句类别。
+func firstKeyword(text string) string {
+	i := 0
+	for i < len(text) {
+		switch c := text[i]; {
+		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+			i++
+		case c == '-' && i+1 < len(text) && text[i+1] == '-':
+			for i < len(text) && text[i] != '\n' {
+				i++
+			}
+		case c == '#':
+			for i < len(text) && text[i] != '\n' {
+				i++
+			}
+		case c == '/' && i+1 < len(text) && text[i+1] == '*':
+			end := strings.Index(text[i+2:], "*/")
+			if end < 0 {
+				return ""
+			}
+			i += end + 4
+		default:
+			j := i
+			for j < len(text) && !isSpaceByte(text[j]) {
+				j++
+			}
+			return strings.ToUpper(text[i:j])
+		}
+	}
+	return ""
+}
+
+// isDDLStatement 按首个关键字判断语句是否为 DDL（ALTER/CREATE/DROP/TRUNCATE/RENAME）。
+func isDDLStatement(text string) bool {
+	switch firstKeyword(text) {
+	case "ALTER", "CREATE", "DROP", "TRUNCATE", "RENAME":
+		return true
+	}
+	return false
+}
+
+// appendMultiDDLCheck 落实规则集的 DdlMultiToCommit（是否允许一个工单内多条 DDL）。
+// 该开关此前只在主程序侧可配置、随规则集下发，但引擎从未校验过（死配置）——
+// 项目级工单用于跨数据源编排，与此规则不冲突：单工单内多条 DDL 的一致性管控由
+// 这里兜底，想一个工单放多条 DDL 的需在规则集里显式打开开关。
+// 违规时追加一条整单级错误记录（Level 1 阻断，检测页据此拦住提交/审批）。
+func appendMultiDDLCheck(recs []*enginev1.Record, stmts []string, rules *enginev1.AuditRole) []*enginev1.Record {
+	n := 0
+	for _, s := range stmts {
+		if isDDLStatement(s) {
+			n++
+		}
+	}
+	if n <= 1 || rules == nil || rules.GetDdlMultiToCommit() {
+		return recs
+	}
+	return append(recs, &enginev1.Record{
+		Sql:    "(整单校验)",
+		Status: "审核不通过",
+		Level:  1,
+		Error: fmt.Sprintf("工单包含 %d 条 DDL 语句，规则集未开启「允许工单内多条 DDL」(DDLMultiToCommit)。"+
+			"请拆分为多个工单提交，或使用项目级工单批量管理", n),
+	})
+}
+
 // auditSQLStatement 单条语句的 SQL 方言审核：自研规则 → 语法解析 → advisor
 // 错误组 → 降级组（警告/观察）。mysql / postgres / doris(DML) 三条路径共用，
 // 方言差异只在 engine 参数；影响行数估算等方言专属增强由调用方在返回的

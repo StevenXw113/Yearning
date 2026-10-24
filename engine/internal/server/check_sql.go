@@ -56,6 +56,8 @@ func checkSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckRe
 		}
 		recs = append(recs, rec)
 	}
+	// 整单级校验：多条 DDL 需规则集显式允许（见 appendMultiDDLCheck）
+	recs = appendMultiDDLCheck(recs, stmts, req.Rule)
 	return &enginev1.CheckReply{Ok: true, Records: recs}
 }
 

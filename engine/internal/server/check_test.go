@@ -261,3 +261,90 @@ func TestCheckDispatchesBySourceKind(t *testing.T) {
 		t.Fatalf("空 source 应仍按 MySQL 解析: err=%v rep=%+v", err, rep)
 	}
 }
+
+// TestFirstKeyword 首关键字提取要能跳过前导注释（-- / # / /* */），否则带注释的
+// DDL 语句会被漏数、多条 DDL 检测失效。
+func TestFirstKeyword(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"alter table t add c int", "ALTER"},
+		{"  \n CREATE TABLE t(id int)", "CREATE"},
+		{"-- 注释\nDROP TABLE t", "DROP"},
+		{"# hash 注释\ntruncate table t", "TRUNCATE"},
+		{"/* 块注释 */rename table a to b", "RENAME"},
+		{"update t set x=1", "UPDATE"},
+		{"", ""},
+		{"/* 未闭合注释", ""},
+	}
+	for _, c := range cases {
+		if got := firstKeyword(c.in); got != c.want {
+			t.Fatalf("firstKeyword(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestCheckMultiDDLRules DdlMultiToCommit（允许工单内多条 DDL）此前是死配置，
+// 引擎从未校验。此用例固定它的两条行为：开关关闭时多条 DDL 报整单级错误，
+// 打开后放行；单条 DDL 不受影响。
+func TestCheckMultiDDLRules(t *testing.T) {
+	multiDDL := "CREATE TABLE a(id int);\nCREATE TABLE b(id int);"
+
+	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{Sql: multiDDL, Rule: &enginev1.AuditRole{}})
+	if !rep.Ok {
+		t.Fatalf("ok=false: %s", rep.Error)
+	}
+	found := false
+	for _, r := range rep.Records {
+		if r.Sql == "(整单校验)" {
+			found = true
+			if r.Level != 1 || !strings.Contains(r.Error, "DDLMultiToCommit") {
+				t.Fatalf("multi-DDL 违规应为 Level1 错误记录, got %+v", r)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("未开启 DDLMultiToCommit 时应追加整单校验错误记录, records=%+v", rep.Records)
+	}
+
+	rep, _ = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:  multiDDL,
+		Rule: &enginev1.AuditRole{DdlMultiToCommit: true},
+	})
+	for _, r := range rep.Records {
+		if r.Sql == "(整单校验)" {
+			t.Fatalf("开启 DDLMultiToCommit 后不应再报整单校验错误, got %+v", r)
+		}
+	}
+
+	// 单条 DDL + 若干 DML：不算多条 DDL，不应触发
+	rep, _ = testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:  "CREATE TABLE a(id int);\nINSERT INTO a VALUES(1);",
+		Rule: &enginev1.AuditRole{},
+	})
+	for _, r := range rep.Records {
+		if r.Sql == "(整单校验)" {
+			t.Fatalf("单条 DDL 不应触发整单校验, got %+v", r)
+		}
+	}
+}
+
+// TestCheckMultiDDLRulesPostgreSQL PostgreSQL 入口与 MySQL 行为一致。
+func TestCheckMultiDDLRulesPostgreSQL(t *testing.T) {
+	rep, _ := testEngine().Check(context.Background(), &enginev1.CheckRequest{
+		Sql:    "CREATE TABLE a(id int);\nDROP TABLE b;",
+		Schema: "public",
+		Source: &enginev1.DataSource{Kind: "postgres"},
+		Rule:   &enginev1.AuditRole{},
+	})
+	found := false
+	for _, r := range rep.Records {
+		if r.Sql == "(整单校验)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("PostgreSQL 多条 DDL 也应触发整单校验, records=%+v", rep.Records)
+	}
+}
