@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	enginev1 "engine/gen/engine/v1"
@@ -52,16 +53,20 @@ func connectRedisDB(ds *enginev1.DataSource, db int) (*redis.Client, error) {
 	return client, nil
 }
 
-// redisParseDB 把查询页传来的库名（dbN）解析成库号，非法值返回 0。
-func redisParseDB(name string) int {
-	if len(name) < 3 || name[:2] != "db" {
-		return 0
+// redisParseDB 把工单/查询库名（dbN）解析成库号。空名表示默认 db0；
+// 非法值报错而不是静默落 db0——在错误的库上执行变更比报错严重得多。
+func redisParseDB(name string) (int, error) {
+	if name == "" {
+		return 0, nil
+	}
+	if len(name) < 3 || !strings.EqualFold(name[:2], "db") {
+		return 0, fmt.Errorf("非法的 Redis 库名 %q，应为 db0..dbN", name)
 	}
 	n, err := strconv.Atoi(name[2:])
 	if err != nil || n < 0 {
-		return 0
+		return 0, fmt.Errorf("非法的 Redis 库名 %q，应为 db0..dbN", name)
 	}
-	return n
+	return n, nil
 }
 
 // execRedis 执行 Redis 变更工单：硬保底 → 连接 → 执行 → 回滚。
@@ -73,7 +78,11 @@ func (e *Engine) execRedis(ctx context.Context, req *enginev1.ExecRequest) (*eng
 	if _, _, err := rediscmd.Validate(req.Order.Sql); err != nil {
 		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
-	client, err := connectRedisDB(req.Source, redisParseDB(req.Order.DataBase))
+	dbNo, err := redisParseDB(req.Order.DataBase)
+	if err != nil {
+		return &enginev1.ExecReply{Ok: false, Error: err.Error()}, nil
+	}
+	client, err := connectRedisDB(req.Source, dbNo)
 	if err != nil {
 		return &enginev1.ExecReply{Ok: false, Error: "连接 Redis 失败: " + err.Error()}, nil
 	}

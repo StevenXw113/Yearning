@@ -24,24 +24,7 @@ func checkRedis(req *enginev1.CheckRequest) *enginev1.CheckReply {
 	if err != nil {
 		return &enginev1.CheckReply{Ok: false, Error: err.Error()}
 	}
-	rec := &enginev1.Record{
-		Sql:    strings.TrimSpace(req.Sql),
-		Schema: req.Schema,
-		Status: "审核通过",
-		Level:  0,
-	}
-	if len(findings) > 0 {
-		rec.Error = redischeck.Messages(findings)
-		rec.Level = uint32(redischeck.Severity(findings))
-		rec.Status = "审核不通过"
-		if redischeck.Blocked(findings) == nil {
-			// warn / observe 只提示、不拦提交（与 SQL 侧的降级语义一致）
-			if rec.Level == 2 {
-				rec.Status = "警告"
-			} else {
-				rec.Status = "观察"
-			}
-		}
-	}
+	rec := findingsRecord(strings.TrimSpace(req.Sql), req.Schema,
+		redischeck.Messages(findings), redischeck.Severity(findings), redischeck.Blocked(findings) != nil)
 	return &enginev1.CheckReply{Ok: true, Records: []*enginev1.Record{rec}}
 }

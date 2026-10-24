@@ -31,6 +31,10 @@ func queryPG(req *enginev1.QueryRequest) *enginev1.QueryReply {
 		if perr := mysqlparse.CheckEngine(engine, text); perr != nil {
 			rec.Error = "SQL 语法错误: " + perr.Error()
 			rec.Level = 1
+		} else if !isReadOnlyQuery(text) {
+			// 只读白名单（引擎侧纵深防御）；pg 的 WITH 可接写语句，扫描器会识别
+			rec.Error = "查询页仅允许只读语句（SELECT/SHOW/DESC/EXPLAIN 等），变更请走工单申请"
+			rec.Level = 1
 		}
 		// 敏感字段词表逐条附带，Yearning 本地据此收敛字段内容。
 		if iwl := splitList(req.InsulateWordList); len(iwl) > 0 {

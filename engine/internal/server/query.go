@@ -14,18 +14,22 @@ import (
 // 方言按 kind 分派，各自独立实现、互不混用：
 //   - postgres → queryPG（query_pg.go）
 //   - doris    → queryDoris（query_doris.go，查询语法兼容 MySQL）
-//   - 其余（含空值）→ querySQL（query_sql.go，MySQL）
+//   - mysql / 空 kind → querySQL（query_sql.go；不填 kind 的历史调用方按 MySQL）
+//
+// 其余未知 kind 显式拒绝（fail-closed），与 Check / Exec 保持一致。
 func (e *Engine) Query(_ context.Context, req *enginev1.QueryRequest) (*enginev1.QueryReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
 		return &enginev1.QueryReply{Ok: false, Error: "SQL 不能为空"}, nil
 	}
-	switch {
-	case strings.EqualFold(req.GetKind(), "postgres"):
+	switch k := strings.ToLower(strings.TrimSpace(req.GetKind())); k {
+	case "", "mysql":
+		return querySQL(req), nil
+	case "postgres":
 		return queryPG(req), nil
-	case strings.EqualFold(req.GetKind(), "doris"):
+	case "doris":
 		return queryDoris(req), nil
 	default:
-		return querySQL(req), nil
+		return &enginev1.QueryReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
 	}
 }
 

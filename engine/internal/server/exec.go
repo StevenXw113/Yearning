@@ -10,9 +10,11 @@ import (
 // Exec 按数据源方言分派执行。五个引擎各自独立实现、互不混用：
 //   - mongodb  → execMongo（exec_mongo.go，主程序驱动 + 前镜像回滚）
 //   - redis    → execRedis（exec_redis.go）
-//   - postgres → execPG（exec_pg.go，pgx + SET search_path，无 binlog 回滚）
+//   - postgres → execPG（exec_pg.go，pgx + 连接参数 search_path，无 binlog 回滚）
 //   - doris    → execDoris（exec_doris.go，mysql 协议直连，无事务无回滚）
-//   - 其余     → execSQL（exec_mysql.go，MySQL；未知 kind 按 MySQL 处理以兼容旧调用方）
+//   - mysql / 空 kind → execSQL（exec_mysql.go；不填 kind 的历史调用方按 MySQL）
+//
+// 其余未知 kind 显式拒绝（fail-closed）：宁可报错也不能落到错误方言上执行。
 func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
 	if req == nil || req.Order == nil {
 		return &enginev1.ExecReply{Ok: false, Error: "工单为空"}, nil
@@ -21,7 +23,9 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 		return &enginev1.ExecReply{Ok: false, Error: "工单 SQL 为空"}, nil
 	}
 
-	switch strings.ToLower(req.Source.GetKind()) {
+	switch k := strings.ToLower(strings.TrimSpace(req.Source.GetKind())); k {
+	case "", "mysql":
+		return e.execSQL(ctx, req)
 	case "mongodb":
 		return e.execMongo(ctx, req)
 	case "redis":
@@ -31,7 +35,7 @@ func (e *Engine) Exec(ctx context.Context, req *enginev1.ExecRequest) (*enginev1
 	case "doris":
 		return e.execDoris(ctx, req)
 	default:
-		return e.execSQL(ctx, req)
+		return &enginev1.ExecReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
 	}
 }
 

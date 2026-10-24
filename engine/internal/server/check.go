@@ -7,6 +7,7 @@ import (
 
 	enginev1 "engine/gen/engine/v1"
 	"engine/internal/customrules"
+	"engine/internal/mysqlparse"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 	bbadvisor "engine/internal/bytebase/plugin/advisor"
@@ -20,7 +21,10 @@ import (
 //   - redis    → checkRedis（check_redis.go）
 //   - postgres → checkPG（check_pg.go）
 //   - doris    → checkDoris（check_doris.go，建表走 dorischeck，DML/查询走 MySQL 解析器）
-//   - 其余     → checkSQL（check_sql.go，MySQL）
+//   - mysql / 空 kind → checkSQL（check_sql.go；不填 kind 的历史调用方按 MySQL）
+//
+// 其余未知 kind 显式拒绝（fail-closed）：新增数据源若引擎侧未实现，静默按
+// MySQL 审会产出误报/漏报都难察觉的假结果，宁可报「不支持」。
 func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*enginev1.CheckReply, error) {
 	if req == nil || strings.TrimSpace(req.Sql) == "" {
 		return &enginev1.CheckReply{Ok: false, Error: "SQL 不能为空"}, nil
@@ -34,9 +38,11 @@ func (e *Engine) Check(ctx context.Context, req *enginev1.CheckRequest) (*engine
 		return checkPG(ctx, req), nil
 	case isDorisSource(req.Source):
 		return checkDoris(ctx, req), nil
-	default:
-		return checkSQL(ctx, req), nil
 	}
+	if k := strings.TrimSpace(req.Source.GetKind()); k != "" && !strings.EqualFold(k, "mysql") {
+		return &enginev1.CheckReply{Ok: false, Error: "引擎暂不支持该数据源类型: " + k + "，请升级引擎或检查数据源配置"}, nil
+	}
+	return checkSQL(ctx, req), nil
 }
 
 // ---- 以下为 SQL 审核（MySQL / pg 共用）的辅助 ----
@@ -66,7 +72,7 @@ func review(ctx context.Context, engine storepb.Engine, stmts []base.ParsedState
 		checkCtx.Rule = rule
 		advices, err := bbadvisor.Check(ctx, engine, rule.GetType(), checkCtx)
 		if err != nil {
-			if strings.Contains(err.Error(), "unknown advisor ") {
+			if mysqlparse.IsUnknownAdvisorError(err) {
 				// 该方言没有实现这条规则（例如 pg 没有 MySQL 的自增/无符号/LIMIT 规则）。
 				// 规则集是 MySQL 语义的、两方言共用，这里的缺失不是错误，跳过即可。
 				continue
@@ -95,6 +101,56 @@ func customStatus(l customrules.Level) string {
 	default:
 		return "审核不通过"
 	}
+}
+
+// auditSQLStatement 单条语句的 SQL 方言审核：自研规则 → 语法解析 → advisor
+// 错误组 → 降级组（警告/观察）。mysql / postgres / doris(DML) 三条路径共用，
+// 方言差异只在 engine 参数；影响行数估算等方言专属增强由调用方在返回的
+// Record 上追加。返回的 parsed 供调用方复用（避免重复解析）。
+func auditSQLStatement(ctx context.Context, engine storepb.Engine, text, schema string, rule *enginev1.AuditRole, plan reviewPlan) (*enginev1.Record, []base.ParsedStatement) {
+	rec := &enginev1.Record{Sql: text, Schema: schema, Status: "审核通过", Level: 0}
+	if f, ok := runCustomRules(rule, text, schema); ok {
+		rec.Error = fmt.Sprintf("[%s] %s", f.Title, f.Content)
+		rec.Status, rec.Level = customStatus(f.Level), uint32(f.Level)
+		return rec, nil
+	}
+	parsed, perr := base.ParseStatements(engine, text)
+	switch {
+	case perr != nil || len(parsed) == 0:
+		rec.Error, rec.Status, rec.Level = "SQL 语法错误: "+errText(perr), "语法错误", 1
+	default:
+		advice, rerr := review(ctx, engine, parsed, schema, plan.error)
+		switch {
+		case rerr != nil:
+			rec.Error, rec.Status, rec.Level = "SQL 语法错误: "+rerr.Error(), "语法错误", 1
+		case advice != nil:
+			rec.Error, rec.Status, rec.Level = adviceText(advice), "审核不通过", 1
+		default:
+			rec.Error, rec.Status, rec.Level = downgraded(ctx, engine, parsed, schema, plan)
+		}
+	}
+	return rec, parsed
+}
+
+// findingsRecord 把自研规则包（mongocheck / redischeck / dorischeck，三者助手
+// 同构）的命中映射成统一 Record：msgs 为空表示未命中，保持「审核通过」；
+// 命中时按 blocked 区分拦截与仅提示（警告/观察不拦提交，与 SQL 侧降级语义一致）。
+func findingsRecord(sql, schema, msgs string, severity int, blocked bool) *enginev1.Record {
+	rec := &enginev1.Record{Sql: sql, Schema: schema, Status: "审核通过", Level: 0}
+	if msgs == "" {
+		return rec
+	}
+	rec.Error = msgs
+	rec.Level = uint32(severity)
+	rec.Status = "审核不通过"
+	if !blocked {
+		if rec.Level == 2 {
+			rec.Status = "警告"
+		} else {
+			rec.Status = "观察"
+		}
+	}
+	return rec
 }
 
 // adviceText 把 Bytebase 建议渲染成检测结果里的错误文案。

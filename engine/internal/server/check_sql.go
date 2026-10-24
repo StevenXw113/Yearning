@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	enginev1 "engine/gen/engine/v1"
 	"engine/internal/mysqlparse"
@@ -12,12 +11,11 @@ import (
 	"github.com/bytebase/omni/mysql/ast"
 
 	storepb "engine/internal/bytebase/generated-go/store"
-	"engine/internal/bytebase/plugin/parser/base"
 	mysqlparser "engine/internal/bytebase/plugin/parser/mysql"
 )
 
-// checkSQL 执行 MySQL 静态审核：拆分语句 → 自研规则 → Bytebase MySQL advisor。
-// 方言固定 MySQL，不再用 engine 变量 + 条件分支与其他方言混在一起。
+// checkSQL 执行 MySQL 静态审核：拆分 → 逐条 auditSQLStatement → 影响行数估算。
+// 方言固定 MySQL；估算与行数上限是 MySQL 专属增强，挂在共享审核结果之上。
 func checkSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckReply {
 	const engine = storepb.Engine_MYSQL
 
@@ -41,36 +39,19 @@ func checkSQL(ctx context.Context, req *enginev1.CheckRequest) *enginev1.CheckRe
 		}
 	}()
 	for _, text := range stmts {
-		rec := &enginev1.Record{Sql: text, Schema: req.Schema, Status: "审核通过", Level: 0}
-		if f, ok := runCustomRules(req.Rule, text, req.Schema); ok {
-			rec.Error = fmt.Sprintf("[%s] %s", f.Title, f.Content)
-			rec.Status, rec.Level = customStatus(f.Level), uint32(f.Level)
+		rec, parsed := auditSQLStatement(ctx, engine, text, req.Schema, req.Rule, plan)
+		// 影响行数估算：MySQL 的 AST 支持，直接做（语法解析失败时 parsed 为空，跳过）
+		if len(parsed) == 0 {
 			recs = append(recs, rec)
 			continue
 		}
-		parsed, perr := base.ParseStatements(engine, text)
-		switch {
-		case perr != nil || len(parsed) == 0:
-			rec.Error, rec.Status, rec.Level = "SQL 语法错误: "+errText(perr), "语法错误", 1
-		default:
-			advice, rerr := review(ctx, engine, parsed, req.Schema, plan.error)
-			switch {
-			case rerr != nil:
-				rec.Error, rec.Status, rec.Level = "SQL 语法错误: "+rerr.Error(), "语法错误", 1
-			case advice != nil:
-				rec.Error, rec.Status, rec.Level = adviceText(advice), "审核不通过", 1
-			default:
-				rec.Error, rec.Status, rec.Level = downgraded(ctx, engine, parsed, req.Schema, plan)
-			}
-			// 影响行数估算：MySQL 的 AST 支持，直接做（不再用 if engine==MYSQL 区分）
-			if node, ok := mysqlparser.GetOmniNode(parsed[0].AST); ok {
-				rec.AffectRows = estimateRows(ctx, &db, req.Source, req.Schema, node, text)
-				// 审核期用估算值比对规则集上限（执行期还会用真实影响行数再比对一次）；
-				// 估算只覆盖 DML，DDL 工单的 MaxDDLAffectRows 由执行期兜底
-				if over, limit := affectRowOverLimit(req.Rule, "dml", rec.AffectRows); over {
-					rec.Error = fmt.Sprintf("预估影响行数 %d 超过规则集上限 %d", rec.AffectRows, limit)
-					rec.Status, rec.Level = "审核不通过", 1
-				}
+		if node, ok := mysqlparser.GetOmniNode(parsed[0].AST); ok {
+			rec.AffectRows = estimateRows(ctx, &db, req.Source, req.Schema, node, text)
+			// 审核期用估算值比对规则集上限（执行期还会用真实影响行数再比对一次）；
+			// 估算只覆盖 DML，DDL 工单的 MaxDDLAffectRows 由执行期兜底
+			if over, limit := affectRowOverLimit(req.Rule, "dml", rec.AffectRows); over {
+				rec.Error = fmt.Sprintf("预估影响行数 %d 超过规则集上限 %d", rec.AffectRows, limit)
+				rec.Status, rec.Level = "审核不通过", 1
 			}
 		}
 		recs = append(recs, rec)
@@ -116,7 +97,7 @@ func explainRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, sc
 		*dbp, db = d, d
 	}
 	var plan string
-	q := "EXPLAIN FORMAT=JSON " + strings.TrimRight(strings.TrimSpace(stmtText), ";")
+	q := "EXPLAIN FORMAT=JSON " + trimStmtSemicolon(stmtText)
 	if err := db.QueryRowContext(ctx, q).Scan(&plan); err != nil {
 		return 0
 	}
@@ -125,4 +106,18 @@ func explainRows(ctx context.Context, dbp **sql.DB, src *enginev1.DataSource, sc
 		return 0
 	}
 	return uint32(n)
+}
+
+// trimStmtSemicolon 去掉语句结尾分号与空白，避免拼进 EXPLAIN 前缀后语法错误。
+func trimStmtSemicolon(s string) string {
+	out := s
+	for len(out) > 0 {
+		last := out[len(out)-1]
+		if last == ';' || last == ' ' || last == '\t' || last == '\r' || last == '\n' {
+			out = out[:len(out)-1]
+			continue
+		}
+		break
+	}
+	return out
 }

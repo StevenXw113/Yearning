@@ -67,7 +67,30 @@ func (e *Engine) MergeAlterTables(_ context.Context, req *enginev1.MergeAlterTab
 		bodies = append(bodies, a.body)
 	}
 	merged := "ALTER TABLE " + alts[0].table + " " + strings.Join(bodies, ", ")
+	// 词法拼接对 MySQL 有已知限制，命中即放弃合并、原样返回（多跑几次 ALTER 无害，
+	// 拼出非法 SQL 会让工单直接执行失败）：
+	//   - ALGORITHM=/LOCK= 子句一条 ALTER 只能出现一次；
+	//   - FULLTEXT/SPATIAL 索引一条 ALTER 里最多一个；
+	//   - 合并结果还须过得了语法解析。
+	if !mergeSafe(bodies) || mysqlparse.Check(merged) != nil {
+		return &enginev1.MergeAlterTablesReply{Ok: true, Sql: strings.Join(stmts, "; ")}, nil
+	}
 	return &enginev1.MergeAlterTablesReply{Ok: true, Sql: merged}, nil
+}
+
+// reFulltextSpatial 识别 FULLTEXT/SPATIAL 索引子句。
+var reFulltextSpatial = regexp.MustCompile(`(?i)\b(fulltext|spatial)\s+(index|key)\b`)
+
+// mergeSafe 判断多条 ALTER 子句按逗号拼接后是否落在 MySQL 的已知限制内。
+func mergeSafe(bodies []string) bool {
+	clauses, fts := 0, 0
+	for _, b := range bodies {
+		if topLevelKeywordAt(b, "algorithm") || topLevelKeywordAt(b, "lock") {
+			clauses++
+		}
+		fts += len(reFulltextSpatial.FindAllString(b, -1))
+	}
+	return clauses <= 1 && fts <= 1
 }
 
 // normalizeIdent 统一标识符（去掉反引号）。

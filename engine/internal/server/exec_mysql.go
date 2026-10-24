@@ -10,6 +10,8 @@ import (
 	"engine/internal/mysqlparse"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	storepb "engine/internal/bytebase/generated-go/store"
 )
 
 // mysqlDSN 构造 MySQL DSN。首期支持明文 TCP；配了 CA/Cert/Key 则启用 TLS。
@@ -29,7 +31,9 @@ func mysqlDSN(s *enginev1.DataSource, db string) (string, error) {
 		user, s.Password, s.Ip, s.Port, db, tlsParam), nil
 }
 
-// execSQL 执行 MySQL 工单：逐条拆分执行 + binlog / 前镜像回滚。
+// execSQL 执行 MySQL 工单：连接与切库后走共享骨架 execSQLStatements
+// （事务、语法预检、影响行数上限），回滚两级方案的挂载在这里：
+// binlog 抓取优先（capture 钩子），不可用时退回前镜像（buildRollback 钩子）。
 func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*enginev1.ExecReply, error) {
 	stmts, err := mysqlparse.Split(req.Order.Sql)
 	if err != nil || len(stmts) == 0 {
@@ -54,105 +58,34 @@ func (e *Engine) execSQL(ctx context.Context, req *enginev1.ExecRequest) (*engin
 		}
 	}
 
-	tx, dmlTx := (*sql.Tx)(nil), false
-	if req.Rules != nil && req.Rules.DmlTransaction && orderType(req.Order.Type) == "dml" {
-		tx, err = db.BeginTx(ctx, nil)
-		if err != nil {
-			return &enginev1.ExecReply{Ok: false, Error: "开启事务失败: " + err.Error()}, nil
-		}
-		dmlTx = true
-	}
-	run := func(q string) (sql.Result, error) {
-		if dmlTx {
-			return tx.ExecContext(ctx, q)
-		}
-		return db.ExecContext(ctx, q)
-	}
-
-	// 回滚语句（binlog 优先，退回前镜像）
-	var (
-		rb  *rollbackBuilder
-		blc *binlogCapture
-	)
+	var buildRollback func(ctx context.Context, q rowQueryer, text string) (string, string)
+	var capture func(ctx context.Context) ([]string, string)
 	if req.Order.Backup == 1 {
 		meta := newTableMeta(db, req.Order.DataBase)
 		if c, ok := newBinlogCapture(ctx, req.Source, db, meta, req.Order.DataBase, stmts); ok {
-			blc = c
+			capture = func(ctx context.Context) ([]string, string) {
+				return captureRollback(ctx, c, db)
+			}
 		} else {
-			var q rowQueryer = db
-			if dmlTx {
-				q = tx
+			// 前镜像构建器按查询连接缓存（db 与事务各一份，主键/列信息不重复查询）
+			var rbDB, rbTx *rollbackBuilder
+			buildRollback = func(ctx context.Context, q rowQueryer, text string) (string, string) {
+				b := rbDB
+				if _, isTx := q.(*sql.Tx); isTx {
+					if rbTx == nil {
+						rbTx = newRollbackBuilder(q, req.Order.DataBase)
+					}
+					b = rbTx
+				} else if b == nil {
+					rbDB = newRollbackBuilder(q, req.Order.DataBase)
+					b = rbDB
+				}
+				return b.build(ctx, text)
 			}
-			rb = newRollbackBuilder(q, req.Order.DataBase)
 		}
 	}
 
-	recs := make([]*enginev1.Record, 0, len(stmts))
-	for _, text := range stmts {
-		rec := &enginev1.Record{Sql: text, Status: "执行中", Level: 0}
-		if perr := mysqlparse.Check(text); perr != nil {
-			rec.Error = "SQL 语法错误: " + perr.Error()
-			rec.Status = "执行失败"
-			rec.Level = 1
-			recs = append(recs, rec)
-			if dmlTx {
-				_ = tx.Rollback()
-				return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs}, nil
-			}
-			continue
-		}
-		var rwarn string
-		if rb != nil {
-			rec.Rollback, rwarn = rb.build(ctx, text)
-		}
-		res, err := run(text)
-		if err != nil {
-			rec.Error = err.Error()
-			rec.Status = "执行失败"
-			rec.Level = 1
-			if rwarn != "" {
-				rec.Error += "\n" + rwarn
-			}
-			recs = append(recs, rec)
-			if dmlTx {
-				_ = tx.Rollback()
-			}
-			// 与执行失败路径一致：已生效的部分改动仍要抓回滚语句
-			rbStmts, rbWarn := captureRollback(ctx, blc, db)
-			attachRollbackWarning(recs, rbWarn)
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: rbStmts}, nil
-		}
-		if n, err := res.RowsAffected(); err == nil {
-			rec.AffectRows = uint32(n)
-		}
-		// 规则集影响行数上限：超限即中止（已执行的不可撤回，但不再放行后续语句）
-		if over, limit := affectRowOverLimit(req.Rules, orderType(req.Order.Type), rec.AffectRows); over {
-			rec.Error = fmt.Sprintf("影响行数 %d 超过规则集上限 %d，已中止执行", rec.AffectRows, limit)
-			rec.Status = "执行失败"
-			rec.Level = 1
-			recs = append(recs, rec)
-			if dmlTx {
-				_ = tx.Rollback()
-			}
-			rbStmts, rbWarn := captureRollback(ctx, blc, db)
-			attachRollbackWarning(recs, rbWarn)
-			return &enginev1.ExecReply{Ok: false, Error: rec.Error, Records: recs, Rollback: rbStmts}, nil
-		}
-		if rwarn != "" { // 前镜像回滚的不完整提示（状态仍为已执行）
-			rec.Error = rwarn
-		}
-		rec.Status = "已执行"
-		recs = append(recs, rec)
-	}
-
-	if dmlTx {
-		if err := tx.Commit(); err != nil {
-			return &enginev1.ExecReply{Ok: false, Error: "提交事务失败: " + err.Error(), Records: recs}, nil
-		}
-	}
-	rbStmts, rbWarn := captureRollback(ctx, blc, db)
-	attachRollbackWarning(recs, rbWarn)
-	return &enginev1.ExecReply{Ok: true, Records: recs, Rollback: rbStmts}, nil
+	return execSQLStatements(ctx, db, stmts, req, storepb.Engine_MYSQL, buildRollback, capture)
 }
 
 // captureRollback 执行完成（含提交）后读取 binlog 位点并抓取整单回滚语句。

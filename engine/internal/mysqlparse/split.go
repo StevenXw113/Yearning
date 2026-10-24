@@ -15,6 +15,13 @@ import (
 	_ "engine/internal/bytebase/plugin/parser/pg"
 )
 
+// IsUnknownAdvisorError 判定「该方言未实现此规则」的上游报错（advisor 注册表查无此键）。
+// 规则集是 MySQL 语义、多方言共用，方言缺失不是错误，调用方跳过即可。
+// 集中在适配层做字符串匹配：上游错误文案变化时只需改这里，不再散落各调用点。
+func IsUnknownAdvisorError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "unknown advisor ")
+}
+
 // Split 拆分 MySQL SQL（历史入口，等价 SplitEngine(storepb.Engine_MYSQL, sql)）。
 func Split(sql string) ([]string, error) {
 	return SplitEngine(storepb.Engine_MYSQL, sql)
