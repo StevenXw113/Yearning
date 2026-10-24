@@ -61,7 +61,7 @@
       </c-table>
     </a-card>
     <Profile
-      :visible="visible"
+      :open="visible"
       :width="width"
       @close="onClose"
       @close-drawer="() => (visible = false)"

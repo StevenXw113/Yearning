@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    v-model:visible="is_open"
+    v-model:open="is_open"
     :title="$t('db.edit.title')"
     width="1000px"
     :ok-text="$t('common.save')"

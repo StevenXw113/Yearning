@@ -13,16 +13,7 @@ import localeData from 'dayjs/plugin/localeData';
 extend(weekday);
 extend(localeData);
 
-if (localStorage.getItem('theme') === null) {
-  import('@/style/theme.less');
-  localStorage.setItem('theme', 'dark');
-} else {
-  if (localStorage.getItem('theme') === 'dark') {
-    import('@/style/theme.less');
-  } else {
-    import('@/style/light.less');
-  }
-}
+import('@/style/base.less');
 
 createApp(App)
   .directive('watermark', (el, binding) => {

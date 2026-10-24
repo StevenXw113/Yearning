@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    v-model:visible="is_open"
+    v-model:open="is_open"
     :title="$t('user.policy')"
     :width="800"
     :ok-text="$t('common.save')"

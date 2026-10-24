@@ -15,10 +15,10 @@
           }}</a-button>
           <a-popconfirm
             :title="$t('order.agree.tips')"
-            :visible="condition"
+            :open="condition"
             placement="bottomLeft"
             @confirm="next"
-            @visible-change="handleVisibleChange"
+            @open-change="handleVisibleChange"
           >
             <a-button key="1" type="primary" :disabled="enabled">{{
               $t('order.agree')

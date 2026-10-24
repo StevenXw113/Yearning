@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    v-model:visible="is_open"
+    v-model:open="is_open"
     :header-style="{ display: 'none' }"
     :body-style="{ padding: 0 }"
   >

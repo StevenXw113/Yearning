@@ -1,5 +1,5 @@
 <template>
-  <a-modal v-model:visible="is_open" :title="$t('order.delay')">
+  <a-modal v-model:open="is_open" :title="$t('order.delay')">
     <a-date-picker show-time :disabled-date="disabledDate" @ok="delayTime" />
     <template #footer>
       <a-button type="danger" @click="killSchedule">

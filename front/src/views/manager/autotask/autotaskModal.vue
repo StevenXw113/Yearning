@@ -1,5 +1,5 @@
 <template>
-  <a-modal v-model:visible="is_open" :title="$t('auto.title')" @ok="postOk">
+  <a-modal v-model:open="is_open" :title="$t('auto.title')" @ok="postOk">
     <a-form ref="formRef" layout="vertical" :model="autotask" :rules="rules">
       <a-form-item :label="$t('auto.edit.name')" name="name">
         <a-input v-model:value="autotask.name"></a-input>

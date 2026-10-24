@@ -49,7 +49,7 @@
   </a-card>
 
   <a-drawer
-    v-model:visible="is_open"
+    v-model:open="is_open"
     force-render
     :title="$t('custom')"
     placement="right"

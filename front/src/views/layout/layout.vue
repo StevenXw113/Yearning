@@ -118,6 +118,7 @@
 </template>
 
 <script setup lang="ts">
+  import { toggleTheme, isDark as themeIsDark } from '@/style/theme';
   import { Copyright } from '@/config/vars';
   import Menu from '@/components/menu/menu.vue';
   import { useUserStore } from '@/store';
@@ -129,7 +130,7 @@
     MenuFoldOutlined,
   } from '@ant-design/icons-vue';
   import { useFullscreen } from '@vueuse/core';
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
 
   // 只用系统图标（public/icon.png），不再用带文字的整张 logo，省掉那一段横向空白
   const logoUrl = `${import.meta.env.BASE_URL}icon.png`;
@@ -140,12 +141,11 @@
 
   const collapsed = ref<boolean>(false);
 
-  const isDark = ref(localStorage.getItem('theme') !== 'light');
+  // antd 4 主题运行时切换（CSS-in-JS token + data-theme CSS 变量），不再整页重载
+  const isDark = computed(() => themeIsDark.value);
 
-  // 亮暗主题是构建期 less 变量，切换只能整页重载（与「个人中心」里的主题下拉一致）
   const changeTheme = () => {
-    localStorage.setItem('theme', isDark.value ? 'light' : 'dark');
-    location.reload();
+    toggleTheme();
   };
 
   const changeUser = (e: { key: string | number }) => {

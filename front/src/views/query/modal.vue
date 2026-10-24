@@ -1,5 +1,5 @@
 <template>
-  <a-modal v-model:visible="is_open" :title="title" @ok="saveHandle">
+  <a-modal v-model:open="is_open" :title="title" @ok="saveHandle">
     <a-form ref="formRef" :model="clip" :rules="rules">
       <a-form-item :label="$t('query.clip.title')" name="title">
         <a-input v-model:value="clip.title"></a-input>

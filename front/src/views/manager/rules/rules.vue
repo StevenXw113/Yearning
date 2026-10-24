@@ -75,7 +75,7 @@
   </a-table>
 
   <a-modal
-    v-model:visible="helpOpen"
+    v-model:open="helpOpen"
     :title="$t('ruleHelp')"
     :footer="null"
     :width="680"
@@ -90,7 +90,7 @@
   </a-modal>
 
   <a-drawer
-    v-model:visible="historyOpen"
+    v-model:open="historyOpen"
     :title="$t('ruleHistory')"
     placement="right"
     :width="560"

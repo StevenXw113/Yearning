@@ -114,17 +114,17 @@
     </a-form-item>
   </a-form>
   <ssl_model
-    v-model:visible="open.ca"
+    v-model:open="open.ca"
     title="CA"
     @save="(text:string) =>{ dbForm.ca_file = text;open.ca = false}"
   ></ssl_model>
   <ssl_model
-    v-model:visible="open.cert"
+    v-model:open="open.cert"
     title="Cert"
     @save="(text:string) => {dbForm.cert = text;open.cert = false}"
   ></ssl_model>
   <ssl_model
-    v-model:visible="open.key"
+    v-model:open="open.key"
     title="KeyFile"
     @save="(text:string) => {dbForm.key_file = text;open.key = false}"
   ></ssl_model>

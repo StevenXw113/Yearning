@@ -1,6 +1,6 @@
 <template>
   <a-modal
-    v-model:visible="is_open"
+    v-model:open="is_open"
     :title="$t('order.retry.title')"
     width="780px"
     :footer="null"

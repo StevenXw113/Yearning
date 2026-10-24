@@ -1,7 +1,7 @@
 <template>
   <a-drawer
     v-bind="$attrs"
-    :visible="isDrawerVisible"
+    :open="isDrawerVisible"
     :width="500"
     :header-style="{ display: 'none' }"
     :body-style="{ padding: 0 }"

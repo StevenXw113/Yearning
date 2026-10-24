@@ -1,0 +1,154 @@
+/* 全站业务样式（antd-vue 4 迁移后唯一的全局样式文件）。
+   原 v3 的 theme.less/light.less 拆分为：
+   - antd 组件差异 → src/style/theme.ts 的 token/algorithm
+   - 本文件的纯 CSS（颜色走 :root[data-theme] CSS 变量，运行时随主题切换） */
+
+/* ── 主题 CSS 变量：框架配色（侧栏/顶栏/菜单）与业务文字色 ── */
+:root[data-theme='dark'] {
+  --frame-bg: #1a1f26;
+  --frame-line: rgba(255, 255, 255, 0.06);
+  --frame-hover: rgba(255, 255, 255, 0.06);
+  --frame-hover-strong: rgba(255, 255, 255, 0.08);
+  --frame-group: rgba(255, 255, 255, 0.04);
+  --menu-sub-color: rgba(255, 255, 255, 0.7);
+  --menu-sub-active: rgba(255, 255, 255, 0.95);
+  --border-split: #3e4451;
+  --total-color: #fff;
+  --state-color: rgb(193, 205, 214);
+  --chart-meta: rgba(255, 255, 255, 0.6);
+  --chart-border: #fff;
+  --editor-border: #3e4451;
+}
+
+:root[data-theme='light'] {
+  --frame-bg: #ffffff;
+  --frame-line: rgba(0, 0, 0, 0.06);
+  --frame-hover: rgba(0, 0, 0, 0.04);
+  --frame-hover-strong: rgba(0, 0, 0, 0.06);
+  --frame-group: rgba(0, 0, 0, 0.02);
+  --menu-sub-color: rgba(0, 0, 0, 0.65);
+  --menu-sub-active: rgba(0, 0, 0, 0.88);
+  --border-split: #efefef;
+  --total-color: #000;
+  --state-color: #1b1b1b;
+  --chart-meta: rgba(0, 0, 0, 0.6);
+  --chart-border: #000;
+  --editor-border: #efefef;
+}
+
+.fff {
+  color: #fff;
+}
+
+.editor_border {
+  border: 1px solid var(--editor-border);
+}
+
+.state_color {
+  color: var(--state-color);
+}
+
+.total {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all;
+  white-space: nowrap;
+  color: var(--total-color);
+  margin-top: 4px;
+  margin-bottom: 0;
+  font-size: 30px;
+  line-height: 38px;
+  height: 38px;
+}
+
+.chart-card-header {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+
+  .meta {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    color: var(--chart-meta);
+    font-size: 14px;
+    line-height: 22px;
+  }
+}
+
+.chart-card-action {
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.chart-card-footer {
+  border-top: 0.5px solid var(--chart-border);
+  padding-top: 9px;
+  margin-top: 8px;
+
+  >* {
+    position: relative;
+  }
+
+  .field {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+  }
+}
+
+.chart-card-content {
+  margin-bottom: 30px;
+  position: relative;
+  height: 46px;
+  width: 100%;
+
+  .content-fix {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+  }
+}
+
+/* ── 列表页筛选栏（.table-page-search-wrapper）──
+   原样式用 :sm="8" 把每个筛选项均分 1/3 行宽，控件跟着栅格一起拉长，
+   1430px 下行宽 1233px 时日期范围/下拉框分别被拉到 329px / 357px，中间还空一大段。
+   改成按内容定宽：标签 12px + 固定宽度控件依次排列，宽度不够时自动换行 */
+.table-page-search-wrapper {
+  /* 去掉栅格等比列宽与 offset 占位，列宽随内容 */
+  .ant-col {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+  }
+  .ant-col[class*='-offset-'] {
+    margin-left: 0;
+  }
+
+  .ant-form-item {
+    margin-bottom: 12px;
+    margin-right: 12px;
+  }
+  .ant-form-item-label {
+    font-size: 12px;
+  }
+
+  /* 各类筛选控件的统一宽度 */
+  .ant-picker {
+    width: 300px;
+  }
+  .ant-select {
+    width: 170px;
+  }
+  .ant-input,
+  .ant-input-affix-wrapper {
+    width: 170px;
+  }
+  .ant-input-number {
+    width: 120px;
+  }
+}

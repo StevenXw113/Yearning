@@ -101,7 +101,7 @@
   </a-card>
 
   <ChangePassword
-    v-model:visible="isOpen"
+    v-model:open="isOpen"
     is-manager
     @post="handlePassword"
   ></ChangePassword>

@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    v-model:visible="visible"
+    v-model:open="visible"
     :width="500"
     :title="$t('common.clip')"
     placement="bottom"

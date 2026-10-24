@@ -1,6 +1,8 @@
 <template>
-  <a-config-provider :locale="lang">
-    <router-view />
+  <a-config-provider :locale="lang" :theme="themeConfig">
+    <a-app>
+      <router-view />
+    </a-app>
   </a-config-provider>
 </template>
 
@@ -12,8 +14,14 @@
   import { onMounted, ref } from 'vue';
   import { systemLang } from './apis/loginApi';
   import i18n from '@/lang';
+  import { themeConfig, applyTheme, isDark } from '@/style/theme';
 
   const lang = ref();
+
+  onMounted(() => {
+    // 主题在渲染前就位（data-theme 驱动 base.less 的 CSS 变量），避免闪烁
+    applyTheme(isDark.value);
+  });
 
   onMounted(async () => {
     const { data } = await systemLang();
