@@ -1,7 +1,7 @@
 import { getFlowList, RespTPLs } from '@/apis/flow';
 import { Res } from '@/config/request';
 import { encode } from '@msgpack/msgpack';
-import { WebSocketResult } from '@vueuse/core';
+import { UseWebSocketReturn } from '@vueuse/core';
 import { AxiosResponse } from 'axios';
 import { Module } from 'vuex';
 import { RootStore } from '../types';
@@ -33,7 +33,7 @@ export const common: Module<commonStore, RootStore> = {
     schemaList: [],
     spinning: false,
     sql: '',
-    sock: {} as WebSocketResult<any>,
+    sock: {} as UseWebSocketReturn<any>,
     schema: '',
     principal: [],
   },

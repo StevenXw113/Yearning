@@ -40,7 +40,7 @@
 
 <script lang="ts" setup>
   import CommonMixins from '@/mixins/common';
-  import { reactive, UnwrapRef, ref, withDefaults } from 'vue';
+  import { reactive, UnwrapRef, ref } from 'vue';
   import { RegisterForm, signUpUser } from '@/apis/user';
   import { RuleObject } from 'ant-design-vue/es/form/interface';
   import { EventBus } from '@/lib';
@@ -52,9 +52,8 @@
     isManager: boolean;
   }
 
-  const props = withDefaults(defineProps<propsAttr>(), {
-    isManager: false,
-  });
+  // vue 3.5 响应式 props 解构（编译器宏，默认值一等公民）——替代 withDefaults
+  const { isManager = false } = defineProps<propsAttr>();
 
   const registerForm: UnwrapRef<RegisterForm> = reactive({
     username: '',
@@ -116,7 +115,7 @@
 
   const registered = (): boolean =>
     formRef.value.validate().then(async () => {
-      await signUpUser(registerForm, props.isManager);
+      await signUpUser(registerForm, isManager);
       resetFields();
       EventBus.emit('closeState');
     });

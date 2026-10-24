@@ -1,7 +1,7 @@
 import type { App } from 'vue';
 import CTable from '@/components/table/table.vue';
 import { TableColumnsType } from 'ant-design-vue';
-import { WebSocketResult } from '@vueuse/core';
+import { UseWebSocketReturn } from '@vueuse/core';
 
 const components = [CTable];
 
@@ -15,7 +15,7 @@ export interface tableRef {
   fn?: any;
   defaultPageSize?: number;
   isloop?: boolean;
-  websocket?: WebSocketResult<any>;
+  websocket?: UseWebSocketReturn<any>;
   // 表格自身不分页（如详情抽屉里的结果表 / 分页由外部组件负责）
   hidePagination?: boolean;
   // true：工单相关表格——固定列宽 + 可拖拽 + 超长截断（截断内容悬停看全文）

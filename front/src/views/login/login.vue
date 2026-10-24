@@ -60,7 +60,7 @@
 
     <a-modal v-model:visible="is_open" :title="$t('user.form.title')">
       <template #footer></template>
-      <Register ref="register"></Register>
+      <Register ref="register" :is-manager="false"></Register>
     </a-modal>
   </div>
 </template>
