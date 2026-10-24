@@ -14,6 +14,8 @@
 
   onMounted(async () => {
     const { data } = await getTopContext();
+    // 实机验证发现：目标库刚建/无统计数据时 payload 为 null，直接 sort 抛未捕获异常
+    if (!Array.isArray(data.payload)) return;
     data.payload.sort((a: any, b: any) => {
       return a.count - b.count;
     });

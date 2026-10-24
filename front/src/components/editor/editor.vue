@@ -19,9 +19,12 @@
 
 <script setup lang="ts">
   import * as monaco from 'monaco-editor';
-  import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+  // monaco 0.5x 的 exports 映射（./* → ./esm/vs/*.js）下,worker 子路径需从包根重写
+  import editorWorker from 'monaco-editor/editor/editor.worker?worker';
   import { onMounted, onUnmounted } from 'vue';
   import { format } from 'sql-formatter';
+  // sql-formatter v15 起 format 需显式方言；项目以 MySQL 方言为主
+  // （Doris 兼容 MySQL 语法；pg 侧美化细节略有出入可接受）
   import { mergeDDLSTMT } from '@/apis/orderPostApis';
   import { useI18n } from 'vue-i18n';
   import { useElementSize } from '@vueuse/core';
@@ -72,7 +75,7 @@
   };
 
   const setEditorValue = (ed: monaco.editor.ICodeEditor) => {
-    ed.setValue(format(ed.getValue()));
+    ed.setValue(format(ed.getValue(), { language: 'mysql' }));
   };
 
   const emitSelectedOrAllValues = (ed: monaco.editor.ICodeEditor) => {
@@ -84,7 +87,7 @@
   const beautyFunc: monaco.editor.IActionDescriptor = {
     id: 'ms-beauty',
     label: t('query.editor.beauty'),
-    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_B],
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB],
     contextMenuGroupId: 'navigation',
     contextMenuOrder: 1.5,
     run: function (ed: monaco.editor.ICodeEditor) {
@@ -95,7 +98,7 @@
   const mergeDDL: monaco.editor.IActionDescriptor = {
     id: 'ms-merge',
     label: t('query.editor.merge'),
-    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_M],
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyM],
     contextMenuGroupId: 'navigation',
     contextMenuOrder: 1.5,
     run: async function (ed: monaco.editor.ICodeEditor) {
@@ -115,7 +118,7 @@
   const GetValueFunc: monaco.editor.IActionDescriptor = {
     id: 'ms-test',
     label: getValBtnName,
-    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_E],
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyE],
     contextMenuGroupId: 'navigation',
     contextMenuOrder: 1.5,
     run: function () {
@@ -126,7 +129,7 @@
   const GetSQLGenFunc: monaco.editor.IActionDescriptor = {
     id: 'ms-gen',
     label: t('query.editor.text2sql'),
-    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_1],
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Digit1],
     contextMenuGroupId: 'navigation',
     contextMenuOrder: 1.5,
     run: function () {

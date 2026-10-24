@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import * as monaco from 'monaco-editor';
 import { MysqlKeywords } from '@/components/editor/keyword';
 import { lightWord } from '@/store/module/highlight';
 
