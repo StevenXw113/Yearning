@@ -2,7 +2,7 @@
 //
 // 每个数据源类型（mysql / postgres / mongodb / redis）实现一个 Engine，把散落在
 // 各 handler 里的 `switch s.DBType` 分支收敛成接口调用。规则审核**不在这里**：
-// 它已经由引擎 gRPC 按 kind 统一分派，本包只管元数据 / 补全 / 提交硬保底 / 执行。
+// 它已经由引擎 HTTP 通道按 kind 统一分派，本包只管元数据 / 补全 / 提交硬保底 / 执行。
 //
 // 迁移分批进行，见 design.md。本包不得 import handler 包（common/fetch/audit/personal），
 // 否则会让 handler 反过来 import 本包时成环。

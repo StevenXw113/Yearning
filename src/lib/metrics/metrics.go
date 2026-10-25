@@ -64,9 +64,9 @@ var (
 	OrdersTotal = newLabeledCounter("yearning_orders_total", "type", "result")
 	// OrderExecDuration 工单执行总耗时（引擎 Exec 全程，不含 gh-ost）
 	OrderExecDuration LatencyRecorder
-	// EngineRPCDuration 引擎 gRPC 调用耗时（Check/Exec/Query 全部）
+	// EngineRPCDuration 引擎调用耗时（Check/Exec/Query 全部;历史名含 rpc,传输已是 HTTP）
 	EngineRPCDuration LatencyRecorder
-	// EngineRPCTotal 引擎 gRPC 调用计数，label: method, result=ok|error
+	// EngineRPCTotal 引擎调用计数，label: method, result=ok|error
 	EngineRPCTotal = newLabeledCounter("yearning_engine_rpc_total", "method", "result")
 	// EngineUnavailableTotal 引擎不可用（连接失败/UNAVAILABLE）次数
 	EngineUnavailableTotal Counter
@@ -116,7 +116,7 @@ func RenderPrometheus() string {
 			OrdersTotal.values[combo].Value(), comboPromLabels(OrdersTotal.labels, combo))
 	}
 	for _, combo := range EngineRPCTotal.sortedKeys() {
-		writeCounter(EngineRPCTotal.name, "Engine gRPC calls",
+		writeCounter(EngineRPCTotal.name, "Engine calls",
 			EngineRPCTotal.values[combo].Value(), comboPromLabels(EngineRPCTotal.labels, combo))
 	}
 
@@ -125,7 +125,7 @@ func RenderPrometheus() string {
 
 	// 耗时（summary 形态：count/sum/max/last）
 	writeSummary(&b, "yearning_order_exec_duration_seconds", "Order execution duration (engine Exec)", &OrderExecDuration)
-	writeSummary(&b, "yearning_engine_rpc_duration_seconds", "Engine gRPC call duration", &EngineRPCDuration)
+	writeSummary(&b, "yearning_engine_rpc_duration_seconds", "Engine call duration", &EngineRPCDuration)
 
 	// Gauge
 	healthy := EngineHealthy.Load()

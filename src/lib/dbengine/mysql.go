@@ -27,15 +27,16 @@ type sqlEngine struct {
 func (e sqlEngine) Kind() string { return e.kind }
 
 func (e sqlEngine) ListDatabases(_ context.Context, src *model.CoreDataSource) ([]string, error) {
-	// TODO(batch3): 迁移 FetchBase 时带上 src.ExcludeDbList 的过滤（现有行为）
 	db, err := sqlConnect(src)
 	if err != nil {
 		return nil, err
 	}
 	defer model.Close(db)
+	// 排除系统库 + ExcludeDbList(与 mysql 内联路径、schemataQuery 同语义)
+	excl := append(append([]string{}, e.sysSchemas...), excludeDbList(src)...)
 	return queryStrings(db, `SELECT SCHEMA_NAME FROM information_schema.schemata
-		WHERE SCHEMA_NAME NOT IN (`+placeholders(len(e.sysSchemas))+`)
-		ORDER BY SCHEMA_NAME`, toAny(e.sysSchemas)...)
+		WHERE SCHEMA_NAME NOT IN (`+placeholders(len(excl))+`)
+		ORDER BY SCHEMA_NAME`, toAny(excl)...)
 }
 
 func (e sqlEngine) ListCollections(_ context.Context, src *model.CoreDataSource, dbName string) ([]string, error) {
@@ -135,14 +136,20 @@ func queryStrings(db *gorm.DB, sql string, args ...interface{}) ([]string, error
 
 // schemataQuery 构造库列表查询，拼进 ExcludeDbList 与系统库的 NOT IN。
 func schemataQuery(src *model.CoreDataSource, sys []string) (string, []interface{}) {
-	excl := append([]string{}, sys...)
-	for _, v := range strings.Split(src.ExcludeDbList, ",") {
-		if v = strings.TrimSpace(v); v != "" {
-			excl = append(excl, v)
-		}
-	}
+	excl := append(append([]string{}, sys...), excludeDbList(src)...)
 	q := `SELECT SCHEMA_NAME FROM information_schema.schemata WHERE SCHEMA_NAME NOT IN (` + placeholders(len(excl)) + `) ORDER BY SCHEMA_NAME`
 	return q, toAny(excl)
+}
+
+// excludeDbList 解析数据源的排除库列表(逗号分隔,容忍空白)。
+func excludeDbList(src *model.CoreDataSource) []string {
+	out := make([]string, 0, 4)
+	for _, v := range strings.Split(src.ExcludeDbList, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // placeholders 生成 n 个 `?`，用逗号连接（给 NOT IN 用）。
