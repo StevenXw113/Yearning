@@ -113,15 +113,92 @@ def drop_methods(rel, names):
     _drop_callable(rel, r"(?:^//[^\n]*\n)*^func \([^)\n]*\) {name}\(", names)
 
 
+def drop_var_entry(rel, names):
+    """删除 var (...) 块里的单个条目（含函数字面量等多行初始化，吞掉行尾的 }() 等）。"""
+    src = read(rel)
+    for name in names:
+        m = re.search(rf"^\t{re.escape(name)}\s*[= ]", src, re.M)
+        if not m:
+            fail(f"{rel}: 未找到 var 条目 {name}")
+        i, j, depth = m.start(), m.end(), 0
+        while j < len(src):
+            c = src[j]
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+            elif c == "\n" and depth <= 0:
+                break
+            j += 1
+        end = j + 1 if j < len(src) else j
+        src = src[:i] + src[end:]
+    write(rel, src)
+
+
+def drop_types(rel, names):
+    """删除包级类型声明（含其前导注释；struct/接口体按花括号配平，单行别名声明的删到行尾）。"""
+    src = read(rel)
+    for name in names:
+        m = re.search(rf"(?:^//[^\n]*\n)*^type {re.escape(name)} \w* ?[^=]*?(\n|\{{)", src, re.M)
+        if not m:
+            fail(f"{rel}: 未找到 type {name}")
+        start = m.start()
+        if m.group(1) == "{":
+            i = src.index("{", m.end() - 1)
+            depth = 0
+            while i < len(src):
+                if src[i] == "{":
+                    depth += 1
+                elif src[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            end = i + 1
+        else:
+            end = m.end()
+        while end < len(src) and src[end] == "\n":
+            end += 1
+        src = src[:start] + src[end:]
+    write(rel, src)
+
+
 def append_text(rel, text):
-    """在文件末尾追加内容。
+    """在文件末尾追加内容（幂等：已含 marker 则跳过）。
 
     用于内化「上游包里的少量代码」：与其为几个纯函数引入整个上游包
     （例如 backend/utils 会拖入 connectrpc / store / genproto），
     不如把用到的那几行抄进来。追加时保留来源说明。
+    同步用 rsync 无 --delete，本地追加的内容会在下次同步后存活，故必须幂等。
     """
     src = read(rel)
+    marker = text.strip().splitlines()[0]
+    if marker in src:
+        return
     write(rel, src.rstrip() + "\n\n" + text.strip() + "\n")
+
+
+def create_file(rel, text):
+    """以给定内容创建文件（已存在且内容相同则跳过）。
+
+    用于「上游文件的活代码骨架 + 大量死代码」场景：比几十条 drop 更可靠的方式是
+    冻结一份只含活函数的副本。上游若改名/删除该文件，前置的 rm() 会先报错拦下。
+    """
+    p = DST / rel
+    if p.exists() and p.read_text() == text:
+        return
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text)
+    changed.append(rel)
+
+
+def replace_every(rel, old, new):
+    """全部替换（至少 1 处，否则视为上游已变化）。"""
+    src = read(rel)
+    n = src.count(old)
+    if n == 0:
+        fail(f"{rel}: 未找到 {old!r}")
+    write(rel, src.replace(old, new))
 
 
 def truncate_at(rel, marker):
@@ -177,6 +254,42 @@ for rel in [
     # pg advisor：SDL diff 检查，依赖 plugin/schema（未内化）。CheckSDLDropOperations
     # 无任何调用点、也无 init 注册，是本仓库用不到的 SDL 死代码。
     "plugin/advisor/pg/sdl_drop_check.go",
+
+    # ---- query span / backup / restore / 编辑器校验整机：engine 审核链路只用
+    # ParseStatements / SplitMultiSQL / GetStatementTypes / GetOmniNode /
+    # EstimateAffectedRowsFromExplainJSON，下列机器零调用方 ----
+    # base：span/limit/explain/backup/transform/词法行列/文档分析/json_path/拓扑排序/事务模式
+    "plugin/parser/base/span.go",
+    "plugin/parser/base/limit.go",
+    "plugin/parser/base/explain.go",
+    "plugin/parser/base/backup.go",
+    "plugin/parser/base/transform.go",
+    "plugin/parser/base/restore.go",
+    "plugin/parser/base/lexer.go",
+    "plugin/parser/base/document_analysis.go",
+    "plugin/parser/base/json_path.go",
+    "plugin/parser/base/topo_sort.go",
+    "plugin/parser/base/transaction_mode.go",
+    # mysql：query span 提取、备份、还原、explain 注册、limit 注册、资源变更、编辑器校验
+    "plugin/parser/mysql/backup.go",
+    "plugin/parser/mysql/explain.go",
+    "plugin/parser/mysql/limit.go",
+    "plugin/parser/mysql/query.go",
+    "plugin/parser/mysql/query_span.go",
+    "plugin/parser/mysql/query_span_extractor.go",
+    "plugin/parser/mysql/resource_change.go",
+    "plugin/parser/mysql/restore.go",
+    # pg：同上 + antlr 校验器（拖 antlr fork）
+    "plugin/parser/pg/access_tables.go",
+    "plugin/parser/pg/backup.go",
+    "plugin/parser/pg/explain.go",
+    "plugin/parser/pg/limit.go",
+    "plugin/parser/pg/query.go",
+    "plugin/parser/pg/query_antlr.go",
+    "plugin/parser/pg/query_span.go",
+    "plugin/parser/pg/query_span_plpgsql.go",
+    "plugin/parser/pg/resource_change.go",
+    "plugin/parser/pg/restore.go",
 ]:
     rm(rel)
 
@@ -191,6 +304,11 @@ for rel in [
     "common/environment.go",  # 环境展示排序
     "common/password.go",  # 密码策略校验
     "common/risk.go",  # 语句风险分级 —— 3.23.0 起上游已删除
+    # resource_name.go：38 个 Bytebase 资源名解析器，调用方（backup/restore 机器）已删，
+    # 包外零引用。proto.go：SanitizeUTF8Message 零调用，删掉后 common 不再依赖
+    # protobuf reflect。
+    "common/resource_name.go",
+    "common/proto.go",
 ]:
     rm_optional(rel)
 
@@ -216,11 +334,15 @@ drop_lines(
 )
 
 # --------------------------------------------------------------------------
-# 3. plugin/parser/base/interface.go：去掉补全 / 诊断 / 语句区间注册（依赖 lsp-protocol）
+# 3. plugin/parser/base/interface.go：只留 SplitMultiSQL / ParseStatements /
+#    GetStatementTypes 三台注册机器。补全/诊断/语句区间（lsp-protocol）、
+#    query span / DML→SELECT / 还原 / 资源变更 / 编辑器校验（IsAllDML 及其
+#    golang-lru + xxh3 缓存）全部删除。
 # --------------------------------------------------------------------------
 drop_lines(
     "plugin/parser/base/interface.go",
     [
+        # 补全/诊断/语句区间（上游本就有，先删）
         r'^\s*completers\s*=\s*make\(',
         r'^\s*diagnoseCollectors\s*=\s*make\(',
         r'^\s*statementRanges\s*=\s*make\(',
@@ -230,50 +352,277 @@ drop_lines(
         r'^\s*type StatementRangeContext struct\{\}\s*$',
         r'^\s*type Range = lsp\.Range\s*$',
         r'^\s*lsp\s+"github\.com/bytebase/lsp-protocol"\s*$',
+        # 其余注册表与 IsAllDML 缓存
+        r'^\s*queryValidators\s*=\s*make\(',
+        r'^\s*changedResourcesGetters\s*=\s*make\(',
+        r'^\s*spans\s*=\s*make\(',
+        r'^\s*transformDMLToSelect\s*=\s*make\(',
+        r'^\s*generateRestoreSQL\s*=\s*make\(',
+        r'^\s*// searchPathPrefix starts the statement',
+        r'^\s*showplanReg\s*=\s*regexp\.MustCompile',
+        r'^\s*// REFACTOR\(zp\): Put it here',
+        # 随机器一起消失的 import
+        r'^\s*"context"\s*$',
+        r'^\s*"regexp"\s*$',
+        r'^\s*"strings"\s*$',
+        r'^\s*lru\s+"github\.com/hashicorp/golang-lru/v2"\s*$',
+        r'^\s*"github\.com/pkg/errors"\s*$',
+        r'^\s*"github\.com/zeebo/xxh3"\s*$',
+        r'^\s*"engine/internal/bytebase/store/model"\s*$',
     ],
 )
+drop_types(
+    "plugin/parser/base/interface.go",
+    [
+        "isAllDMLCacheKey",
+        "isAllDMLResult",
+        "ChangeSummary",
+        "ValidateSQLForEditorFunc",
+        "ExtractChangedResourcesFunc",
+        "GetQuerySpanFunc",
+        "TransformDMLToSelectFunc",
+        "GenerateRestoreSQLFunc",
+    ],
+)
+drop_var_entry("plugin/parser/base/interface.go", ["isAllDMLCacheMu", "isAllDMLCache"])
+# 三台活机器的错误构造改用 stdlib（pkg/errors import 已删）
+replace_every("plugin/parser/base/interface.go", "errors.Errorf(", "fmt.Errorf(")
 drop_funcs(
     "plugin/parser/base/interface.go",
     [
+        # 补全/诊断/语句区间注册（上游本就有）
         "RegisterCompleteFunc",
         "Completion",
         "RegisterDiagnoseFunc",
         "Diagnose",
         "RegisterStatementRangesFunc",
         "GetStatementRanges",
+        # 编辑器校验 / 资源变更 / query span / DML→SELECT / 还原 / IsAllDML
+        "RegisterQueryValidator",
+        "ValidateSQLForEditor",
+        "HasQueryValidator",
+        "RegisterExtractChangedResourcesFunc",
+        "ExtractChangedResources",
+        "RegisterGetQuerySpan",
+        "GetQuerySpan",
+        "RegisterTransformDMLToSelect",
+        "TransformDMLToSelect",
+        "RegisterGenerateRestoreSQL",
+        "GenerateRestoreSQL",
+        "IsAllDML",
+        "isAllDMLImpl",
+        "WithSearchPath",
+        "SplitSearchPath",
+        "tsqlRecognizeExplainType",
     ],
 )
 
-# --------------------------------------------------------------------------
-# 4. plugin/parser/tokenizer/tokenizer.go：去掉依赖 pingcap/tidb 的建表行号修正
-# --------------------------------------------------------------------------
-drop_methods("plugin/parser/tokenizer/tokenizer.go", ["SetLineForMySQLCreateTableStmt"])
-drop_funcs("plugin/parser/tokenizer/tokenizer.go", ["matchMySQLTableConstraint"])
-drop_lines(
-    "plugin/parser/tokenizer/tokenizer.go",
-    [
-        r'^\s*tidbast\s+"github\.com/pingcap/tidb/pkg/parser/ast"\s*$',
-        r'^\s*"strings"\s*$',
-    ],
+# base.go：补一个 ListDatabaseNamesFunc 类型声明（原在已删的 span.go 里，
+# advisor.Context 的字段仍引用它）。引擎侧从未注入实现，advisor.DatabaseExists
+# 恒走 nil 分支；接入真实实现时再评估去留。
+replace_once(
+    "plugin/parser/base/base.go",
+    'import storepb "engine/internal/bytebase/generated-go/store"\n',
+    'import (\n\t"context"\n\n\tstorepb "engine/internal/bytebase/generated-go/store"\n)\n',
 )
-
-# --------------------------------------------------------------------------
-# 5. plugin/parser/base/limit.go：内联 utils.IsSpaceOrSemicolon
-#    （backend/utils 会拖入 connectrpc / store / genproto，只用到一个纯函数）
-# --------------------------------------------------------------------------
-drop_lines("plugin/parser/base/limit.go", [r'^\s*"engine/internal/bytebase/utils"\s*$'])
-replace_once("plugin/parser/base/limit.go", "utils.IsSpaceOrSemicolon", "isSpaceOrSemicolon")
 append_text(
-    "plugin/parser/base/limit.go",
+    "plugin/parser/base/base.go",
     """
-// isSpaceOrSemicolon 内联自上游 backend/utils.IsSpaceOrSemicolon。
-// 内化版本不引入 backend/utils：那个包会连带 connectrpc / store / genproto
-// 等与审核链路无关的重依赖，而这里只需要这一个纯函数。
-func isSpaceOrSemicolon(r rune) bool {
-	return unicode.IsSpace(r) || r == ';'
+// ListDatabaseNamesFunc 原在 query-span 机器（已删）里声明，advisor 的 Context 字段仍在用。
+// ponytail: 引擎侧从未注入该实现，advisor.DatabaseExists 恒走 nil 分支；接入真实实现时再评估去留。
+type ListDatabaseNamesFunc func(context.Context, string) ([]string, error)
+""",
+)
+
+# mysql/explain_plan.go：dmlKeywordStart 原属已删的 backup.go，explain 链路仍在用。
+append_text(
+    "plugin/parser/mysql/explain_plan.go",
+    """
+// dmlKeywordStart 原属 parser 的 backup 机器（已删），explain 链路仍在用，随迁至此：
+// WITH 前缀不算 DML 关键字本身，定位到 UPDATE/DELETE 真正开始处。
+func dmlKeywordStart(sql string, loc ast.Loc) int {
+	if loc.Start < 0 || loc.End > len(sql) || loc.Start >= loc.End {
+		return loc.Start
+	}
+	tokens := mysqlparser.Tokenize(sql[loc.Start:loc.End])
+	if len(tokens) == 0 || mysqlparser.TokenName(tokens[0].Type) != "WITH" {
+		return loc.Start
+	}
+	depth := 0
+	for _, token := range tokens[1:] {
+		switch token.Type {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		default:
+			if depth != 0 {
+				continue
+			}
+			if name := mysqlparser.TokenName(token.Type); name == "UPDATE" || name == "DELETE" {
+				return loc.Start + token.Loc
+			}
+		}
+	}
+	return loc.Start
 }
 """,
 )
+# explain_plan.go 引入 mysqlparser import（幂等：已有则跳过）
+replace_optional(
+    "plugin/parser/mysql/explain_plan.go",
+    '\t"github.com/bytebase/omni/mysql/ast"\n\t"github.com/pkg/errors"\n',
+    '\t"github.com/bytebase/omni/mysql/ast"\n\tmysqlparser "github.com/bytebase/omni/mysql/parser"\n\t"github.com/pkg/errors"\n',
+)
+
+# pg/query_type.go：上游版本是 QueryType 分类器（query span/编辑器校验链路），
+# 死代码为主；statement-type 仍需其中 6 个纯 AST 辅助 + 已删 explain.go 里的
+# explainedText。先 rm 保证上游改名时 loudly fail，再冻结一份只含活函数的副本。
+rm("plugin/parser/pg/query_type.go")
+create_file(
+    "plugin/parser/pg/query_type.go",
+    '''package pg
+
+import (
+	"strings"
+
+	"github.com/bytebase/omni/pg/ast"
+)
+
+// 原文件还含 QueryType 分类器（query span/编辑器校验链路），机器已删，只留 statement-type
+// 仍在用的这几个纯 AST 辅助。
+
+// getWithClause returns the WITH clause of a query-carrying statement.
+func getWithClause(node ast.Node) *ast.WithClause {
+	switch n := node.(type) {
+	case *ast.SelectStmt:
+		return n.WithClause
+	case *ast.InsertStmt:
+		return n.WithClause
+	case *ast.UpdateStmt:
+		return n.WithClause
+	case *ast.DeleteStmt:
+		return n.WithClause
+	case *ast.MergeStmt:
+		return n.WithClause
+	case *ast.CreateTableAsStmt:
+		return getWithClause(n.Query)
+	default:
+		return nil
+	}
+}
+
+// hasOmniIntoClause checks if a SelectStmt has an INTO clause (SELECT INTO).
+func hasOmniIntoClause(n *ast.SelectStmt) bool {
+	return omniIntoClause(n) != nil
+}
+
+// omniIntoClause returns the INTO clause of n, searching set-operation arms
+// (UNION/INTERSECT/EXCEPT) — the parser attaches INTO to the first arm, not the root.
+func omniIntoClause(n *ast.SelectStmt) *ast.IntoClause {
+	if n == nil {
+		return nil
+	}
+	if n.IntoClause != nil {
+		return n.IntoClause
+	}
+	if c := omniIntoClause(n.Larg); c != nil {
+		return c
+	}
+	return omniIntoClause(n.Rarg)
+}
+
+// isExplainAnalyzeOmni reports whether an ExplainStmt executes its query: its last ANALYZE option
+// is not FALSE, OFF, or 0, the values PostgreSQL reads as false.
+func isExplainAnalyzeOmni(n *ast.ExplainStmt) bool {
+	if n.Options == nil {
+		return false
+	}
+	analyze := false
+	for _, item := range n.Options.Items {
+		de, ok := item.(*ast.DefElem)
+		if !ok || !strings.EqualFold(de.Defname, "analyze") {
+			continue
+		}
+		switch arg := de.Arg.(type) {
+		case *ast.String:
+			analyze = !strings.EqualFold(arg.Str, "false") && !strings.EqualFold(arg.Str, "off")
+		case *ast.Integer:
+			analyze = arg.Ival != 0
+		default:
+			analyze = true
+		}
+	}
+	return analyze
+}
+
+// UnwrapExplainAnalyze returns the statement that an EXPLAIN ANALYZE executes and that statement's text
+// within text, the text of the EXPLAIN. It returns any other node and text unchanged.
+func UnwrapExplainAnalyze(node ast.Node, text string) (ast.Node, string) {
+	explain, ok := node.(*ast.ExplainStmt)
+	if !ok || !isExplainAnalyzeOmni(explain) {
+		return node, text
+	}
+	inner, ok := explainedText(explain, text)
+	if !ok {
+		return explain.Query, text
+	}
+	return explain.Query, inner
+}
+
+// explainedText returns the text of the statement an EXPLAIN runs, within the EXPLAIN's own text.
+func explainedText(explain *ast.ExplainStmt, text string) (string, bool) {
+	// The statement runs from its WITH clause, which the location of a SELECT leaves out, to the end
+	// of the EXPLAIN, which its location can also leave out, as for ORDER BY.
+	start := ast.NodeLoc(explain.Query).Start
+	if with := getWithClause(explain.Query); with != nil && with.Loc.Start >= 0 && with.Loc.Start < start {
+		start = with.Loc.Start
+	}
+	if start < 0 || start >= explain.Loc.End || explain.Loc.End > len(text) {
+		return "", false
+	}
+	return text[start:explain.Loc.End], true
+}
+''',
+)
+
+# --------------------------------------------------------------------------
+# 4. prior-backup / builtin 规则：EnablePriorBackup / EnableGhost 全仓库从未置位，
+#    这两条规则的第一道门恒为假（Check 永远直接返回 nil）；prior-backup 还引用
+#    已删的 mysqlparser 提取机器。builtin_rules.go 的 GetBuiltinRules 零调用。
+#    Yearning 的规则清单（RULES.md / archguard）同步把它们记为不存在。
+# --------------------------------------------------------------------------
+for rel in [
+    "plugin/advisor/mysql/rule_builtin_prior_backup_check.go",
+    "plugin/advisor/pg/advisor_builtin_prior_backup_check.go",
+    "plugin/advisor/builtin_rules.go",
+]:
+    rm(rel)
+# defaultSchema 原在已删的 pg prior-backup 规则里，object-owner 检查仍在用。
+append_text(
+    "plugin/advisor/pg/advisor_statement_object_owner_check.go",
+    """
+// defaultSchema 原在已删的 prior-backup 规则文件里，object-owner 检查仍在用。
+const defaultSchema = "public"
+""",
+)
+
+# --------------------------------------------------------------------------
+# 5. generated-go/store：protobuf 只留审核链路用到的 5 个文件（advice / common /
+#    database / plan_check_run[ChangedResource 家族] / review_config[SQLReviewRule]）。
+#    *_equal.pb.go（Equal 方法零调用）与其余 30+ 个应用级 proto（issue/plan/task/
+#    project/user/setting/…）全部删除。rm_optional 语义：上游新增 proto 不应中断同步。
+# --------------------------------------------------------------------------
+PROTO_KEEP = {
+    "advice.pb.go",
+    "common.pb.go",
+    "database.pb.go",
+    "plan_check_run.pb.go",
+    "review_config.pb.go",
+}
+for p in sorted((DST / "generated-go/store").glob("*.pb.go")):
+    if p.name not in PROTO_KEEP:
+        rm_optional(f"generated-go/store/{p.name}")
 
 # --------------------------------------------------------------------------
 # 6. plugin/db/mysql/stats.go：只保留 ExplainJSON / EstimateAffectedRows 两个包级函数
@@ -340,18 +689,6 @@ replace_optional(
     "common/engine.go",
     'connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid engine type %v", e))',
     'errors.Errorf("invalid engine type %v", e)',
-)
-
-replace_once("common/resource_name.go", '\t"connectrpc.com/connect"\n', "")
-replace_once(
-    "common/resource_name.go",
-    'connect.NewError(connect.CodeInvalidArgument, errors.New("policy parent resource name must not be empty"))',
-    'errors.New("policy parent resource name must not be empty")',
-)
-replace_once(
-    "common/resource_name.go",
-    "connect.NewError(connect.CodeInvalidArgument, err)",
-    "err",
 )
 
 print("裁剪完成，涉及文件:")

@@ -282,3 +282,6 @@ func getCurrentUser(ctx context.Context, driver *sql.DB) (string, error) {
 	}
 	return user, nil
 }
+
+// defaultSchema 原在已删的 prior-backup 规则文件里，object-owner 检查仍在用。
+const defaultSchema = "public"

@@ -4,103 +4,28 @@ import (
 	"strings"
 
 	"github.com/bytebase/omni/pg/ast"
-
-	"engine/internal/bytebase/plugin/parser/base"
 )
 
-// classifyQueryType classifies an omni AST node into a QueryType.
-// allSystems indicates whether all referenced tables are system/info_schema tables.
-func classifyQueryType(node ast.Node, allSystems bool) (queryType base.QueryType, isExplainAnalyze bool) {
-	if node == nil {
-		return base.QueryTypeUnknown, false
-	}
+// 原文件还含 QueryType 分类器（query span/编辑器校验链路），机器已删，只留 statement-type
+// 仍在用的这几个纯 AST 辅助。
 
+// getWithClause returns the WITH clause of a query-carrying statement.
+func getWithClause(node ast.Node) *ast.WithClause {
 	switch n := node.(type) {
-	// DML statements
-	case *ast.InsertStmt, *ast.UpdateStmt, *ast.DeleteStmt, *ast.MergeStmt, *ast.CopyStmt:
-		return base.DML, false
-
-	// SELECT: check for INTO clause (becomes DDL)
 	case *ast.SelectStmt:
-		if hasOmniIntoClause(n) {
-			return base.DDL, false
-		}
-		// A data-modifying CTE writes, so the SELECT needs DML permission.
-		if containsWriteCTE(n) {
-			return base.DML, false
-		}
-		if allSystems {
-			return base.SelectInfoSchema, false
-		}
-		return base.Select, false
-
-	// SET is treated as safe (Select)
-	case *ast.VariableSetStmt:
-		return base.Select, false
-
-	// SHOW → info schema
-	case *ast.VariableShowStmt:
-		return base.SelectInfoSchema, false
-
-	// EXPLAIN: check for ANALYZE option
-	case *ast.ExplainStmt:
-		if isExplainAnalyzeOmni(n) {
-			qt := classifyExplainedQuery(n.Query)
-			return qt, true
-		}
-		return base.Explain, false
-
-	// REFRESH MATERIALIZED VIEW is DML
-	case *ast.RefreshMatViewStmt:
-		return base.DML, false
-
-	// CALL stored procedure is DML
-	case *ast.CallStmt:
-		return base.DML, false
-
-	// All DDL statements
-	case *ast.CreateStmt, *ast.DropStmt, *ast.AlterTableStmt,
-		*ast.CreateTableAsStmt, *ast.CreateSeqStmt, *ast.CreateSchemaStmt,
-		*ast.CreatedbStmt, *ast.CreateFunctionStmt, *ast.CreateRoleStmt,
-		*ast.IndexStmt, *ast.CreateExtensionStmt, *ast.CreateTrigStmt,
-		*ast.CreateEventTrigStmt, *ast.CreateDomainStmt, *ast.CreateConversionStmt,
-		*ast.CreateCastStmt, *ast.CreateOpClassStmt, *ast.CreateOpFamilyStmt,
-		*ast.CreatePolicyStmt, *ast.CreateAmStmt, *ast.CreateTransformStmt,
-		*ast.CreateStatsStmt, *ast.CreateTableSpaceStmt,
-		*ast.CreateFdwStmt, *ast.CreateForeignServerStmt,
-		*ast.CreateForeignTableStmt, *ast.CreatePLangStmt,
-		*ast.CreatePublicationStmt, *ast.CreateSubscriptionStmt,
-		*ast.CreateUserMappingStmt,
-		*ast.ViewStmt,
-		*ast.AlterSeqStmt, *ast.AlterDatabaseStmt, *ast.AlterDatabaseSetStmt,
-		*ast.AlterFunctionStmt, *ast.AlterRoleStmt, *ast.AlterRoleSetStmt,
-		*ast.AlterCollationStmt, *ast.AlterDomainStmt,
-		*ast.AlterExtensionStmt, *ast.AlterExtensionContentsStmt,
-		*ast.AlterFdwStmt, *ast.AlterForeignServerStmt,
-		*ast.AlterOpFamilyStmt, *ast.AlterPolicyStmt,
-		*ast.AlterEventTrigStmt, *ast.AlterObjectDependsStmt,
-		*ast.AlterObjectSchemaStmt, *ast.AlterOwnerStmt,
-		*ast.AlterOperatorStmt, *ast.AlterTypeStmt, *ast.AlterEnumStmt,
-		*ast.AlterStatsStmt, *ast.AlterTableSpaceOptionsStmt,
-		*ast.AlterSystemStmt, *ast.AlterPublicationStmt,
-		*ast.AlterSubscriptionStmt, *ast.AlterUserMappingStmt,
-		*ast.CompositeTypeStmt, *ast.AlterDefaultPrivilegesStmt,
-		*ast.AlterTSConfigurationStmt, *ast.AlterTSDictionaryStmt,
-		*ast.DropdbStmt, *ast.DropRoleStmt, *ast.DropOwnedStmt,
-		*ast.DropSubscriptionStmt, *ast.DropUserMappingStmt,
-		*ast.TruncateStmt, *ast.CommentStmt,
-		*ast.GrantStmt, *ast.GrantRoleStmt,
-		*ast.ClusterStmt, *ast.VacuumStmt, *ast.LockStmt,
-		*ast.ReindexStmt, *ast.RuleStmt,
-		*ast.RenameStmt, *ast.ReassignOwnedStmt,
-		*ast.SecLabelStmt,
-		*ast.DoStmt, *ast.DiscardStmt,
-		*ast.FetchStmt, *ast.ConstraintsSetStmt, *ast.CheckPointStmt,
-		*ast.CreateEnumStmt:
-		return base.DDL, false
-
+		return n.WithClause
+	case *ast.InsertStmt:
+		return n.WithClause
+	case *ast.UpdateStmt:
+		return n.WithClause
+	case *ast.DeleteStmt:
+		return n.WithClause
+	case *ast.MergeStmt:
+		return n.WithClause
+	case *ast.CreateTableAsStmt:
+		return getWithClause(n.Query)
 	default:
-		return base.QueryTypeUnknown, false
+		return nil
 	}
 }
 
@@ -162,37 +87,16 @@ func UnwrapExplainAnalyze(node ast.Node, text string) (ast.Node, string) {
 	return explain.Query, inner
 }
 
-// classifyExplainedQuery returns the QueryType for the query inside EXPLAIN
-// ANALYZE, which actually runs it — so unlike classifyQueryType's own default,
-// an unrecognized node type here must fail closed rather than pass as Select.
-// The cases below are exhaustive over what PostgreSQL actually accepts as an
-// EXPLAIN target (CALL, TRUNCATE, COPY, DDL like DROP/ALTER do not parse
-// there), matching classifyQueryType's DML/DDL classification for the same
-// node types; the default exists only for a future grammar addition.
-func classifyExplainedQuery(query ast.Node) base.QueryType {
-	if query == nil {
-		return base.Select
+// explainedText returns the text of the statement an EXPLAIN runs, within the EXPLAIN's own text.
+func explainedText(explain *ast.ExplainStmt, text string) (string, bool) {
+	// The statement runs from its WITH clause, which the location of a SELECT leaves out, to the end
+	// of the EXPLAIN, which its location can also leave out, as for ORDER BY.
+	start := ast.NodeLoc(explain.Query).Start
+	if with := getWithClause(explain.Query); with != nil && with.Loc.Start >= 0 && with.Loc.Start < start {
+		start = with.Loc.Start
 	}
-	switch n := query.(type) {
-	case *ast.SelectStmt:
-		if hasOmniIntoClause(n) {
-			return base.DDL
-		}
-		if containsWriteCTE(n) {
-			return base.DML
-		}
-		return base.Select
-	case *ast.InsertStmt, *ast.UpdateStmt, *ast.DeleteStmt, *ast.MergeStmt:
-		return base.DML
-	case *ast.DeclareCursorStmt:
-		return base.Select
-	case *ast.CreateTableAsStmt:
-		return base.DDL
-	case *ast.RefreshMatViewStmt:
-		return base.DML
-	case *ast.ExecuteStmt:
-		return base.Select
-	default:
-		return base.QueryTypeUnknown
+	if start < 0 || start >= explain.Loc.End || explain.Loc.End > len(text) {
+		return "", false
 	}
+	return text[start:explain.Loc.End], true
 }

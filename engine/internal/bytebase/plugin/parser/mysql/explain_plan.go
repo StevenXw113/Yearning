@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/bytebase/omni/mysql/ast"
+	mysqlparser "github.com/bytebase/omni/mysql/parser"
 	"github.com/pkg/errors"
 
 	"engine/internal/bytebase/common"
@@ -578,4 +579,33 @@ func limitCount(limit *ast.Limit) (int64, bool) {
 		return 0, false
 	}
 	return lit.Value, true
+}
+
+// dmlKeywordStart 原属 parser 的 backup 机器（已删），explain 链路仍在用，随迁至此：
+// WITH 前缀不算 DML 关键字本身，定位到 UPDATE/DELETE 真正开始处。
+func dmlKeywordStart(sql string, loc ast.Loc) int {
+	if loc.Start < 0 || loc.End > len(sql) || loc.Start >= loc.End {
+		return loc.Start
+	}
+	tokens := mysqlparser.Tokenize(sql[loc.Start:loc.End])
+	if len(tokens) == 0 || mysqlparser.TokenName(tokens[0].Type) != "WITH" {
+		return loc.Start
+	}
+	depth := 0
+	for _, token := range tokens[1:] {
+		switch token.Type {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		default:
+			if depth != 0 {
+				continue
+			}
+			if name := mysqlparser.TokenName(token.Type); name == "UPDATE" || name == "DELETE" {
+				return loc.Start + token.Loc
+			}
+		}
+	}
+	return loc.Start
 }

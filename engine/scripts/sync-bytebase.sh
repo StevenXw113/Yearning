@@ -79,7 +79,10 @@ mkdir -p "$DST/plugin/parser" "$DST/store" "$DST/generated-go" "$DST/plugin/db/t
 echo "==> 复制子集（排除测试、测试数据与非 MySQL/PG 方言）"
 # bigquery 是 3.24.0 新增的 advisor（依赖 parser/bigquery + parser/googlesql，
 # 两者都不在子集里），且没有任何保留代码 import 它，整目录排除。
+# test/ 是 advisor 的测试 fixture（YAML，~16MB）：内化后 *_test.go 已排除，
+# fixture 无消费者，不拷。
 rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' --exclude='test-data/' \
+	--exclude='test/' \
 	--exclude='utils_for_tests.go' \
 	--exclude='bigquery/' \
 	--exclude='mssql/' --exclude='oceanbase/' --exclude='oracle/' \
@@ -87,8 +90,8 @@ rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' --exclude='
 	"$SRC/plugin/advisor/" "$DST/plugin/advisor/"
 # mariadb 是 3.24.0 起 parser/mysql 的依赖（statement_type / resource_change /
 # mysql.go 都 import 它），必须一起拷；parser/bigquery 与 parser/googlesql 只有
-# 被排除的 bigquery advisor 用到，不拷。
-for d in base mariadb mysql tokenizer pg; do
+# 被排除的 bigquery advisor 用到，不拷。tokenizer 零引用（trim 里也不再处理），不拷。
+for d in base mariadb mysql pg; do
 	rsync -a --exclude='._*' --exclude='.DS_Store' --exclude='*_test.go' --exclude='test-data/' \
 		"$SRC/plugin/parser/$d/" "$DST/plugin/parser/$d/"
 done

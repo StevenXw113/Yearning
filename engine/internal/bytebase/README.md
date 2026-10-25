@@ -10,18 +10,17 @@ engine 自身只做「拆分 → 逐条审核 → 结果映射」，不重复实
 
 ```
 engine/internal/bytebase/          # 对应 bytebase/backend/
-├── plugin/advisor/                # 审核规则框架（advisor.go、builtin_rules.go、code）
+├── plugin/advisor/                # 审核规则框架（advisor.go、code）
 │   ├── sql_review.go              # 仅保留规则类型常量与模板解析（已砍 SQLReviewCheck）
 │   ├── mysql/                     # MySQL 全部审核规则实现
 │   └── pg/                        # PostgreSQL 审核规则实现
 ├── plugin/parser/base/            # 解析器接口、AST、拆分、错误类型
 ├── plugin/parser/mariadb/         # MariaDB 解析（3.24.0 起 MySQL 解析器依赖它）
-├── plugin/parser/mysql/           # MySQL 解析 / 拆分 / 资源变更
+├── plugin/parser/mysql/           # MySQL 解析 / 拆分 / explain 估算
 ├── plugin/parser/pg/              # PostgreSQL 解析 / 拆分
-├── plugin/parser/tokenizer/       # 通用分词器
 ├── common/                        # 审核链路用到的通用工具（已裁剪）
 ├── store/model/                   # 元数据模型
-├── generated-go/store/            # protobuf 生成代码
+├── generated-go/store/            # protobuf 生成代码（只留 5 个审核链路用到的文件）
 ├── UPSTREAM                       # 同步来源与版本（脚本自动生成）
 ├── README.md
 └── LICENSE
@@ -39,16 +38,28 @@ engine/internal/bytebase/          # 对应 bytebase/backend/
    MySQL 解析器自 3.24.0 起依赖 `parser/mariadb`，故该目录一并保留，但不保留它的 `diagnose.go`。
 2. **砍掉 `SQLReviewCheck`**：它依赖 `component/sheet` 与 `plugin/schema`（会牵入全部方言解析器与 tidb），
    engine 改为规则级调用 `advisor.Check`。`plugin/advisor/sql_review.go` 仅保留规则常量与 payload 解析。
-3. **去掉补全 / 诊断 / 语句区间**：删除 `plugin/parser/base/{complete.go,diagnose.go}`、
-   `plugin/parser/mysql/{completion.go,diagnose.go}`、`plugin/parser/mariadb/diagnose.go`，
-   并在 `plugin/parser/base/interface.go` 中移除对应注册与 `lsp-protocol` 依赖。
-4. **去掉 tidb 依赖**：删除 `plugin/parser/tokenizer/tokenizer.go` 中
-   `SetLineForMySQLCreateTableStmt` / `matchMySQLTableConstraint`。
-5. **精简 `common`**：复制阶段排除 `cel*.go`、`context.go`、`retry.go`、`qb/`（分别依赖 cel-go、
+3. **只留三台解析机器**：engine 审核链路只用 `ParseStatements` / `SplitMultiSQL` / `GetStatementTypes`
+   （外加各方言包的 `GetOmniNode` 与 stats.go 的 `EstimateAffectedRowsFromExplainJSON`）。
+   补全 / 诊断 / 语句区间（lsp-protocol）、query span、DML→SELECT、备份还原、资源变更、
+   编辑器校验（`ValidateSQLForEditor`）与 `IsAllDML`（golang-lru + xxh3 缓存）整机删除；
+   `base/interface.go` 收敛为三台注册机器，错误构造改用 stdlib `fmt.Errorf`。
+   死机器里个别仍被活代码引用的纯函数（`dmlKeywordStart`、pg 的 6 个 AST 辅助 +
+   `explainedText`、`ListDatabaseNamesFunc` 类型）随迁到存活文件，`pg/query_type.go`
+   冻结为只含活函数的副本。`plugin/parser/tokenizer/` 零引用，整包不拷。
+4. **砍死规则**：`EnablePriorBackup` / `EnableGhost` 全仓库从未置位，prior-backup 两条规则的
+   第一道门恒为假（`Check` 永远直接返回 nil），连同零调用的 `builtin_rules.go`（`GetBuiltinRules`）
+   一并删除。RULES.md 清单同步把它们记为不存在。
+5. **protobuf 只留 5 个文件**：`generated-go/store` 保留 `advice` / `common` / `database` /
+   `plan_check_run`（ChangedResource 家族）/ `review_config`（SQLReviewRule 家族）；
+   其余 30+ 个应用级 proto（issue / plan / task / project / user / setting / …）与全部
+   `*_equal.pb.go`（Equal 方法零调用）删除——genproto、golang-lru、xxh3 三个直接依赖随之消失。
+6. **精简 `common`**：复制阶段排除 `cel*.go`、`context.go`、`retry.go`、`qb/`（分别依赖 cel-go、
    `generated-go/v1`、backoff、未被引用）；裁剪阶段删除审核链路用不到的应用级工具
    `audit.go`、`config.go`、`config_dev.go`、`config_release.go`、`directory_sync.go`、
-   `environment.go`、`password.go`、`risk.go`；并去掉 `ValidatePhone`（phonenumbers）与 `connectrpc` 引用。
-6. 同步时排除所有 `*_test.go`、`test-data/`、上游测试辅助文件。
+   `environment.go`、`password.go`、`risk.go`、`resource_name.go`（38 个资源名解析器，调用方已删）、
+   `proto.go`（`SanitizeUTF8Message` 零调用）；并去掉 `ValidatePhone`（phonenumbers）与 `connectrpc` 引用。
+7. 同步时排除所有 `*_test.go`、`test-data/`、advisor 的 `test/` fixture（约 16MB YAML）、
+   上游测试辅助文件。
 
 ## 同步 / 升级
 
@@ -119,4 +130,4 @@ cd engine
 
 Bytebase 的 advisor / parser 位于 `backend/` 单一应用模块内，直接 import 会把应用级依赖
 （各类数据库驱动、connectrpc、cel-go、LSP 等）全部拖入。内化只保留审核所需子集，依赖收敛为
-`github.com/bytebase/omni`（解析器）、`github.com/pkg/errors`、`protobuf` / `grpc` 等。
+`github.com/bytebase/omni`（解析器）、`github.com/pkg/errors`、`protobuf` 等。
