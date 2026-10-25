@@ -9,6 +9,7 @@ import (
 	"Yearning-go/src/lib/vars"
 	"Yearning-go/src/model"
 	"gorm.io/gorm"
+	"slices"
 )
 
 // PermissionService 提供权限相关的服务
@@ -167,23 +168,13 @@ func (service *PermissionService) Equal(control *Control) bool {
 	// 检查权限
 	switch control.Kind {
 	case vars.DDL:
-		return contains(permissions.DDLSource, control.SourceId)
+		return slices.Contains(permissions.DDLSource, control.SourceId)
 	case vars.DML:
-		return contains(permissions.DMLSource, control.SourceId)
+		return slices.Contains(permissions.DMLSource, control.SourceId)
 	case vars.QUERY:
-		return contains(permissions.QuerySource, control.SourceId)
+		return slices.Contains(permissions.QuerySource, control.SourceId)
 	}
 
-	return false
-}
-
-// contains 判断切片里是否含某个值（数据源数量在几十以内，线性查找足够）
-func contains(list []string, want string) bool {
-	for _, v := range list {
-		if v == want {
-			return true
-		}
-	}
 	return false
 }
 

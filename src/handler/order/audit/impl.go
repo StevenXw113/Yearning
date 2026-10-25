@@ -287,10 +287,30 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 // 任意一条定位不到说明记录与工单内容对不上（如人工改库过），宁可拒绝重试也
 // 不能重复执行已生效的语句。
 func remainingSQL(sql string, executed []model.CoreSqlRecord) (string, error) {
+	// skipFailed=false:任意一条定位不到即拒绝(重试必须逐条对得上)
+	return remainingSQLScan(sql, executed, false)
+}
+
+// remainingSQLAfter 计算「跳过失败语句继续执行」时应执行的剩余 SQL。
+// 与 remainingSQL 的区别：失败语句视为已由人工处理（在库上修好或确认放弃），
+// 定位终点推进到最后一条记录（含失败记录）之后。
+
+// remainingSQLScan 逐条在原文中顺序定位记录语句,定位终点之后的原文即剩余部分。
+// skipFailed=false:定位不到即记录与工单内容对不上(如人工改库过),宁可拒绝重试也
+// 不能重复执行已生效的语句;skipFailed=true:同一语句可能有多条记录(先失败后重试
+// 成功),从当前位置向后找不到但在全文中存在的记录视为「已消费语句的重复记录」跳过,
+// 全文中都找不到才拒绝。
+func remainingSQLScan(sql string, records []model.CoreSqlRecord, skipFailed bool) (string, error) {
 	pos := 0
-	for _, rec := range executed {
+	for _, rec := range records {
+		if rec.SQL == "" {
+			return "", errors.New(i18n.DefaultLang.Load(i18n.ER_ORDER_RETRY_MISMATCH))
+		}
 		idx := strings.Index(sql[pos:], rec.SQL)
-		if idx < 0 || rec.SQL == "" {
+		if idx < 0 {
+			if skipFailed && strings.Contains(sql, rec.SQL) {
+				continue // 重复记录：该语句此前已定位过（如先失败、重试后成功的两次记录）
+			}
 			return "", errors.New(i18n.DefaultLang.Load(i18n.ER_ORDER_RETRY_MISMATCH))
 		}
 		pos += idx + len(rec.SQL)
@@ -300,6 +320,9 @@ func remainingSQL(sql string, executed []model.CoreSqlRecord) (string, error) {
 	remain := strings.TrimSpace(sql[pos:])
 	remain = strings.TrimSpace(strings.TrimLeft(remain, ";"))
 	if remain == "" {
+		if skipFailed {
+			return "", errors.New(i18n.DefaultLang.Load(i18n.ER_ORDER_SKIP_EMPTY))
+		}
 		return "", errors.New(i18n.DefaultLang.Load(i18n.ER_ORDER_RETRY_ALL_EXECUTED))
 	}
 	return remain, nil

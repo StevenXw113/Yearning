@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -36,13 +37,7 @@ func MultiArrayRemove(source []byte, sep []string, flag string) ([]byte, error) 
 
 // dropValue 过滤掉等于 flag 的元素；结果为空时返回空数组而非 nil，避免序列化成 null
 func dropValue(items []string, flag string) []string {
-	out := make([]string, 0, len(items))
-	for _, v := range items {
-		if v != flag {
-			out = append(out, v)
-		}
-	}
-	return out
+	return slices.DeleteFunc(slices.Clone(items), func(v string) bool { return v == flag })
 }
 
 // GetRandom 生成密码学安全的随机盐值。

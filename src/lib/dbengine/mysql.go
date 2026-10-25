@@ -10,13 +10,23 @@ import (
 	"gorm.io/gorm"
 )
 
-func init() { register(0, mysqlEngine{}) }
+func init() {
+	register(0, sqlEngine{
+		kind:       "mysql",
+		sysSchemas: []string{"information_schema", "mysql", "performance_schema", "sys"},
+	})
+}
 
-type mysqlEngine struct{}
+// sqlEngine 是走 information_schema 的 MySQL 系方言引擎（MySQL / Doris），
+// 差异只有 kind 与系统库列表。
+type sqlEngine struct {
+	kind       string
+	sysSchemas []string
+}
 
-func (mysqlEngine) Kind() string { return "mysql" }
+func (e sqlEngine) Kind() string { return e.kind }
 
-func (mysqlEngine) ListDatabases(_ context.Context, src *model.CoreDataSource) ([]string, error) {
+func (e sqlEngine) ListDatabases(_ context.Context, src *model.CoreDataSource) ([]string, error) {
 	// TODO(batch3): 迁移 FetchBase 时带上 src.ExcludeDbList 的过滤（现有行为）
 	db, err := sqlConnect(src)
 	if err != nil {
@@ -24,11 +34,11 @@ func (mysqlEngine) ListDatabases(_ context.Context, src *model.CoreDataSource) (
 	}
 	defer model.Close(db)
 	return queryStrings(db, `SELECT SCHEMA_NAME FROM information_schema.schemata
-		WHERE SCHEMA_NAME NOT IN ('information_schema','mysql','performance_schema','sys')
-		ORDER BY SCHEMA_NAME`)
+		WHERE SCHEMA_NAME NOT IN (`+placeholders(len(e.sysSchemas))+`)
+		ORDER BY SCHEMA_NAME`, toAny(e.sysSchemas)...)
 }
 
-func (mysqlEngine) ListCollections(_ context.Context, src *model.CoreDataSource, dbName string) ([]string, error) {
+func (e sqlEngine) ListCollections(_ context.Context, src *model.CoreDataSource, dbName string) ([]string, error) {
 	db, err := sqlConnect(src)
 	if err != nil {
 		return nil, err
@@ -38,7 +48,7 @@ func (mysqlEngine) ListCollections(_ context.Context, src *model.CoreDataSource,
 		WHERE table_schema = ? AND table_type = 'BASE TABLE' ORDER BY table_name`, dbName)
 }
 
-func (mysqlEngine) DescribeTable(_ context.Context, src *model.CoreDataSource, dbName, table string) ([]Field, error) {
+func (e sqlEngine) DescribeTable(_ context.Context, src *model.CoreDataSource, dbName, table string) ([]Field, error) {
 	db, err := sqlConnect(src)
 	if err != nil {
 		return nil, err
@@ -61,7 +71,7 @@ func (mysqlEngine) DescribeTable(_ context.Context, src *model.CoreDataSource, d
 }
 
 // Highlight SQL 补全：isField 时给当前库的表 + 字段，否则给库列表（排除 ExcludeDbList）。
-func (mysqlEngine) Highlight(src *model.CoreDataSource, isField bool, dbName string) []map[string]string {
+func (e sqlEngine) Highlight(src *model.CoreDataSource, isField bool, dbName string) []map[string]string {
 	db, err := sqlConnect(src)
 	if err != nil {
 		return nil
@@ -81,7 +91,7 @@ func (mysqlEngine) Highlight(src *model.CoreDataSource, isField bool, dbName str
 		}
 		return list
 	}
-	q, args := schemataQuery(src)
+	q, args := schemataQuery(src, e.sysSchemas)
 	if ss, err := queryStrings(db, q, args...); err == nil {
 		for _, s := range ss {
 			list = append(list, map[string]string{"vl": s, "meta": "Schema"})
@@ -91,7 +101,7 @@ func (mysqlEngine) Highlight(src *model.CoreDataSource, isField bool, dbName str
 }
 
 // ValidateChange SQL 不做提交硬保底：解析与审核都由引擎完成。
-func (mysqlEngine) ValidateChange(_ *model.CoreDataSource, _ string) error { return nil }
+func (e sqlEngine) ValidateChange(_ *model.CoreDataSource, _ string) error { return nil }
 
 // sqlConnect 建一条元数据查询用的连接（mysql 驱动）。
 func sqlConnect(src *model.CoreDataSource) (*gorm.DB, error) {
@@ -124,22 +134,26 @@ func queryStrings(db *gorm.DB, sql string, args ...interface{}) ([]string, error
 }
 
 // schemataQuery 构造库列表查询，拼进 ExcludeDbList 与系统库的 NOT IN。
-func schemataQuery(src *model.CoreDataSource) (string, []interface{}) {
-	excl := []string{"information_schema", "mysql", "performance_schema", "sys"}
+func schemataQuery(src *model.CoreDataSource, sys []string) (string, []interface{}) {
+	excl := append([]string{}, sys...)
 	for _, v := range strings.Split(src.ExcludeDbList, ",") {
 		if v = strings.TrimSpace(v); v != "" {
 			excl = append(excl, v)
 		}
 	}
 	q := `SELECT SCHEMA_NAME FROM information_schema.schemata WHERE SCHEMA_NAME NOT IN (` + placeholders(len(excl)) + `) ORDER BY SCHEMA_NAME`
-	args := make([]interface{}, len(excl))
-	for i, v := range excl {
-		args[i] = v
-	}
-	return q, args
+	return q, toAny(excl)
 }
 
 // placeholders 生成 n 个 `?`，用逗号连接（给 NOT IN 用）。
 func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+func toAny(ss []string) []interface{} {
+	out := make([]interface{}, len(ss))
+	for i, v := range ss {
+		out[i] = v
+	}
+	return out
 }

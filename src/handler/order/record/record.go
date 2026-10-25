@@ -2,13 +2,10 @@ package record
 
 import (
 	"Yearning-go/src/handler/common"
-	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/model"
-	"encoding/json"
 	"fmt"
 	"github.com/cookieY/yee"
-	"golang.org/x/net/websocket"
-	"io"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"time"
 )
@@ -31,40 +28,14 @@ func RecordDashAxis(c yee.Context) (err error) {
 }
 
 func RecordOrderList(c yee.Context) (err error) {
-	websocket.Handler(func(ws *websocket.Conn) {
-		defer ws.Close()
-		var u common.PageList[[]model.CoreSqlOrder]
-		var b []byte
-		for {
-			if err := websocket.Message.Receive(ws, &b); err != nil {
-				if err != io.EOF {
-					c.Logger().Error(err)
-				}
-				break
-			}
-			if string(b) == "ping" {
-				continue
-			}
-			if err := json.Unmarshal(b, &u); err != nil {
-				c.Logger().Error(err)
-				break
-			}
-			if err != nil {
-				c.Logger().Error(err)
-				break
-			}
-			// 项目级工单按项目聚合分页（同批子工单不跨页），见 common.GroupedOrderPage
-			common.GroupedOrderPage(&u, common.QueryField,
-				common.AccordingToAllOrderType(u.Expr.Type),
-				common.AccordingToAllOrderState(u.Expr.Status),
-				common.AccordingToDate(u.Expr.Picker),
-				common.AccordingToText(u.Expr.Text),
-			)
-			if err = websocket.Message.Send(ws, factory.ToJson(u.ToMessage())); err != nil {
-				c.Logger().Error(err)
-				break
-			}
-		}
-	}).ServeHTTP(c.Response(), c.Request())
+	// 审计公共视图,不鉴权;项目级工单按项目聚合分页(同批子工单不跨页),见 common.GroupedOrderPage
+	common.WsPageList(c, false, func(_ string, _ jwt.MapClaims, u *common.PageList[[]model.CoreSqlOrder]) {
+		common.GroupedOrderPage(u, common.QueryField,
+			common.AccordingToAllOrderType(u.Expr.Type),
+			common.AccordingToAllOrderState(u.Expr.Status),
+			common.AccordingToDate(u.Expr.Picker),
+			common.AccordingToText(u.Expr.Text),
+		)
+	})
 	return nil
 }

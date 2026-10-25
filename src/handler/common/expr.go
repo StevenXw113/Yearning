@@ -21,12 +21,6 @@ func AccordingToWorkId(workId string) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-func AccordingToQueryPer() func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("`status` in (?)", []int{1, 3})
-	}
-}
-
 func AccordingToAllQueryOrderState(state int) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		switch state {
@@ -35,12 +29,6 @@ func AccordingToAllQueryOrderState(state int) func(db *gorm.DB) *gorm.DB {
 		default:
 			return db.Where("`status` = ?", state)
 		}
-	}
-}
-
-func AccordingToOrderState() func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("`status` in (?)", []int{1, 4, 0})
 	}
 }
 
@@ -76,12 +64,6 @@ func AccordingToAllOrderType(state int) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-func AccordingToAssigned(user string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("`assigned` like ?", "%"+user+"%")
-	}
-}
-
 // AccordingQueryToAssigned 把查询工单限定为「当前审批人」名下的。
 // 审计员（isRecord）与内置超管不受此限：他们需要查看全部查询工单/查询记录。
 func AccordingQueryToAssigned(isRecord bool, username string) func(db *gorm.DB) *gorm.DB {
@@ -100,15 +82,6 @@ func AccordingToUsername(user string) func(db *gorm.DB) *gorm.DB {
 			return db
 		}
 		return db.Where("username like ?", "%"+user+"%")
-	}
-}
-
-func AccordingToPrincipal(principal string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		if principal == "" {
-			return db
-		}
-		return db.Where("principal like ?", "%"+principal+"%")
 	}
 }
 
@@ -188,15 +161,6 @@ func AccordingToOrderIDC(text string) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-func AccordingToOrderAccurateIDC(text string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		if text == "" {
-			return db
-		}
-		return db.Where("id_c = ? ", text)
-	}
-}
-
 func AccordingToOrderIP(text string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if text == "" {
@@ -245,23 +209,5 @@ func AccordingToGroupNameIsLike(text string) func(db *gorm.DB) *gorm.DB {
 			return db
 		}
 		return db.Where("`group` like ?", "%"+text+"%")
-	}
-}
-
-func AccordingToSchemaNotIn(isSchema bool, excludeDbList []string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		if len(excludeDbList) == 0 {
-			return db
-		}
-		if isSchema {
-			return db.Where("SCHEMA_NAME not in (?)", excludeDbList)
-		}
-		return db.Where("table_schema not in (?)", excludeDbList)
-	}
-}
-
-func AccordingToSchemaIn(includeDbList string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("table_schema = ? ", includeDbList)
 	}
 }

@@ -37,7 +37,6 @@ var en_US = map[int]string{
 	INFO_LIBRARY_NAME_TABLE_NAME:                              "Please select the database name and table name before clicking to get the table structure information",
 	ER_ILLEGAL_GET_INFO:                                       "Illegal information retrieval",
 	UNDO_MESSAGE_ERROR:                                        "Order status has changed! Unable to undo",
-	UNDO_MESSAGE_SUCCESS:                                      "Order has been undone!",
 	COMMENT_IS_POST:                                           "Comment posted successfully",
 	INFO_REGISTRATION_SUCCESS:                                 "Registration successful!",
 	ER_USER_ALREADY_EXISTS:                                    "User already exists, please register again!",

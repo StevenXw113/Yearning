@@ -37,7 +37,6 @@ var zh_CN = map[int]string{
 	INFO_LIBRARY_NAME_TABLE_NAME:                              "请选择库名以及表名后再点击获取表结构信息",
 	ER_ILLEGAL_GET_INFO:                                       "非法获取信息",
 	UNDO_MESSAGE_ERROR:                                        "工单状态已更改！无法撤销",
-	UNDO_MESSAGE_SUCCESS:                                      "工单已撤销！",
 	COMMENT_IS_POST:                                           "评论发送成功",
 	INFO_REGISTRATION_SUCCESS:                                 "注册成功！",
 	ER_USER_ALREADY_EXISTS:                                    "用户已存在，请重新注册！",

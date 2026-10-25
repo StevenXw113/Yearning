@@ -5,10 +5,6 @@ import (
 	"gorm.io/gorm"
 )
 
-func (g *GeneralList[any]) ToMessage() Resp {
-	return SuccessPayload(g)
-}
-
 func (p *PageList[any]) ToMessage() Resp {
 	return SuccessPayload(map[string]interface{}{"data": p.Data, "page": p.Page})
 }

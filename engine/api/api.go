@@ -263,23 +263,3 @@ type QueryReply struct {
 	Records []*Record `json:"records"`
 }
 
-// Confirm 与 Yearning audit.Confirm 对齐,用于 StopDelay 定位待执行的延迟工单。
-type Confirm struct {
-	WorkId   string `json:"work_id"`
-	Page     int32  `json:"page"`
-	Flag     int32  `json:"flag"`
-	Text     string `json:"text"`
-	Tp       string `json:"tp"`
-	SourceId string `json:"source_id"`
-	Delay    string `json:"delay"`
-}
-
-type StopDelayRequest struct {
-	Confirm *Confirm `json:"confirm"`
-}
-
-type StopDelayReply struct {
-	Ok      bool   `json:"ok"`
-	Error   string `json:"error"`
-	Message string `json:"message"`
-}

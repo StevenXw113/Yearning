@@ -16,9 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-const (
-	UNDO_EXPR = "username =? AND work_id =? AND `status` =? "
-)
+const ()
 
 // checkSourcePerm 校验当前登录用户是否拥有该数据源的任意权限
 func checkSourcePerm(c yee.Context, sourceId string) bool {

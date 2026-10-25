@@ -66,21 +66,6 @@ func TestExecDoesNotRetry(t *testing.T) {
 	}
 }
 
-// TestStopDelayDoesNotRetry 同 Exec:非幂等方法不重试。
-func TestStopDelayDoesNotRetry(t *testing.T) {
-	var attempts atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		attempts.Add(1)
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	defer srv.Close()
-
-	_, _ = newTestClient(t, srv, "").StopDelay(context.Background(), &api.StopDelayRequest{})
-	if attempts.Load() != 1 {
-		t.Fatalf("StopDelay 不应自动重试, got %d", attempts.Load())
-	}
-}
-
 // TestIdempotentRetryGivesUp 持续不可用时幂等方法有界放弃(不无限重试)。
 func TestIdempotentRetryGivesUp(t *testing.T) {
 	var attempts atomic.Int32

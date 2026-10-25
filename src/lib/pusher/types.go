@@ -2,7 +2,6 @@ package pusher
 
 import "Yearning-go/src/model"
 
-
 type messageToUserList struct {
 	ToUser  []model.CoreAccount
 	Message model.Message
@@ -18,12 +17,6 @@ type Msg struct {
 }
 
 type OrderTPL struct {
-	pushTpl string
-	mailTpl string
-	ll      messageToUserList
-}
-
-type QueryTPL struct {
 	pushTpl string
 	mailTpl string
 	ll      messageToUserList

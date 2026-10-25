@@ -1,10 +1,5 @@
 package common
 
-type GeneralList[T any] struct {
-	Page int64 `json:"page"`
-	Data T     `json:"data"`
-}
-
 type PageList[T any] struct {
 	Current  int    ` json:"current"`
 	PageSize int    `json:"pageSize"`
@@ -16,7 +11,6 @@ type PageList[T any] struct {
 	sel      string
 	Order    string
 }
-
 
 type Search struct {
 	Picker   []string `json:"picker"`

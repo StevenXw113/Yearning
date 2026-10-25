@@ -67,13 +67,6 @@ func (s *CoreDataSource) ConnectRedisWith(password string) (*redis.Client, error
 // go-redis 是在连接建立时按 Options.DB 发 SELECT 的，所以换库要另建客户端，
 // 不能在一个客户端上手动 SELECT（连接池里各连接的库会不一致）。
 func (s *CoreDataSource) ConnectRedisDB(db int) (*redis.Client, error) {
-	return s.connectRedisDB(db)
-}
-
-// connectRedisDB 建连并选中指定逻辑库。
-// go-redis 是在连接建立时按 Options.DB 发 SELECT 的，所以换库要另建客户端，
-// 不能在一个客户端上手动 SELECT（连接池里各连接的库会不一致）。
-func (s *CoreDataSource) connectRedisDB(db int) (*redis.Client, error) {
 	if db <= 0 {
 		return s.ConnectRedis()
 	}
@@ -129,7 +122,7 @@ func (s *CoreDataSource) RedisScanKeys(db int, pattern string, limit int) ([]str
 	if limit <= 0 || limit > RedisScanLimit {
 		limit = RedisScanLimit
 	}
-	client, err := s.connectRedisDB(db)
+	client, err := s.ConnectRedisDB(db)
 	if err != nil {
 		return nil, err
 	}

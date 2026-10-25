@@ -35,14 +35,8 @@ func FetchMongoDatabaseInfo(u *model.CoreDataSource) ([]map[string]interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	list := make([]map[string]interface{}, 0, len(names))
-	for _, n := range names {
-		// 带上 db_type：前端左树按根节点的类型决定右键生成 SQL 还是命令 JSON
-		list = append(list, map[string]interface{}{
-			"title": n, "key": n, "meta": "Schema", "isLeaf": false, "db_type": model.DBTypeMongoDB,
-		})
-	}
-	return list, nil
+	// 带上 db_type：前端左树按根节点的类型决定右键生成 SQL 还是命令 JSON
+	return treeNodes(names, "Schema", false, model.DBTypeMongoDB), nil
 }
 
 // FetchMongoCollectionInfo 列出库下的集合（树第二层）。
@@ -55,13 +49,7 @@ func FetchMongoCollectionInfo(u *model.CoreDataSource, schema string) ([]map[str
 	if err != nil {
 		return nil, err
 	}
-	list := make([]map[string]interface{}, 0, len(names))
-	for _, n := range names {
-		list = append(list, map[string]interface{}{
-			"title": n, "key": n, "meta": "Table", "isLeaf": true, "db_type": model.DBTypeMongoDB,
-		})
-	}
-	return list, nil
+	return treeNodes(names, "Table", true, model.DBTypeMongoDB), nil
 }
 
 // socketMongoResults 与 SocketQueryResults 同构的 Mongo 版本：
@@ -98,7 +86,7 @@ func socketMongoResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			continue
 		}
 		// 查询侧规则审核（引擎，可配置）：拦截级命中就不执行，提示级照常执行但留痕。
-		audit, blocked := checkMongoQuery(&u, msg.Ref.Schema, msg.Ref.Sql)
+		audit, blocked := checkQuerySide(&u, msg.Ref.Schema, msg.Ref.Sql)
 		if blocked != nil {
 			saveQueryRecord(d, msg.Ref.Sql, u.Source, msg.Ref.Schema, 0, blocked.Error())
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: blocked.Error()}))
@@ -121,17 +109,17 @@ func socketMongoResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 	}
 }
 
-// mongoQueryCheckTimeout 查询侧规则审核的超时（与申请页检测一致）
-const mongoQueryCheckTimeout = 30 * time.Second
+// querySideCheckTimeout 查询侧规则审核的超时（与申请页检测一致）
+const querySideCheckTimeout = 30 * time.Second
 
-// checkMongoQuery 把只读命令送引擎做查询侧规则审核（mode=query）。
+// checkQuerySide 把只读命令送引擎做查询侧规则审核（mode=query）。
 //
 // 返回要写进查询记录的命中说明，以及拦截级错误（非 nil 时不要执行）。
 //
 // 引擎不可用**不拦查询**：查询是只读的，本地已有只读白名单硬保底
 // （mongodb.ValidateQuery），没必要因为引擎离线把整个查询功能拿掉；
 // 这种情况会在审计记录里写清「未做规则审核」。
-func checkMongoQuery(source *model.CoreDataSource, schema, command string) (string, error) {
+func checkQuerySide(source *model.CoreDataSource, schema, command string) (string, error) {
 	rule, rerr := factory.CheckDataSourceRule(source.RuleId)
 	if rerr != nil {
 		return "规则集加载失败，未做查询侧规则审核：" + rerr.Error(), nil
@@ -140,7 +128,7 @@ func checkMongoQuery(source *model.CoreDataSource, schema, command string) (stri
 	if err != nil {
 		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), mongoQueryCheckTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), querySideCheckTimeout)
 	defer cancel()
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:    command,

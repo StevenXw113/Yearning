@@ -16,7 +16,6 @@ package service
 import (
 	"Yearning-go/src/engine"
 	"Yearning-go/src/model"
-	_ "Yearning-go/src/model"
 	"Yearning-go/src/router"
 	"context"
 	"embed"
@@ -26,8 +25,8 @@ import (
 	"github.com/cookieY/yee/logger"
 	"github.com/cookieY/yee/middleware"
 	"net/http"
-	"strings"
 	"os"
+	"strings"
 )
 
 //go:embed dist/*

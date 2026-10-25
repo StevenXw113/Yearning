@@ -20,18 +20,6 @@ func TestUnique(t *testing.T) {
 	}
 }
 
-func TestContains(t *testing.T) {
-	list := []string{"s1", "s2"}
-	if !contains(list, "s2") {
-		t.Error("contains 应命中 s2")
-	}
-	if contains(list, "s3") {
-		t.Error("contains 不该命中 s3")
-	}
-	if contains(nil, "s1") {
-		t.Error("空列表不该命中")
-	}
-}
 
 // TestIsSuperUser 超管判定：内置 admin 恒为超管；[General].SuperUsers 追加
 // 名单（逗号分隔、容忍空白）；普通用户不是。lazy 解析依赖 model.C，

@@ -190,63 +190,21 @@ func Migrate() {
 				return
 			}
 		}
-		_ = model.DB().AutoMigrate(&model.CoreAccount{})
-		_ = model.DB().AutoMigrate(&model.CoreDataSource{})
-		_ = model.DB().AutoMigrate(&model.CoreGlobalConfiguration{})
-		_ = model.DB().AutoMigrate(&model.CoreGrained{})
-		_ = model.DB().AutoMigrate(&model.CoreSqlOrder{})
-		_ = model.DB().AutoMigrate(&model.CoreSqlRecord{})
-		_ = model.DB().AutoMigrate(&model.CoreRollback{})
-		_ = model.DB().AutoMigrate(&model.CoreQueryRecord{})
-		_ = model.DB().AutoMigrate(&model.CoreQueryOrder{})
-		_ = model.DB().AutoMigrate(&model.CoreAutoTask{})
-		_ = model.DB().AutoMigrate(&model.CoreRoleGroup{})
-		_ = model.DB().AutoMigrate(&model.CoreWorkflowTpl{})
-		_ = model.DB().AutoMigrate(&model.CoreWorkflowDetail{})
-		_ = model.DB().AutoMigrate(&model.CoreOrderComment{})
-		_ = model.DB().AutoMigrate(&model.CoreRules{})
-		_ = model.DB().AutoMigrate(&model.CoreTotalTickets{})
+		autoMigrate(coreModels...)
 		// 归档表（与原表同构，见 model/archive.go）：随主表一并创建，
 		// 未开启归档时只是空表，无成本
-		_ = model.DB().AutoMigrate(&model.CoreSqlOrderArchive{})
-		_ = model.DB().AutoMigrate(&model.CoreSqlRecordArchive{})
-		_ = model.DB().AutoMigrate(&model.CoreRollbackArchive{})
-		_ = model.DB().AutoMigrate(&model.CoreOrderCommentArchive{})
-		_ = model.DB().AutoMigrate(&model.CoreWorkflowDetailArchive{})
-		_ = model.DB().AutoMigrate(&model.CoreQueryRecordArchive{})
+		autoMigrate(
+			&model.CoreSqlOrderArchive{}, &model.CoreSqlRecordArchive{}, &model.CoreRollbackArchive{},
+			&model.CoreOrderCommentArchive{}, &model.CoreWorkflowDetailArchive{}, &model.CoreQueryRecordArchive{},
+		)
+		// 其余字段零值即默认关闭,只写非零项
 		o := engine.AuditRole{
-			DMLInsertColumns:               false,
-			DMLMaxInsertRows:               10,
-			DMLWhere:                       false,
-			DMLOrder:                       false,
-			DMLSelect:                      false,
-			DDLCheckTableComment:           false,
-			DDLCheckColumnNullable:         false,
-			DDLCheckColumnDefault:          false,
-			DDLEnableAcrossDBRename:        false,
-			DDLEnableAutoincrementInit:     false,
-			DDLEnableAutoIncrement:         false,
-			DDLEnableAutoincrementUnsigned: false,
-			DDLEnableDropTable:             false,
-			DDLEnableDropDatabase:          false,
-			DDLEnableNullIndexName:         false,
-			DDLIndexNameSpec:               false,
-			DDLMaxKeyParts:                 5,
-			DDLMaxKey:                      5,
-			DDLMaxCharLength:               10,
-			DDLAllowColumnType:             false,
-			DDLPrimaryKeyMust:              false,
-			MaxTableNameLen:                10,
-			MaxAffectRows:                  1000,
-			SupportCharset:                 "",
-			SupportCollation:               "",
-			CheckIdentifier:                false,
-			MustHaveColumns:                "",
-			DDLMultiToCommit:               false,
-			AllowCreatePartition:           false,
-			AllowCreateView:                false,
-			AllowSpecialType:               false,
-			DDLEnablePrimaryKey:            false,
+			DMLMaxInsertRows: 10,
+			DDLMaxKeyParts:   5,
+			DDLMaxKey:        5,
+			DDLMaxCharLength: 10,
+			MaxTableNameLen:  10,
+			MaxAffectRows:    1000,
 		}
 
 		other := model.Other{
@@ -298,23 +256,7 @@ func Migrate() {
 
 func UpdateData() {
 	fmt.Println(i18n.DefaultLang.Load(i18n.INFO_CHECKING_UPDATE))
-	_ = model.DB().AutoMigrate(&model.CoreAccount{})
-	_ = model.DB().AutoMigrate(&model.CoreDataSource{})
-	_ = model.DB().AutoMigrate(&model.CoreGlobalConfiguration{})
-	_ = model.DB().AutoMigrate(&model.CoreGrained{})
-	_ = model.DB().AutoMigrate(&model.CoreSqlOrder{})
-	_ = model.DB().AutoMigrate(&model.CoreSqlRecord{})
-	_ = model.DB().AutoMigrate(&model.CoreRollback{})
-	_ = model.DB().AutoMigrate(&model.CoreQueryRecord{})
-	_ = model.DB().AutoMigrate(&model.CoreQueryOrder{})
-	_ = model.DB().AutoMigrate(&model.CoreAutoTask{})
-	_ = model.DB().AutoMigrate(&model.CoreRoleGroup{})
-	_ = model.DB().AutoMigrate(&model.CoreWorkflowTpl{})
-	_ = model.DB().AutoMigrate(&model.CoreWorkflowDetail{})
-	_ = model.DB().AutoMigrate(&model.CoreOrderComment{})
-	_ = model.DB().AutoMigrate(&model.CoreRules{})
-	_ = model.DB().AutoMigrate(&model.CoreTotalTickets{})
-	_ = model.DB().AutoMigrate(&model.CoreRuleSetHistory{})
+	autoMigrate(coreModels...)
 	// 回填工单列表分组键（CoreSqlOrder.GroupKey）：普通工单=工单号(自增 id)，
 	// 项目级工单=批次号。列表分页由 GroupedOrderPage 按该列分组走索引，
 	// 见 common.GroupedOrderPage 的注释。
@@ -377,4 +319,21 @@ func MargeRuleGroup() {
 	_ = model.DB().Exec("alter table core_sql_orders modify assigned varchar(550) not null")
 	_ = model.DB().Exec("alter table core_workflow_details modify action varchar(550) not null")
 	fmt.Println(i18n.DefaultLang.Load(i18n.INFO_FIX_SUCCESS))
+}
+
+// coreModels 是全部核心表清单,install 与每次启动的升级迁移共用同一份,
+// 避免 Migrate/UpdateData 两处列表漂移。
+var coreModels = []any{
+	&model.CoreAccount{}, &model.CoreDataSource{}, &model.CoreGlobalConfiguration{},
+	&model.CoreGrained{}, &model.CoreSqlOrder{}, &model.CoreSqlRecord{},
+	&model.CoreRollback{}, &model.CoreQueryRecord{}, &model.CoreQueryOrder{},
+	&model.CoreAutoTask{}, &model.CoreRoleGroup{}, &model.CoreWorkflowTpl{},
+	&model.CoreWorkflowDetail{}, &model.CoreOrderComment{}, &model.CoreRules{},
+	&model.CoreTotalTickets{}, &model.CoreRuleSetHistory{},
+}
+
+func autoMigrate(models ...any) {
+	for _, m := range models {
+		_ = model.DB().AutoMigrate(m)
+	}
 }

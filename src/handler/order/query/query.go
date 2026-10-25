@@ -8,69 +8,30 @@ import (
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
-	"encoding/json"
 	"errors"
 	"github.com/cookieY/yee"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/net/websocket"
 	"gorm.io/gorm"
-	"io"
 	"net/http"
 	"time"
 )
 
 func FetchQueryOrder(c yee.Context) (err error) {
-	websocket.Handler(func(ws *websocket.Conn) {
-		defer ws.Close()
-		var u common.PageList[[]model.CoreQueryOrder]
-		var b []byte
-		for {
-			if err := websocket.Message.Receive(ws, &b); err != nil {
-				if err != io.EOF {
-					c.Logger().Error(err)
-				}
-				break
-			}
-			if string(b) == "ping" {
-				continue
-			}
-			if err := json.Unmarshal(b, &u); err != nil {
-				c.Logger().Error(err)
-				break
-			}
-			token, err := factory.WsTokenParse(ws.Request().Header.Get("Sec-WebSocket-Protocol"))
-			if err != nil || token == nil || !token.Valid {
-				c.Logger().Error(err)
-				break
-			}
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				break
-			}
-			is_record, _ := claims["is_record"].(bool)
-			name, ok := claims["name"].(string)
-			if !ok {
-				break
-			}
-
-			u.Paging().OrderBy("(status = 2) DESC, date DESC").Query(
-				// 审批人只看分派给自己的；审计员与超管看全部（原先 tp=record 时反被过滤，审计员看不到别人的记录）
-				common.AccordingQueryToAssigned(is_record, name),
-				common.AccordingToUsername(u.Expr.Username),
-				common.AccordingToRealName(u.Expr.RealName),
-				common.AccordingToDate(u.Expr.Picker),
-				common.AccordingToWorkId(u.Expr.WorkId),
-				common.AccordingToAllQueryOrderState(u.Expr.Status),
-			)
-			if err = websocket.Message.Send(ws, factory.ToJson(u.ToMessage())); err != nil {
-				c.Logger().Error(err)
-				break
-			}
-		}
-	}).ServeHTTP(c.Response(), c.Request())
+	common.WsPageList(c, true, func(_ string, claims jwt.MapClaims, u *common.PageList[[]model.CoreQueryOrder]) {
+		isRecord, _ := claims["is_record"].(bool)
+		name, _ := claims["name"].(string)
+		u.Paging().OrderBy("(status = 2) DESC, date DESC").Query(
+			// 审批人只看分派给自己的；审计员与超管看全部（原先 tp=record 时反被过滤，审计员看不到别人的记录）
+			common.AccordingQueryToAssigned(isRecord, name),
+			common.AccordingToUsername(u.Expr.Username),
+			common.AccordingToRealName(u.Expr.RealName),
+			common.AccordingToDate(u.Expr.Picker),
+			common.AccordingToWorkId(u.Expr.WorkId),
+			common.AccordingToAllQueryOrderState(u.Expr.Status),
+		)
+	})
 	return nil
 }
-
 func FetchQueryRecordProfile(c yee.Context) (err error) {
 	u := new(audit.Confirm)
 	if err = c.Bind(u); err != nil {
@@ -86,9 +47,12 @@ func FetchQueryRecordProfile(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_RELATED)))
 	}
 	start, end := factory.Paging(u.Page, 15)
-	l := new(common.GeneralList[[]model.CoreQueryRecord])
-	model.DB().Model(&model.CoreQueryRecord{}).Where("work_id =?", u.WorkId).Count(&l.Page).Offset(start).Limit(end).Find(&l.Data)
-	return c.JSON(http.StatusOK, l.ToMessage())
+	var (
+		page int64
+		data []model.CoreQueryRecord
+	)
+	model.DB().Model(&model.CoreQueryRecord{}).Where("work_id =?", u.WorkId).Count(&page).Offset(start).Limit(end).Find(&data)
+	return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"data": data, "page": page}))
 }
 
 func QueryDeleteEmptyRecord(c yee.Context) (err error) {

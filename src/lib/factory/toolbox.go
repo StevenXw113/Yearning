@@ -21,22 +21,14 @@ import (
 	"github.com/cookieY/yee/logger"
 	"github.com/vmihailenco/msgpack/v5"
 	"math"
+	"slices"
 	"strconv"
 	"time"
 )
 
-const None = "none" //无延迟
-
 // RemoveString 从给定字符串切片中删除所有与指定字符串匹配的元素。
 func RemoveString(s []string, p string) []string {
-	result := []string{} // 创建一个新的切片用于保存不匹配的元素
-
-	for _, item := range s {
-		if item != p {
-			result = append(result, item) // 仅将不匹配的元素添加到结果中
-		}
-	}
-	return result // 返回去掉匹配项后的新切片
+	return slices.DeleteFunc(slices.Clone(s), func(item string) bool { return item == p })
 }
 
 func Paging(page interface{}, total int) (start int, end int) {

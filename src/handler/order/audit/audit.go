@@ -7,12 +7,10 @@ import (
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/lib/pusher"
 	"Yearning-go/src/model"
-	"encoding/json"
 	"github.com/cookieY/yee"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/net/websocket"
 	"gorm.io/gorm"
-	"io"
 	"net/http"
 	"time"
 )
@@ -150,63 +148,27 @@ func DelayKill(c yee.Context) (err error) {
 }
 
 func FetchAuditOrder(c yee.Context) (err error) {
-	websocket.Handler(func(ws *websocket.Conn) {
-		defer ws.Close()
-		var u common.PageList[[]model.CoreSqlOrder]
-		var b []byte
-		for {
-			if err := websocket.Message.Receive(ws, &b); err != nil {
-				if err != io.EOF {
-					c.Logger().Error(err)
-				}
-				break
-			}
-			if string(b) == "ping" {
-				continue
-			}
-			if err := json.Unmarshal(b, &u); err != nil {
-				c.Logger().Error(err)
-				break
-			}
-			token, err := factory.WsTokenParse(ws.Request().Header.Get("Sec-WebSocket-Protocol"))
-			if err != nil || token == nil || !token.Valid {
-				c.Logger().Error(err)
-				break
-			}
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				break
-			}
-			user, ok := claims["name"].(string)
-			if !ok {
-				break
-			}
-			// 项目级工单以项目为分页单位（同一批的子工单不跨页），见 common.GroupedOrderPage
-			scopes := []func(*gorm.DB) *gorm.DB{
-				common.AccordingToAllOrderState(u.Expr.Status),
-				common.AccordingToAllOrderType(u.Expr.Type),
-			}
-			// 超级管理员拥有所有权限：可审所有工单，不按「相关人」过滤
-			if !permission.IsSuperUser(user) {
-				scopes = append(scopes, common.AccordingToRelevant(user))
-			}
-			scopes = append(scopes,
-				common.AccordingToText(u.Expr.Text),
-				common.AccordingToUsername(u.Expr.Username),
-				common.AccordingToDate(u.Expr.Picker),
-				common.AccordingToWorkId(u.Expr.WorkId),
-				common.AccordingToSource(u.Expr.Source),
-			)
-			common.GroupedOrderPage(&u, QueryField, scopes...)
-			if err = websocket.Message.Send(ws, factory.ToJson(u.ToMessage())); err != nil {
-				c.Logger().Error(err)
-				break
-			}
+	// 项目级工单以项目为分页单位（同一批的子工单不跨页），见 common.GroupedOrderPage
+	common.WsPageList(c, true, func(user string, _ jwt.MapClaims, u *common.PageList[[]model.CoreSqlOrder]) {
+		scopes := []func(*gorm.DB) *gorm.DB{
+			common.AccordingToAllOrderState(u.Expr.Status),
+			common.AccordingToAllOrderType(u.Expr.Type),
 		}
-	}).ServeHTTP(c.Response(), c.Request())
+		// 超级管理员拥有所有权限：可审所有工单，不按「相关人」过滤
+		if !permission.IsSuperUser(user) {
+			scopes = append(scopes, common.AccordingToRelevant(user))
+		}
+		scopes = append(scopes,
+			common.AccordingToText(u.Expr.Text),
+			common.AccordingToUsername(u.Expr.Username),
+			common.AccordingToDate(u.Expr.Picker),
+			common.AccordingToWorkId(u.Expr.WorkId),
+			common.AccordingToSource(u.Expr.Source),
+		)
+		common.GroupedOrderPage(u, QueryField, scopes...)
+	})
 	return nil
 }
-
 func FetchOSCAPI(c yee.Context) (err error) {
 	workId := c.QueryParam("work_id")
 	if !common.IsOrderRelated(workId, new(factory.Token).JwtParse(c).Username) {

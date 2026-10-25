@@ -10,15 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"Yearning-go/src/engine"
 	"Yearning-go/src/handler/common"
 	"Yearning-go/src/i18n"
-	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
-
-	"engine/api"
 
 	"github.com/cookieY/yee"
 	"github.com/redis/go-redis/v9"
@@ -31,9 +27,6 @@ import (
 // （KEYS 全量遍历之类）本来就被只读白名单与审核规则挡在外面。
 const redisCommandTimeout = 30 * time.Second
 
-// redisQueryCheckTimeout 查询侧规则审核的超时（与申请页检测一致）
-const redisQueryCheckTimeout = 30 * time.Second
-
 // FetchRedisDatabaseInfo 列出 Redis 的逻辑库（db0..dbN，树的第一层）。
 // 契约与 MySQL / Mongo 版一致：带上 db_type，前端据此决定右键生成什么语句。
 func FetchRedisDatabaseInfo(u *model.CoreDataSource) ([]map[string]interface{}, error) {
@@ -41,13 +34,7 @@ func FetchRedisDatabaseInfo(u *model.CoreDataSource) ([]map[string]interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	list := make([]map[string]interface{}, 0, len(names))
-	for _, n := range names {
-		list = append(list, map[string]interface{}{
-			"title": n, "key": n, "meta": "Schema", "isLeaf": false, "db_type": model.DBTypeRedis,
-		})
-	}
-	return list, nil
+	return treeNodes(names, "Schema", false, model.DBTypeRedis), nil
 }
 
 // FetchRedisKeyInfo 列出某个逻辑库里的键（树的第二层）。
@@ -60,13 +47,7 @@ func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]int
 	if err != nil {
 		return nil, err
 	}
-	list := make([]map[string]interface{}, 0, len(keys))
-	for _, k := range keys {
-		list = append(list, map[string]interface{}{
-			"title": k, "key": k, "meta": "Table", "isLeaf": true, "db_type": model.DBTypeRedis,
-		})
-	}
-	return list, nil
+	return treeNodes(keys, "Table", true, model.DBTypeRedis), nil
 }
 
 // socketRedisResults 与 SocketQueryResults 同构的 Redis 版本：
@@ -117,7 +98,7 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			continue
 		}
 		// 查询侧规则审核（引擎，可配置）：拦截级命中就不执行，提示级照常执行但留痕。
-		audit, blocked := checkRedisQuery(&u, msg.Ref.Schema, msg.Ref.Sql)
+		audit, blocked := checkQuerySide(&u, msg.Ref.Schema, msg.Ref.Sql)
 		if blocked != nil {
 			saveQueryRecord(d, msg.Ref.Sql, u.Source, msg.Ref.Schema, 0, blocked.Error())
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: blocked.Error()}))
@@ -138,53 +119,6 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			return
 		}
 	}
-}
-
-// checkRedisQuery 把只读命令送引擎做查询侧规则审核（mode=query）。
-//
-// 返回要写进查询记录的命中说明，以及拦截级错误（非 nil 时不要执行）。
-// 与 Mongo 侧同理：引擎不可用**不拦查询**——查询是只读的，本地已有只读白名单
-// 硬保底（rediscmd.Validate），没必要因为引擎离线把整个查询功能拿掉；
-// 这种情况会在审计记录里写清「未做规则审核」。
-func checkRedisQuery(source *model.CoreDataSource, schema, command string) (string, error) {
-	rule, rerr := factory.CheckDataSourceRule(source.RuleId)
-	if rerr != nil {
-		return "规则集加载失败，未做查询侧规则审核：" + rerr.Error(), nil
-	}
-	client, err := calls.Client()
-	if err != nil {
-		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), redisQueryCheckTimeout)
-	defer cancel()
-	rep, err := client.Check(ctx, &api.CheckRequest{
-		Sql:    command,
-		Schema: schema,
-		Source: &api.DataSource{Kind: calls.DataSourceKind(source.DBType)},
-		Lang:   model.C.General.Lang,
-		Rule:   engine.AuditRoleToAPI(rule),
-		Mode:   engine.CheckModeQuery,
-	})
-	if err != nil {
-		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
-	}
-	if rep == nil || !rep.Ok {
-		msg := "查询侧审核不通过"
-		if rep != nil && rep.GetError() != "" {
-			msg = rep.GetError()
-		}
-		return "", errors.New(msg)
-	}
-	var notes []string
-	for _, r := range rep.Records {
-		if r.GetLevel() == 1 {
-			return "", errors.New("查询侧规则拦截：" + r.GetError())
-		}
-		if r.GetError() != "" {
-			notes = append(notes, r.GetError())
-		}
-	}
-	return strings.Join(notes, "；"), nil
 }
 
 // runRedisCommand 执行一条只读命令并转成前端表格契约。

@@ -6,10 +6,9 @@ import (
 	"engine/internal/mysqlparse"
 )
 
-// querySQL MySQL 查询预检：拆分 + 语法检查 + 带回敏感词表。方言固定 MySQL。
-func querySQL(req *api.QueryRequest) *api.QueryReply {
-	const engine = storepb.Engine_MYSQL
-
+// queryDialect 查询预检（拆分 + 语法检查 + 只读白名单 + 带回敏感词表），方言由调用方给定。
+// Doris 的查询/DML 语法兼容 MySQL，走 MySQL 方言；PostgreSQL 的 WITH 可接写语句，扫描器会识别。
+func queryDialect(engine storepb.Engine, req *api.QueryRequest) *api.QueryReply {
 	stmts, err := mysqlparse.SplitEngine(engine, req.Sql)
 	if err != nil {
 		return &api.QueryReply{Ok: false, Error: err.Error()}
@@ -43,4 +42,18 @@ func querySQL(req *api.QueryRequest) *api.QueryReply {
 		recs = append(recs, rec)
 	}
 	return &api.QueryReply{Ok: true, Records: recs}
+}
+
+func querySQL(req *api.QueryRequest) *api.QueryReply {
+	return queryDialect(storepb.Engine_MYSQL, req)
+}
+
+func queryPostgreSQL(req *api.QueryRequest) *api.QueryReply {
+	return queryDialect(storepb.Engine_POSTGRES, req)
+}
+
+// queryDoris：查询/DML 语法兼容 MySQL，直接走 MySQL 方言；建表 DDL 不会出现在
+// 查询页（只执行只读查询），故无需处理 Doris 特有语法。
+func queryDoris(req *api.QueryRequest) *api.QueryReply {
+	return queryDialect(storepb.Engine_MYSQL, req)
 }

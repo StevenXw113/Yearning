@@ -15,7 +15,6 @@ package enc
 
 import (
 	"Yearning-go/src/i18n"
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
@@ -147,13 +146,6 @@ func cbcDecrypt(s, cryted string) string {
 		return ""
 	}
 	return string(orig)
-}
-
-// 补码
-func PKCS7Padding(ciphertext []byte, blocksize int) []byte {
-	padding := blocksize - len(ciphertext)%blocksize
-	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-	return append(ciphertext, padtext...)
 }
 
 // 去码

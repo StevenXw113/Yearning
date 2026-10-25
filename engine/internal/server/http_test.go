@@ -93,13 +93,6 @@ func TestEngineHTTPWire(t *testing.T) {
 		t.Fatalf("Query unexpected: status=%d ok=%v records=%d body=%s", rep.StatusCode, qr.Ok, len(qr.Records), body)
 	}
 
-	// StopDelay:未接入调度,业务失败形态。
-	rep, body = postJSON(t, cli, base+"/v1/stop-delay", "", &api.StopDelayRequest{})
-	var sd api.StopDelayReply
-	_ = json.Unmarshal(body, &sd)
-	if rep.StatusCode != http.StatusOK || sd.Ok {
-		t.Fatalf("StopDelay unexpected: status=%d ok=%v body=%s", rep.StatusCode, sd.Ok, body)
-	}
 
 	// 方法不匹配 → 405(Go 1.22 method routing 默认行为)。
 	res, err := http.Get(base + "/v1/check")

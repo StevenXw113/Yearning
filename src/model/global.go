@@ -49,9 +49,9 @@ type general struct {
 	// RpcTLSCA 引擎证书的 CA PEM（启用 TLS 校验服务端身份，防中间人）；
 	// RpcTLSCert/RpcTLSKey 客户端证书（引擎配了 -tls-client-ca 时必配，即 mTLS）；
 	// RpcTLSServerName 校验引擎证书的服务器名（默认取 RpcAddr 的 host）。
-	RpcTLSCA        string
-	RpcTLSCert      string
-	RpcTLSKey       string
+	RpcTLSCA         string
+	RpcTLSCert       string
+	RpcTLSKey        string
 	RpcTLSServerName string
 	// SuperUsers 超级管理员名单（逗号分隔），内置 admin 恒为超管无需配置。
 	// 此前管理端权限硬编码只认 admin 单账号，多管理员无法表达。
@@ -86,14 +86,6 @@ type general struct {
 	GhOstArgs string
 }
 
-type DbInfo struct {
-	Host     string
-	User     string
-	Password string
-	Port     string
-	Db       string
-}
-
 type oidc struct {
 	Enable       bool
 	ClientId     string
@@ -118,7 +110,6 @@ type Config struct {
 var C Config
 
 var DefaultLogger logger.Logger
-
 
 var GloPer CoreGlobalConfiguration
 

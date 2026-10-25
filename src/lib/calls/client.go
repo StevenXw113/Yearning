@@ -38,7 +38,7 @@ var (
 // 传输层替代原 gRPC ClientConn:连接池复用(http.Transport 自带)、断线重连。
 // 重试语义收敛为**按幂等性区分**(修复旧 gRPC retryPolicy 全方法生效的缺口):
 //   - Check / Query / MergeAlterTables 幂等,传输失败自动重试 ≤5 次;
-//   - Exec / StopDelay 非幂等,绝不自动重试——引擎执行到一半挂掉时重发
+//   - Exec 非幂等,绝不自动重试——引擎执行到一半挂掉时重发
 //     会让已生效语句二次执行。
 type EngineClient struct {
 	base    string
@@ -126,10 +126,6 @@ func (c *EngineClient) Exec(ctx context.Context, req *engineapi.ExecRequest) (*e
 
 func (c *EngineClient) Query(ctx context.Context, req *engineapi.QueryRequest) (*engineapi.QueryReply, error) {
 	return call[*engineapi.QueryReply](ctx, c, true, "Query", "/v1/query", req)
-}
-
-func (c *EngineClient) StopDelay(ctx context.Context, req *engineapi.StopDelayRequest) (*engineapi.StopDelayReply, error) {
-	return call[*engineapi.StopDelayReply](ctx, c, false, "StopDelay", "/v1/stop-delay", req)
 }
 
 // call 统一计时/埋点/健康归因。业务错误(引擎返回 Ok=false / Error 非空)

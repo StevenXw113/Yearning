@@ -31,7 +31,6 @@ func NewHandler(eng *Engine, token string) http.Handler {
 	mux.HandleFunc("POST /v1/merge-alter-tables", timed("MergeAlterTables", h.mergeAlterTables))
 	mux.HandleFunc("POST /v1/exec", timed("Exec", h.exec))
 	mux.HandleFunc("POST /v1/query", timed("Query", h.query))
-	mux.HandleFunc("POST /v1/stop-delay", timed("StopDelay", h.stopDelay))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -89,15 +88,6 @@ func (h *handler) query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rep, err := h.eng.Query(r.Context(), &req)
-	reply(w, rep, err)
-}
-
-func (h *handler) stopDelay(w http.ResponseWriter, r *http.Request) {
-	var req api.StopDelayRequest
-	if !decode(w, r, &req) {
-		return
-	}
-	rep, err := h.eng.StopDelay(r.Context(), &req)
 	reply(w, rep, err)
 }
 
