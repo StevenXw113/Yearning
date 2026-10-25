@@ -8,8 +8,6 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
-	drive "gorm.io/driver/mysql"
-	"gorm.io/gorm"
 )
 
 type CommonDBPost struct {
@@ -38,7 +36,9 @@ func ConnTest(u *model.CoreDataSource) error {
 		}
 		return client.Close()
 	}
-	dsn, err := model.InitDSN(model.DSN{
+	// NewDBSub 按 DBType 选驱动:ConnTest 曾把 pg 的 libpq 串喂给 mysql 驱动,
+	// PostgreSQL 数据源永远报 "invalid connection"。
+	db, err := model.NewDBSub(model.DSN{
 		Username: u.Username,
 		Password: u.Password,
 		Host:     u.IP,
@@ -47,15 +47,8 @@ func ConnTest(u *model.CoreDataSource) error {
 		CA:       u.CAFile,
 		Cert:     u.Cert,
 		Key:      u.KeyFile,
+		DBType:   u.DBType,
 	})
-	if err != nil {
-		return err
-	}
-	db, err := gorm.Open(drive.New(drive.Config{
-		DSN:                       dsn,
-		DefaultStringSize:         256,   // string 类型字段的默认长度
-		SkipInitializeWithVersion: false, // 根据当前 MySQL 版本自动配置
-	}), &gorm.Config{})
 	if err != nil {
 		return err
 	}
@@ -115,9 +108,14 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 }
 
 func SuperCreateSource(source *model.CoreDataSource) common.Resp {
-	pwd := enc.Encrypt(model.C.General.SecretKey, source.Password)
-	if pwd == "" {
-		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+	// 空口令(如无认证 MongoDB / 默认 root 的 Doris)存空串,不落密文:
+	// 否则解密回空明文会撞上「解密失败」的判定,数据源在引擎链路上不可用。
+	pwd := ""
+	if source.Password != "" {
+		pwd = enc.Encrypt(model.C.General.SecretKey, source.Password)
+		if pwd == "" {
+			return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+		}
 	}
 	source.Password = pwd
 	// 4 位短 ID（查重分配）：source_id 会在工单、权限配置里被人眼看，UUID 太长

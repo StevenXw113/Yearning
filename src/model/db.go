@@ -239,6 +239,13 @@ func InitDSN(dsn DSN) (string, error) {
 // initPostgreSQLDSN 生成 PostgreSQL 的 libpq 连接串（key=value 格式）。
 // ponytail: 先固定 sslmode=disable（测试库无需 TLS）；生产要 TLS 时再按 CA/Cert/Key 扩展。
 func initPostgreSQLDSN(dsn DSN) string {
-	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		dsn.Host, dsn.Port, dsn.Username, dsn.Password, dsn.DBName)
+	parts := []string{
+		fmt.Sprintf("host=%s port=%d user=%s password=%s",
+			dsn.Host, dsn.Port, dsn.Username, dsn.Password),
+	}
+	// 空 dbname 不能输出:pgx 的 keyword=value 解析会把它后面的 sslmode 吞进库名
+	if dsn.DBName != "" {
+		parts = append(parts, "dbname="+dsn.DBName)
+	}
+	return strings.Join(append(parts, "sslmode=disable"), " ")
 }

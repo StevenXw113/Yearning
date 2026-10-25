@@ -36,10 +36,14 @@ func MongoURI(s *CoreDataSource, password string) string {
 	}
 	u := &url.URL{
 		Scheme:   "mongodb",
-		User:     url.UserPassword(s.Username, password),
 		Host:     net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
 		Path:     "/",
 		RawQuery: "authSource=" + url.QueryEscape(authDB),
+	}
+	// 无认证数据源(空用户名)不能拼 user:pass@——mongo 驱动对空用户信息
+	// 直接报 "username required if URI contains user info",连接测试永远失败。
+	if s.Username != "" {
+		u.User = url.UserPassword(s.Username, password)
 	}
 	return u.String()
 }

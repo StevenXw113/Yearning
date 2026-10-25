@@ -178,9 +178,13 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	}
 	// 工单勾选了事务模式 → 覆写规则的 DMLTransaction（见 withTxMode 的拷贝说明）
 	rule = withTxMode(rule, order.TxMode)
-	p := enc.Decrypt(model.C.General.SecretKey, source.Password)
-	if p == "" {
-		return false, errors.New(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
+	// 与 fetch.go 同理:空口令数据源解密出的空串是合法明文,不是秘钥失败
+	p := ""
+	if source.Password != "" {
+		p = enc.Decrypt(model.C.General.SecretKey, source.Password)
+		if p == "" {
+			return false, errors.New("数据源口令解密失败，请检查 SECRET_KEY 是否一致")
+		}
 	}
 
 	// 大表 ALTER 由 gh-ost 接管做在线变更（进度写入 osc_info 供详情页展示）：

@@ -277,9 +277,14 @@ func FetchSQLTest(c yee.Context) (err error) {
 	if err != nil || rule == nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	p := enc.Decrypt(model.C.General.SecretKey, s.Password)
-	if p == "" {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED)))
+	// Decrypt 无错误信号:空密文(数据源未设口令)解密出的空串是合法明文,
+	// 只有「存储了密文却解不出」才算秘钥失败。
+	p := ""
+	if s.Password != "" {
+		p = enc.Decrypt(model.C.General.SecretKey, s.Password)
+		if p == "" {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED)))
+		}
 	}
 	client, err := calls.Client()
 	if err != nil {
