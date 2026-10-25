@@ -2,6 +2,7 @@
       "name": "gemini-next",
       "version": "3.2.0",
       "license": "AGPL-3.0-or-later",
+      "packageManager": "pnpm@12.15.0",
       "scripts": {
             "dev": "vite  --mode dev",
             "build": "vue-tsc --noEmit && vite build  --mode release",

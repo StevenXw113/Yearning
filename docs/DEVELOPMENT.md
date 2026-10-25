@@ -20,7 +20,7 @@
 |---|---|---|
 | Go | >= 1.26（`go.mod` 已声明 `go 1.26.0`） | 编译后端 |
 | MySQL | 5.7+ / 8.0，字符集 **utf8mb4** | 元数据存储（工单、用户、权限等） |
-| Node.js + yarn | Node >= 18（Vite 5 要求），yarn 1.x | 前端依赖安装与构建 |
+| Node.js + pnpm | Node >= 22.12（Vite 8 要求），pnpm 12 | 前端依赖安装与构建 |
 | 审核引擎 | 见第 8 节（源码在 `engine/`） | SQL 检测 / 执行 / 查询预检（RPC） |
 
 > Windows / PowerShell 与 macOS / Linux / bash 命令在下方分别给出。
@@ -99,8 +99,8 @@ Copy-Item conf.toml.template conf.toml
 
 ```powershell
 cd front
-yarn install          # 首次或依赖变更后
-yarn build            # 产出到 front/dist
+pnpm install          # 首次或依赖变更后
+pnpm build            # 产出到 front/dist
 cd ..
 Remove-Item src/service/dist/* -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item front/dist/* src/service/dist/ -Recurse -Force
@@ -151,11 +151,11 @@ go mod tidy
 ### 4.2 前端依赖（统一国内镜像）
 
 `front/` 下已内置 `front/.npmrc`，将 registry 固定为国内镜像
-`https://registry.npmmirror.com`，`npm`/`yarn` 安装时会自动生效，无需额外配置：
+`https://registry.npmmirror.com`，`npm`/`pnpm` 安装时会自动生效，无需额外配置：
 
 ```powershell
 cd front
-yarn install     # 或 npm install
+pnpm install     # 或 npm install
 ```
 
 > 如需临时切回官方源，可删除 `front/.npmrc` 或执行 `npm config set registry https://registry.npmjs.org`。
