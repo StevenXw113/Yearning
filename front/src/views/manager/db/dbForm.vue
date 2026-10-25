@@ -18,6 +18,17 @@
         >
       </a-select>
     </a-form-item>
+    <a-form-item :label="$t('common.rules')">
+      <!-- 新建时即可指定规则集,与编辑弹窗对齐;0 = 全局规则 -->
+      <a-select v-model:value="dbForm.rule_id" style="width: 100%">
+        <a-select-option :key="-1" :value="0">{{
+          $t('db.global')
+        }}</a-select-option>
+        <a-select-option v-for="i in ruleSets" :key="i.id" :value="i.id">{{
+          i.desc
+        }}</a-select-option>
+      </a-select>
+    </a-form-item>
     <a-form-item :label="$t('common.table.name')" name="source">
       <a-input v-model:value="dbForm.source"></a-input>
     </a-form-item>
@@ -131,8 +142,9 @@
 </template>
 
 <script lang="ts" setup>
-  import { ref, computed, reactive } from 'vue';
+  import { ref, computed, reactive, onMounted } from 'vue';
   import { Source, createSource as cs } from '@/apis/db';
+  import { getCustomRulesList, type CustomRule } from '@/apis/rules';
   import { useCommonStore } from '@/store';
   import { RuleObject } from 'ant-design-vue/es/form';
   import { useI18n } from 'vue-i18n';
@@ -144,6 +156,13 @@
   const emit = defineEmits<{ created: [] }>();
 
   const checked = ref(false);
+
+  // 规则集选项(与编辑弹窗同源 getCustomRulesList);0 = 全局规则
+  const ruleSets = ref([] as CustomRule[]);
+  onMounted(async () => {
+    const { data } = await getCustomRulesList();
+    ruleSets.value = data.payload;
+  });
 
   const open = reactive({
     ca: false,
@@ -253,6 +272,7 @@
     key_file: '',
     db_type: 0,
     auth_database: '',
+    rule_id: 0,
   } as Source);
 
   const formRef = ref();

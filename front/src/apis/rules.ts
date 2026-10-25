@@ -9,6 +9,9 @@ export interface CustomRule {
   id?: number;
   desc: string;
   audit_role: Rules;
+  // 列表接口追加的引用面字段(SuperRolesList 聚合);新增/更新请求不带
+  ref_count?: number;
+  ref_sources?: string[];
 }
 
 export function getRulesList(): AxiosPromise<Rules> {

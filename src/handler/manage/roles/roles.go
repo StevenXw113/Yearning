@@ -45,7 +45,41 @@ func SuperFetchRoles(c yee.Context) (err error) {
 func SuperRolesList(c yee.Context) (err error) {
 	var rules []model.CoreRules
 	model.DB().Model(model.CoreRules{}).Find(&rules)
-	return c.JSON(http.StatusOK, common.SuccessPayload(rules))
+	var rows []ruleSetRefRow
+	model.DB().Model(model.CoreDataSource{}).Where("rule_id <> 0").Select("rule_id, source").Scan(&rows)
+	return c.JSON(http.StatusOK, common.SuccessPayload(mergeRuleSetRefs(rules, rows)))
+}
+
+// ruleSetRefRow 是 core_data_sources 里一条「数据源 → 规则集」引用的扫描载体。
+type ruleSetRefRow struct {
+	RuleID uint
+	Source string
+}
+
+// ruleSetWithRefs 在规则集上追加引用面:管理员修改/删除规则集前,先看到影响哪些数据源。
+type ruleSetWithRefs struct {
+	model.CoreRules
+	RefCount   int      `json:"ref_count"`
+	RefSources []string `json:"ref_sources"`
+}
+
+// mergeRuleSetRefs 把引用行聚合进规则集列表:保持输入顺序,悬空引用(指向已删
+// 规则集)忽略,无引用的 RefSources 输出空数组而非 null(与前端契约一致)。
+func mergeRuleSetRefs(rules []model.CoreRules, rows []ruleSetRefRow) []ruleSetWithRefs {
+	refs := make(map[uint][]string, len(rules))
+	for _, r := range rows {
+		refs[r.RuleID] = append(refs[r.RuleID], r.Source)
+	}
+	out := make([]ruleSetWithRefs, 0, len(rules))
+	for _, r := range rules {
+		item := ruleSetWithRefs{CoreRules: r, RefSources: []string{}}
+		if len(refs[r.ID]) > 0 {
+			item.RefSources = refs[r.ID]
+			item.RefCount = len(refs[r.ID])
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func SuperRolesAdd(c yee.Context) (err error) {

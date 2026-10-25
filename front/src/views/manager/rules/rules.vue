@@ -30,6 +30,8 @@
     </a-col>
   </a-row>
   <br />
+  <a-segmented v-model:value="activeCat" :options="catOptions" />
+  <br />
   <a-table
     bordered
     :columns="col"
@@ -119,7 +121,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { Rule, rule } from './rules';
+  import { Rule, rule, RULE_CATEGORIES, filterRules, categoryCounts, type RuleCategory } from './rules';
   import { computed, ref } from 'vue';
   import {
     Rules,
@@ -206,12 +208,27 @@
   // 规则级别单独存一份（键为规则字段名），保存时合并进 audit_role.RuleLevel。
   const levels = ref({} as Record<string, string>);
 
-  const rules = ref<Rule[]>(rule);
+  // 列表 = 分类页签 × 搜索关键字 的交集;rule 是静态名单,过滤全部走计算属性
+  const activeCat = ref<RuleCategory | 'all'>('all');
+  const keyword = ref('');
+  const counts = categoryCounts(rule);
+  const catOptions = [
+    { label: `${t('ruleCatAll')} (${counts.all})`, value: 'all' as const },
+    ...RULE_CATEGORIES.map((c) => ({
+      label: `${t(c.i18n)} (${counts[c.key]})`,
+      value: c.key,
+    })),
+  ];
+  const rules = computed(() =>
+    filterRules(rule, activeCat.value).filter(
+      (item) => keyword.value === '' || item.desc.indexOf(keyword.value) !== -1
+    )
+  );
 
   const id = ref(0);
 
   const onSearch = (vl: string) => {
-    rules.value = rule.filter((item) => item.desc.indexOf(vl) !== -1);
+    keyword.value = vl;
   };
 
   // 后端把级别放在 audit_role.RuleLevel 里，取回来单独渲染，保存时再合并回去。

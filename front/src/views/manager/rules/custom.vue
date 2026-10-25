@@ -23,6 +23,10 @@
     <br />
     <a-table bordered :columns="col" :data-source="list">
       <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'ref_sources'">
+          <a-tag v-for="s in record.ref_sources || []" :key="s">{{ s }}</a-tag>
+          <span v-if="!record.ref_count">{{ $t('ruleRefNone') }}</span>
+        </template>
         <template v-if="column.dataIndex === 'action'">
           <a-button
             size="small"
@@ -101,6 +105,11 @@
     {
       title: t('common.table.name'),
       dataIndex: 'desc',
+    },
+    {
+      // 引用数据源:改这条规则集前先看影响面(后端 SuperRolesList 聚合返回)
+      title: t('ruleRefSources'),
+      dataIndex: 'ref_sources',
     },
     {
       title: t('common.action'),
