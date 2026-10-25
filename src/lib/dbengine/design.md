@@ -1,7 +1,7 @@
 # 统一「数据引擎」抽象 · 设计
 
 > **方向变更（2026-10-23，覆盖此前「两态通道」与 `CommandExecuter` 的决策）**：
-> 所有数据引擎的执行与查询都进引擎 gRPC 通道；主程序只留元数据 / 补全 / 提交硬保底。
+> 所有数据引擎的执行与查询都进引擎 HTTP 通道；主程序只留元数据 / 补全 / 提交硬保底。
 > 即 `ExecuteWorkOrder` 对所有引擎都走 `client.Exec`，查询 WS 对所有引擎都走 `client.Query`；
 > `dbengine.CommandExecuter` 撤销，`dbengine` 收缩为元数据 / 补全 / 硬保底三类能力。
 
@@ -14,9 +14,9 @@ keyed by `db_type`。
 **要统一**：执行 / 回滚、元数据（库·表·字段·索引）、补全、提交硬保底。
 
 **不统一（刻意保持）**：
-- 规则审核：已经是统一入口（引擎 gRPC `Check` 按 `kind` 分派，`audit_role` 一份配置）。
+- 规则审核：已经是统一入口（引擎 HTTP `Check` 按 `kind` 分派，`audit_role` 一份配置）。
 - 规则**实现**：bytebase AST（SQL） vs `mongocheck` / `redischeck`（命令解析），永远不同。
-- 执行通道：SQL（mysql/PostgreSQL）走引擎 gRPC `Exec`（binlog/OSC/前镜像），Mongo/Redis 走主程序驱动——接口里 `Execute` 对 SQL 只是"调引擎"，不强扭进同一个 DSN。
+- 执行通道：SQL（mysql/PostgreSQL）走引擎 HTTP `Exec`（binlog/OSC/前镜像），Mongo/Redis 走主程序驱动——接口里 `Execute` 对 SQL 只是"调引擎"，不强扭进同一个 DSN。
 
 ## 接口
 
@@ -28,7 +28,7 @@ type Field struct{ Name, Type string }
 type Index struct{ Name string; Unique bool }
 
 // Outcome 一次执行的汇总：影响行数 + 回滚语句 + 无法自动回滚的说明。
-// SQL 引擎的回滚由 gRPC 返回，命令式引擎由主程序抓前镜像——这里统一成同一形状。
+// SQL 引擎的回滚由引擎 HTTP 返回，命令式引擎由主程序抓前镜像——这里统一成同一形状。
 type Outcome struct {
 	Affected int64
 	Rollback []string
@@ -51,7 +51,7 @@ type Engine interface {
 	// ---- 变更 ----
 	// 提交时的硬保底：不读规则集、不依赖引擎在线。SQL 引擎返回 nil（解析由引擎做）。
 	ValidateChange(src *model.CoreDataSource, sql string) error
-	// 执行：含回滚。SQL 走引擎 gRPC（规则复检/影响行上限在引擎内），
+	// 执行：含回滚。SQL 走引擎 HTTP（规则复检/影响行上限在引擎内），
 	// Mongo/Redis 走主程序驱动（硬保底 → 前镜像 → 执行）。返回明细与回滚，由上层落库。
 	Execute(ctx context.Context, src *model.CoreDataSource, order *model.CoreSqlOrder, actor string) (*Outcome, error)
 
@@ -68,7 +68,8 @@ func For(dbType int) Engine
 
 | 引擎 | Kind | 关键差异 |
 |---|---|---|
-| `sqlEngine{kind}` | mysql / postgres | `Execute` 调 gRPC `Exec`（`calls.DataSourceKind` + `AuditRoleToProto`）；元数据用 `information_schema`（PostgreSQL 用 `pg_indexes`/`columns`）；`ValidateChange` 恒 nil |
+| `sqlEngine{kind, sysSchemas}` | mysql / doris | `Execute` 调 HTTP `Exec`；元数据共用 `information_schema`（差异仅系统库列表）；`ValidateChange` 恒 nil |
+| `postgresqlEngine` | postgres | 同上，元数据走 `pg_indexes`/`columns` |
 | `mongoEngine` | mongodb | `Execute` = `mongodb.Validate` + `ConnectMongo` + `mongodb.Execute`；`ListCollections`=`MongoCollections`；`DescribeTable`=`MongoCollectionSchema`（字段名）；`ValidateChange`=`mongodb.Validate` |
 | `redisEngine` | redis | 包一层 `rediscmd` + `model/redis.go` 现有函数；回滚能力以 `Warning` 声明（如无前镜像） |
 
@@ -130,7 +131,7 @@ func For(dbType int) Engine
 3. **主程序行为矩阵**：四引擎 × {提交硬保底, 执行, 回滚, 元数据, 补全} 各打一枪，对照迁移前的记录（`core_sql_records`/`core_rollbacks` 落库一致）。
 4. 每批**先跑一遍迁移前的基线**（记录输出），迁移后再跑，diff 为空才算过。
 
-## 全引擎走 gRPC · 迁移计划（2026-10-23 新方向，覆盖上文批次 2/4 与「不做」条目）
+## 全引擎走统一通道(HTTP) · 迁移计划（2026-10-23 新方向，覆盖上文批次 2/4 与「不做」条目）
 
 > 上文「批次 2」「批次 4」以及「不做」里的两态通道描述已被新方向取代，仅保留历史记录。
 

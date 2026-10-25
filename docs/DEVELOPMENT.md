@@ -7,7 +7,7 @@
 - `engine/` —— SQL 解析 / 审核 / 执行引擎（独立 Go module，见第 8 节），由 `go.mod` 的 `replace engine => ./engine` 引用。
 
 > 技术栈：Go ≥ 1.26、GORM、自研 Web 框架 `github.com/cookieY/yee`、MySQL。
-> 前端为 Vue 3.5 + Vite 5 + TypeScript 5 + Pinia + ant-design-vue 4（CSS-in-JS 主题，
+> 前端为 Vue 3.5 + Vite 8 + TypeScript 5 + Pinia + ant-design-vue 4（组件按需注册，CSS-in-JS 主题，
 > 支持运行时暗/亮切换），详见 `front/README.md`。
 > SQL 解析 / 审核 / 执行由独立的「审核引擎」进程提供（源码在本仓库 `engine/`，见下文「审核引擎」），
 > 支持 MySQL / PostgreSQL / MongoDB / Redis / Doris 五类数据源。

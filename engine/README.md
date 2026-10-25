@@ -1,6 +1,6 @@
 # engine
 
-Yearning 的独立数据库引擎适配服务（独立进程，主服务经 **HTTP+JSON** 调用；最初以 gRPC 替代原 Juno `net/rpc`，后迁移到 stdlib HTTP），首期支持 MySQL。
+Yearning 的独立数据库引擎适配服务（独立进程，主服务经 **HTTP+JSON** 调用；最初以 gRPC 替代原 Juno `net/rpc`，后迁移到 stdlib HTTP），支持 MySQL / PostgreSQL / MongoDB / Redis / Doris 五类数据源。
 
 审核能力直接复用 Bytebase 原生实现：SQL 解析器与 MySQL 审核规则已从
 [Bytebase 官方仓库](https://github.com/bytebase/bytebase)**脚本化内化**到 `internal/bytebase/`
@@ -38,11 +38,15 @@ SQL 文本
 
 ## 现状
 
-- `EngineService.Check` ✅ 拆分 + 语法校验 + Bytebase MySQL 审核规则，返回逐条 `Record`
-- `EngineService.Query` ✅ 查询 SQL 拆分 + 逐条校验，返回逐条 `Record`（含敏感字段词表）
-- `EngineService.MergeAlterTables` ✅ 同表 `ALTER TABLE` 合并，跨表/非 ALTER 原样保留
-- `EngineService.Exec` ✅ 连目标业务库拆分执行工单 SQL，统计影响行返回逐条明细（含事务与失败处理）
-- `EngineService.StopDelay` ⏸ 延迟工单调度需接入 Yearning 元库连接与调度器，暂未接入
+`Check` / `Query` / `Exec` / `MergeAlterTables` 四个方法全部按数据源 `kind` 分派方言实现
+（mysql / postgres / mongodb / redis / doris，未知 kind 显式拒绝）：
+
+- `Check` ✅ 拆分 + 语法校验 + 规则审核（SQL 方言走 Bytebase advisor，Mongo/Redis 走内部规则包），返回逐条 `Record`
+- `Query` ✅ 查询 SQL 拆分 + 逐条校验，返回逐条 `Record`（含敏感字段词表）
+- `MergeAlterTables` ✅ 同表 `ALTER TABLE` 合并，跨表/非 ALTER 原样保留
+- `Exec` ✅ 连目标业务库拆分执行工单 SQL，统计影响行返回逐条明细（含事务与失败处理）；
+  连接池按 DSN 缓存复用（`internal/server/dbpool.go`）
+- ~~`StopDelay`~~ 已整体拆除：延迟工单调度由主程序 cron 实现，引擎不参与
 
 `Exec` 的逐条执行明细由 Yearning 主程序回写 `core_sql_records` 表，回滚语句回写 `core_rollbacks`。
 
@@ -69,8 +73,7 @@ binlog 方案会在执行前记录位点，执行完成（含提交）后读取�
 ## 依赖说明
 
 解析器与审核规则已内化，`go.mod` 只保留运行所需的最小依赖：`github.com/bytebase/omni`
-（Bytebase 的 SQL 解析器）、`github.com/zeebo/xxh3` / `github.com/hashicorp/golang-lru/v2`
-（解析器内部缓存）、`github.com/go-mysql-org/go-mysql`（回滚语句的 binlog 抓取）、
+（Bytebase 的 SQL 解析器）、`github.com/go-mysql-org/go-mysql`（回滚语句的 binlog 抓取）、
 `protobuf`（仅 bytebase 内部 store 结构使用）。不存在 `replace` 指令，也不再引入 tidb 的 SQL 解析器 / 各方言解析器 /
 cel-go / connectrpc / LSP 等无关依赖。
 

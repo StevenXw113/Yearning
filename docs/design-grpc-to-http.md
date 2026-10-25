@@ -1,6 +1,6 @@
 # 设计:引擎通信协议 gRPC → HTTP+JSON
 
-> 状态:**已实施完成**(2026-10-25,契约包/HTTP 服务端/客户端/工具/文档全部落地,两模块 build+vet+test 全绿;实施记录见 docs/plan-grpc-to-http.md)
+> 状态:**已实施完成**(2026-10-25,契约包/HTTP 服务端/客户端/工具/文档全部落地,两模块 build+vet+test 全绿;实施记录见 docs/plan-grpc-to-http.md)。后续变更:StopDelay 端点已整体拆除(见 engine/README.md「现状」)
 > 日期:2026-10-24
 > 决策背景:用户拍板弃用 gRPC 改 HTTP+JSON。取舍分析见会话记录:进程边界保留,仅换传输/序列化层。
 
