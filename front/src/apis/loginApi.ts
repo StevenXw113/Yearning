@@ -7,7 +7,6 @@ export interface LoginFrom {
 }
 
 export function signIn(login: LoginFrom) {
-  // LDAP 已从后端彻底移除，仅保留本地账号登录
   return request.post('/login', login);
 }
 
