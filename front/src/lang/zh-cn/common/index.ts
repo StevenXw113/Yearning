@@ -10,7 +10,7 @@ export default {
   'common.policy': '权限',
   'common.theme': '主题更改',
   'common.action': '动作',
-  'common.rules': 'Audit Rule',
+  'common.rules': '审核规则',
   'common.save': '保存',
   'common.delete': '删除',
   'common.month': '本月',
