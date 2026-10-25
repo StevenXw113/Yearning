@@ -85,6 +85,15 @@ type CoreSqlRecord struct {
 	Error     string `gorm:"type:longtext" json:"error"`
 }
 
+// CoreOrderRelevant 工单相关人关联表:core_sql_orders.relevant JSON 列的
+// 索引化镜像,专供审计列表按「相关人」过滤(原 JSON_SEARCH 全表扫)。
+// JSON 列保留——详情页判相关人仍直读它,双写不双读。
+type CoreOrderRelevant struct {
+	ID       uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
+	WorkId   string `gorm:"type:varchar(50);not null;index:idx_relevant_user_work,priority:2" json:"work_id"`
+	Username string `gorm:"type:varchar(50);not null;index:idx_relevant_user_work,priority:1" json:"username"`
+}
+
 type CoreSqlOrder struct {
 	ID       uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
 	WorkId   string `gorm:"type:varchar(50);not null;index:workId_idx" json:"work_id"`

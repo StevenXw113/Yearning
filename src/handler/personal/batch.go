@@ -117,6 +117,9 @@ func BatchOrderPost(c yee.Context) (err error) {
 			}).Error; err != nil {
 				return err
 			}
+			if err := insertOrderRelevants(tx, order.WorkId, order.Relevant); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

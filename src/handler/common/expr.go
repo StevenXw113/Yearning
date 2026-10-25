@@ -114,8 +114,9 @@ func AccordingToDate(time []string) func(db *gorm.DB) *gorm.DB {
 
 func AccordingToRelevant(user string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-
-		return db.Where("JSON_SEARCH(relevant, 'all', ?) IS NOT NULL", user)
+		// 走 core_order_relevants 关联表的覆盖索引(username,work_id);
+		// 原来的 JSON_SEARCH(relevant,...) 无法用索引,非超管的审计列表每次全表扫
+		return db.Where("work_id IN (SELECT work_id FROM core_order_relevants WHERE username = ?)", user)
 	}
 }
 

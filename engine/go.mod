@@ -3,7 +3,7 @@ module engine
 go 1.26.0
 
 require (
-	github.com/bytebase/omni v0.0.0-20260924090414-198ce4f34cd4
+	github.com/bytebase/omni v0.0.0-20261023061317-0234ea55a861
 	github.com/go-mysql-org/go-mysql v1.16.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.11.0

@@ -261,6 +261,15 @@ func UpdateData() {
 	// 项目级工单=批次号。列表分页由 GroupedOrderPage 按该列分组走索引，
 	// 见 common.GroupedOrderPage 的注释。
 	_ = model.DB().Exec("UPDATE core_sql_orders SET group_key = IF(batch_id = '', CAST(id AS CHAR), batch_id) WHERE group_key = ''").Error
+	// 存量工单的 relevant JSON 一次性展开进关联表(幂等:该工单已有行则跳过)。
+	// 新工单在创建事务内双写,不依赖这里。
+	if err := model.DB().Exec(`INSERT IGNORE INTO core_order_relevants (work_id, username)
+		SELECT o.work_id, jt.username FROM core_sql_orders o
+		JOIN JSON_TABLE(o.relevant, '$[*]' COLUMNS(username VARCHAR(50) PATH '$')) jt
+		WHERE o.relevant IS NOT NULL AND o.relevant <> 'null' AND o.relevant <> '[]'`).Error; err != nil {
+		// MySQL 8 才有 JSON_TABLE;失败(旧版本/权限)不阻断启动,列表过滤退回由双写兜底
+		model.DefaultLogger.Errorf("relevant 关联表回填失败: %v", err)
+	}
 	if model.DB().Migrator().HasColumn(&model.CoreAutoTask{}, "base") {
 		_ = model.DB().Migrator().RenameColumn(&model.CoreAutoTask{}, "base", "data_base")
 	}
@@ -330,6 +339,7 @@ var coreModels = []any{
 	&model.CoreAutoTask{}, &model.CoreRoleGroup{}, &model.CoreWorkflowTpl{},
 	&model.CoreWorkflowDetail{}, &model.CoreOrderComment{}, &model.CoreRules{},
 	&model.CoreTotalTickets{}, &model.CoreRuleSetHistory{},
+	&model.CoreOrderRelevant{},
 }
 
 func autoMigrate(models ...any) {

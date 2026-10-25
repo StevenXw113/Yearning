@@ -86,12 +86,15 @@ func sqlOrderPost(c yee.Context) (err error) {
 		}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&model.CoreWorkflowDetail{
+		if err := tx.Create(&model.CoreWorkflowDetail{
 			WorkId:   order.WorkId,
 			Username: user,
 			Action:   i18n.DefaultLang.Load(i18n.INFO_SUBMITTED),
 			Time:     time.Now().Format("2006-01-02 15:04"),
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		return insertOrderRelevants(tx, order.WorkId, order.Relevant)
 	})
 	if err != nil {
 		c.Logger().Error(err.Error())
@@ -167,6 +170,25 @@ func sanitizeFileName(name string) string {
 		name = string(r[:200])
 	}
 	return name
+}
+
+// insertOrderRelevants 把工单相关人写进关联表(与 JSON 列双写,同事务)。
+// JSON 列仍是详情读路径的权威,关联表只服务列表过滤。
+func insertOrderRelevants(tx *gorm.DB, workId string, relevant model.JSON) error {
+	var names []string
+	if relevant != nil {
+		_ = relevant.UnmarshalToJSON(&names)
+	}
+	rows := make([]model.CoreOrderRelevant, 0, len(names))
+	for _, n := range names {
+		if n != "" {
+			rows = append(rows, model.CoreOrderRelevant{WorkId: workId, Username: n})
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return tx.Create(&rows).Error
 }
 
 func decodeRelation(sourceId string) []string {
