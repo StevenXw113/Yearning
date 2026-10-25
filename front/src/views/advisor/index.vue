@@ -120,9 +120,7 @@
   import { useDebounceFn } from '@vueuse/core';
   import { useSqlCompletion } from '@/components/editor/impl';
   import { FetchSQLAdvisor } from '../../apis/advisor';
-  import Vditor from 'vditor';
-  import 'vditor/dist/index.css';
-  import { sanitizeHTML } from '@/lib/sanitize';
+      import { sanitizeHTML } from '@/lib/sanitize';
 
   const { t } = useI18n();
 
@@ -170,6 +168,9 @@
     if (previewResult) {
       const holder = document.createElement('div');
       // Vditor.preview 为异步渲染，必须 await，否则读到的是空内容、面板永远空白
+      // vditor 动态加载:仅在 AI 回答渲染时拉取
+      const { default: Vditor } = await import('vditor');
+      await import('vditor/dist/index.css');
       await Vditor.preview(holder, data.payload);
       previewResult.innerHTML = sanitizeHTML(holder.innerHTML);
     }

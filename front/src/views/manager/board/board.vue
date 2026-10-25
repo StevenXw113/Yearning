@@ -12,9 +12,7 @@
   import PageHeader from '@/components/pageHeader/pageHeader.vue';
   import { getBoardContext, updateBoardContext } from '@/apis/board';
   import { onMounted, ref } from 'vue';
-  import Vditor from 'vditor';
-  import 'vditor/dist/index.css';
-  import { sanitizeHTML } from '@/lib/sanitize';
+      import { sanitizeHTML } from '@/lib/sanitize';
   import { useI18n } from 'vue-i18n';
 
   let instance: any;
@@ -26,6 +24,9 @@
   onMounted(async () => {
     const { data } = await getBoardContext();
     editValue.value = data.payload;
+    // vditor 动态加载:公告编辑非首屏刚需
+    const { default: Vditor } = await import('vditor');
+    await import('vditor/dist/index.css');
     instance = new Vditor('mavon-editor-id', {
       lang: (sessionStorage.getItem('lang') as any) || 'en_US',
       height: 360,

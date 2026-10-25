@@ -4,7 +4,6 @@
 
 <script lang="ts" setup>
   import { onMounted } from 'vue';
-  import { Chart } from '@antv/g2';
   import { getTopContext } from '@/apis/dash';
 
   const props = defineProps<{
@@ -19,6 +18,7 @@
     data.payload.sort((a: any, b: any) => {
       return a.count - b.count;
     });
+    const { Chart } = await import('@antv/g2');
     const chart = new Chart({
       container: props.containerId,
       autoFit: true,

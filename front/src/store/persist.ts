@@ -25,9 +25,28 @@ function wire(
       sessionStorage.removeItem(key);
     }
   }
+  // 整包 JSON.stringify 每次变更都跑,查询历史等高频变更下做节流:
+  // 首沿立即写(行为与原来一致),300ms 内的后续变更合并到尾沿补一次,
+  // 保证最后状态不丢
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingDirty = false;
+  const writeNow = () => sessionStorage.setItem(key, JSON.stringify(store.$state));
   watch(
     () => store.$state,
-    (state) => sessionStorage.setItem(key, JSON.stringify(state)),
+    () => {
+      if (persistTimer !== null) {
+        pendingDirty = true;
+        return;
+      }
+      writeNow();
+      persistTimer = setTimeout(() => {
+        persistTimer = null;
+        if (pendingDirty) {
+          pendingDirty = false;
+          writeNow();
+        }
+      }, 300);
+    },
     { deep: true },
   );
 }

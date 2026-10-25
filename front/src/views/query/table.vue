@@ -47,13 +47,13 @@
 </template>
 
 <script lang="ts" setup>
+  import type * as XLSXType from 'xlsx';
   import { computed, ref, watch } from 'vue';
   import { useCommonStore } from '@/store';
   import router from '@/router';
   import { App } from 'ant-design-vue';
   const { message } = App.useApp();
   import { useI18n } from 'vue-i18n';
-  import * as XLSX from 'xlsx';
   import { encode, decode } from '@msgpack/msgpack';
   import { useClipboard } from '@vueuse/core';
 
@@ -82,7 +82,9 @@
     col.width = w;
   };
 
-  const downloadXLS = (data: any, title: any) => {
+  // xlsx 动态 import:只有点导出才加载,查询路由不必常驻这份代码
+  const downloadXLS = async (data: any, title: any) => {
+    const XLSX = await import('xlsx');
     const options = {
       '!cols': [
         { wpx: 100 },
@@ -93,11 +95,11 @@
       ],
     };
 
-    const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(data, {
+    const worksheet: XLSXType.WorkSheet = XLSX.utils.json_to_sheet(data, {
       header: title.map((item: any) => item.title),
     });
     worksheet['!cols'] = options['!cols'];
-    const workbook: XLSX.WorkBook = XLSX.utils.book_new();
+    const workbook: XLSXType.WorkBook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
     XLSX.writeFile(workbook, 'Yearning_Table_Data.xlsx');
   };

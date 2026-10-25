@@ -59,9 +59,7 @@
 <script lang="ts" setup>
   import { nextTick, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import Vditor from 'vditor';
-  import 'vditor/dist/index.css';
-  import { chatStream, ChatMessage } from '@/apis/chat';
+      import { chatStream, ChatMessage } from '@/apis/chat';
   import { sanitizeHTML } from '@/lib/sanitize';
 
   interface AssistantContext {
@@ -140,6 +138,8 @@
         // AI 输出视为不可信内容（提示词注入风险）：先脱离 DOM 渲染再清洗后挂载。
         // Vditor.preview 是异步的（返回 Promise），必须 await 后再读 innerHTML，否则拿到空串
         const holder = document.createElement('div');
+        const { default: Vditor } = await import('vditor');
+        await import('vditor/dist/index.css');
         await Vditor.preview(holder, reply.content);
         reply.html = sanitizeHTML(holder.innerHTML);
       }

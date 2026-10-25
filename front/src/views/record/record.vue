@@ -29,7 +29,6 @@
 
 <script lang="ts" setup>
   import { getRecordAxis } from '@/apis/record';
-  import { Chart } from '@antv/g2';
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import RecordOrder from './order.vue';
@@ -44,7 +43,8 @@
 
   const current = ref<string>('order');
 
-  const orderTypeChart = (id: string, data: any) => {
+  const orderTypeChart = async (id: string, data: any) => {
+    const { Chart } = await import('@antv/g2');
     const chart = new Chart({
       container: 'g2-container',
       autoFit: true,

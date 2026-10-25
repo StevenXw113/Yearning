@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -120,11 +119,10 @@ func (e *Engine) execDoris(ctx context.Context, req *api.ExecRequest) (*api.Exec
 	if err != nil {
 		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
-	db, err := sql.Open("mysql", dsn)
+	db, err := execPool("mysql", dsn)
 	if err != nil {
 		return &api.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
 	}
-	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
 		return &api.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
 	}

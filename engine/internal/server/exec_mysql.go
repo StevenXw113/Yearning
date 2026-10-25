@@ -44,11 +44,11 @@ func (e *Engine) execSQL(ctx context.Context, req *api.ExecRequest) (*api.ExecRe
 	if err != nil {
 		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
-	db, err := sql.Open("mysql", dsn)
+	// 池按 DSN 缓存复用(见 dbpool.go),不再每单新建即弃
+	db, err := execPool("mysql", dsn)
 	if err != nil {
 		return &api.ExecReply{Ok: false, Error: "打开数据库失败: " + err.Error()}, nil
 	}
-	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
 		return &api.ExecReply{Ok: false, Error: "连接数据库失败: " + err.Error()}, nil
 	}

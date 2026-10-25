@@ -7,7 +7,6 @@
 </template>
 
 <script setup lang="ts">
-  import { Chart } from '@antv/g2';
   const props = defineProps<{
     containerId: string;
     color: string;
@@ -27,7 +26,9 @@
 
   // G2 v5:语法从 v4 链式 position() 改为 encode() 通道;主题色直接落到
   // mark 的 style 上(不再经 styleSheet.brandColor)
-  const makeBuild = (total: any[]) => {
+  const makeBuild = async (total: any[]) => {
+    // G2 1.3MB 动态加载:迷你图场景不值得常驻
+    const { Chart } = await import('@antv/g2');
     const chart = new Chart({
       container: props.containerId,
       autoFit: true,

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"engine/api"
 	"engine/internal/mysqlparse"
@@ -34,6 +35,11 @@ func connectPostgreSQL(ctx context.Context, s *api.DataSource, schema string) (*
 
 	var lastErr error
 	for _, dbname := range postgresqlDatabaseCandidates(user) {
+		// search_path 是连接级参数,必须随 schema 进缓存键
+		poolKey := "pg|" + base + "|" + dbname + "|" + schema
+		if v, ok := execPools.Load(poolKey); ok {
+			return v.(*sql.DB), nil
+		}
 		cfg, err := pgx.ParseConfig(base + " dbname=" + postgresqlDSNValue(dbname))
 		if err != nil {
 			return nil, err
@@ -42,13 +48,24 @@ func connectPostgreSQL(ctx context.Context, s *api.DataSource, schema string) (*
 			// 值按双引号标识符转义，与旧实现 SET search_path TO "<schema>" 的语义一致
 			cfg.RuntimeParams["search_path"] = `"` + strings.ReplaceAll(schema, `"`, `""`) + `"`
 		}
-		db := sql.OpenDB(stdlib.GetConnector(*cfg))
-		if err := db.PingContext(ctx); err != nil {
-			_ = db.Close()
+		// pgx 连接器带 RuntimeParams(search_path),走通用 execPool 的 sql.Open 路径不可行
+		pgdb := sql.OpenDB(stdlib.GetConnector(*cfg))
+		pgdb.SetConnMaxIdleTime(time.Minute)
+		pgdb.SetConnMaxLifetime(time.Minute * 3)
+		pgdb.SetMaxOpenConns(20)
+		pgdb.SetMaxIdleConns(5)
+		if err := pgdb.PingContext(ctx); err != nil {
+			_ = pgdb.Close()
+			execPools.Delete(poolKey)
 			lastErr = fmt.Errorf("连接库 %s 失败: %w", dbname, err)
 			continue
 		}
-		return db, nil
+		actual, loaded := execPools.LoadOrStore(poolKey, pgdb)
+		if loaded {
+			pgdb.Close()
+			return actual.(*sql.DB), nil
+		}
+		return pgdb, nil
 	}
 	return nil, lastErr
 }

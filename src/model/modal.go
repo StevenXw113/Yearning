@@ -171,9 +171,10 @@ type CoreRoleGroup struct {
 }
 
 type CoreQueryOrder struct {
-	ID           uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
-	WorkId       string `gorm:"type:varchar(50);not null;index:workId_idx" json:"work_id"`
-	Username     string `gorm:"type:varchar(50);not null" json:"username"`
+	ID     uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
+	WorkId string `gorm:"type:varchar(50);not null;index:workId_idx" json:"work_id"`
+	// 查询页 WS 审核模式下每条消息都按 username+status 查这张表(无限增长)
+	Username     string `gorm:"type:varchar(50);not null;index:idx_query_order_username" json:"username"`
 	Date         string `gorm:"type:varchar(50);not null" json:"date"`
 	ApprovalTime string `gorm:"type:varchar(50);not null" json:"approval_time"`
 	Text         string `gorm:"type:longtext;not null" json:"text"`
