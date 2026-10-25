@@ -25,24 +25,28 @@
     return data;
   };
 
+  // G2 v5:语法从 v4 链式 position() 改为 encode() 通道;主题色直接落到
+  // mark 的 style 上(不再经 styleSheet.brandColor)
   const makeBuild = (total: any[]) => {
     const chart = new Chart({
       container: props.containerId,
       autoFit: true,
       height: 46,
-      // padding: [36, 0, 18, 0]
     });
-    chart.forceFit();
     chart.axis(false);
-    chart.data(Randomdata(total));
-    chart.tooltip({
-      showCrosshairs: true,
-      shared: true,
-    });
-
-    chart.line().position('x*totals').shape('smooth');
-    chart.area().position('x*totals').shape('smooth');
-    chart.theme({ styleSheet: { brandColor: props.color } });
+    chart.line()
+      .data(Randomdata(total))
+      .encode('x', 'x')
+      .encode('y', 'totals')
+      .encode('shape', 'smooth')
+      .style('stroke', props.color);
+    chart.area()
+      .data(Randomdata(total))
+      .encode('x', 'x')
+      .encode('y', 'totals')
+      .style('fill', props.color)
+      .style('fillOpacity', 0.25);
+    chart.interaction('tooltip', { crosshairs: true });
     chart.render();
   };
 

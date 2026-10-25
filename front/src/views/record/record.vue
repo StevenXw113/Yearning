@@ -110,45 +110,31 @@
       height: 300,
     });
 
-    chart.data(data);
-    chart.scale({
-      count: {
-        nice: true,
-      },
-      type: {
-        formatter: (value) => {
-          if (value === '0') {
-            return 'DDL';
-          }
-          if (value === '1') {
-            return 'DML';
-          }
-        },
-      },
-    });
-    chart.tooltip({
-      showCrosshairs: true,
-      shared: true,
+    // G2 v5:type 的 0/1 → DDL/DML 直接在数据侧转换(替代 v4 的 scale.formatter,
+    // v5 的 scale 键语义按通道而非字段);自定义 tooltip 用 interaction 原生 render
+    const rows = (Array.isArray(data) ? data : []).map((i: any) => ({
+      time: i.time,
+      type: i.type === '0' ? 'DDL' : 'DML',
+      count: i.count,
+    }));
+    chart.data(rows);
+    chart.scale('y', { nice: true });
+    chart.axis('y', {
+      labelFormatter: (val: any) => `${val} /per`,
+      grid: false,
     });
 
-    chart.axis('count', {
-      label: {
-        formatter: (val) => {
-          return val + ' /per';
-        },
-      },
-      grid: {
-        line: {
-          style: {
-            opacity: 0,
-          },
-        },
-      },
-    });
+    chart.line()
+      .encode('x', 'time')
+      .encode('y', 'count')
+      .encode('color', 'type')
+      .encode('shape', 'smooth');
 
-    chart.line().position('time*count').color('type').shape('smooth');
-
-    chart.point().position('time*count').color('type').shape('circle');
+    chart.point()
+      .encode('x', 'time')
+      .encode('y', 'count')
+      .encode('color', 'type')
+      .encode('shape', 'circle');
 
     // customize tooltip
     const $tooltip = document.getElementById(
@@ -204,9 +190,11 @@
       $tooltip.innerHTML = getTooltipHTML(data);
     });
 
-    // tooltip 的更新
-    chart.on('tooltip:change', (e: any) => {
-      $tooltip.innerHTML = getTooltipHTML(e.data);
+    // tooltip 的更新:v5 interaction 原生 render 取代 v4 的 tooltip:change 事件
+    chart.interaction('tooltip', {
+      crosshairs: true,
+      render: (_evt: any, d: { title: string; items: any }) =>
+        getTooltipHTML(d),
     });
 
     chart.render();

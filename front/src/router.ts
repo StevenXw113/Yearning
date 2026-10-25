@@ -241,19 +241,14 @@ const router = createRouter({
   ] as Array<RouteRecordRaw>,
 });
 
-router.beforeEach((to, from, next) => {
+// vue-router 5:守卫改返回式(next 回调已弃用)。未登录直接重定向登录页,
+// 不再需要 v4 的 next(false)+replace 两段式
+router.beforeEach((to) => {
   NProgress.start();
   // user.account 可能为 null/undefined（storage 还原或 plugin 整体覆盖时的边界），用可选链保护
   const token = userStore().account?.token;
   if (!token && to.name !== 'login') {
-    // 判断是否已经登录且前往的页面不是登录页
-    next(false);
-    router
-      .replace({ name: 'login' })
-      .then(() => {})
-      .finally(() => NProgress.done());
-  } else {
-    next();
+    return { name: 'login' };
   }
 });
 

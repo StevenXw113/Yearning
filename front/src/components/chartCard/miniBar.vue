@@ -24,24 +24,19 @@
       autoFit: true,
       height: 450,
     });
+    // G2 v5:encode() 通道 + coordinate transform;v4 的 element-active 更名
+    // elementHighlight;主题色落到 mark style,不再经 styleSheet
     chart.data(data.payload);
-    chart.scale({
-      value: {
-        alias: 'SQL执行数',
-      },
-    });
-    chart.axis('source', {
-      title: null,
-      tickLine: null,
-      line: null,
-    });
-
-    chart.axis('count', false);
+    chart.axis('y', false);
+    chart.axis('x', { title: false });
     chart.legend(false);
-    chart.coordinate().transpose();
-    chart.interval().position('source*count').size(26);
-    chart.interaction('element-active');
-    chart.theme({ styleSheet: { brandColor: props.color } });
+    chart.coordinate({ transform: [{ type: 'transpose' }] });
+    chart.interval()
+      .encode('x', 'source')
+      .encode('y', 'count')
+      .encode('size', 26)
+      .style('fill', props.color);
+    chart.interaction('elementHighlight');
     chart.render();
   });
 </script>
