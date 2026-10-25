@@ -1,7 +1,6 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import routes from '@/router';
-import Antd from 'ant-design-vue';
 import { pinia } from '@/store/index';
 import { setupSessionPersistence } from '@/store/persist';
 import i18n from '@/lang';
@@ -21,7 +20,6 @@ createApp(App)
   })
   .use(i18n)
   .use(pinia)
-  .use(Antd)
   .use(CTable)
   .use(routes)
   .mount('#app');

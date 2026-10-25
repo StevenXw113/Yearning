@@ -86,10 +86,12 @@ type CoreSqlRecord struct {
 }
 
 type CoreSqlOrder struct {
-	ID          uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
-	WorkId      string `gorm:"type:varchar(50);not null;index:workId_idx" json:"work_id"`
-	Username    string `gorm:"type:varchar(50);not null;index:query_idx" json:"username"`
-	Status      uint   `gorm:"type:tinyint(2);not null;" json:"status"`
+	ID       uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
+	WorkId   string `gorm:"type:varchar(50);not null;index:workId_idx" json:"work_id"`
+	Username string `gorm:"type:varchar(50);not null;index:query_idx" json:"username"`
+	// 组合索引供每分钟 cron 的(status,delay)/(status,execute_time)扫描:
+	// 表上挂着 SQL/Text/OSCInfo 三个 longtext,没索引时每次都是全表聚类扫描。
+	Status      uint   `gorm:"type:tinyint(2);not null;index:idx_order_status_delay,priority:1;index:idx_order_status_exectime,priority:1" json:"status"`
 	Type        int    `gorm:"type:tinyint(2);not null" json:"type"` // 1 dml  0 ddl
 	Backup      uint   `gorm:"type:tinyint(2);not null" json:"backup"`
 	IDC         string `gorm:"type:varchar(50);not null" json:"idc"`
@@ -101,9 +103,9 @@ type CoreSqlOrder struct {
 	SQL         string `gorm:"type:longtext;not null" json:"sql"`
 	Text        string `gorm:"type:longtext;not null" json:"text"`
 	Assigned    string `gorm:"type:varchar(550);not null" json:"assigned"`
-	Delay       string `gorm:"type:varchar(50);not null;default:'none'" json:"delay"`
+	Delay       string `gorm:"type:varchar(50);not null;default:'none';index:idx_order_status_delay,priority:2" json:"delay"`
 	RealName    string `gorm:"type:varchar(50);not null" json:"real_name"`
-	ExecuteTime string `gorm:"type:varchar(50);" json:"execute_time"`
+	ExecuteTime string `gorm:"type:varchar(50);index:idx_order_status_exectime,priority:2" json:"execute_time"`
 	CurrentStep int    `gorm:"type:int(50);not null default 1;" json:"current_step"`
 	Relevant    JSON   `gorm:"type:json" json:"relevant"`
 	OSCInfo     string `gorm:"type:longtext;default ''" json:"osc_info"`

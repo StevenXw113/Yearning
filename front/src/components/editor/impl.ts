@@ -1,3 +1,6 @@
+// monaco 全量 barrel:语言 worker 文件虽随产物携带,但 MonacoEnvironment.getWorker
+// 恒返回基础 worker,运行时零下载;editor.main 的按需拆分绑死 monaco 内部文件路径
+// (升级即碎),故保持 barrel。monaco 已由 vite manualChunks 单拆、按路由按需加载。
 import * as monaco from 'monaco-editor';
 import { ref } from 'vue';
 import { MysqlKeywords } from '@/components/editor/keyword';

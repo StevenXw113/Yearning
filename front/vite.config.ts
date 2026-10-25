@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
+import Components from 'unplugin-vue-components/vite';
+import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers';
 import * as path from 'path';
 
 // https://vitejs.dev/config/
@@ -44,7 +46,21 @@ export default defineConfig({
       },
     },
   },
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // Antd 按需:全量 .use(Antd) 使整库进入口 chunk,tree-shaking 失效
+    Components({ dts: false, resolvers: [AntDesignVueResolver({ importStyle: false })] }),
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        // monaco 单拆成独立 chunk:只在用到编辑器的路由按需加载
+        manualChunks(id) {
+          if (id.includes('monaco-editor')) return 'monaco';
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src/'),

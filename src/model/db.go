@@ -172,16 +172,26 @@ func NewDBSub(dsn DSN) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	var db *gorm.DB
 	if dsn.DBType == DBTypePostgreSQL {
-		return gorm.Open(pgdrive.Open(d), &gorm.Config{})
+		db, err = gorm.Open(pgdrive.Open(d), &gorm.Config{})
+	} else {
+		db, err = gorm.Open(drive.New(drive.Config{
+			DSN:                       d,
+			DefaultStringSize:         256,   // string 类型字段的默认长度
+			SkipInitializeWithVersion: false, // 根据当前 MySQL 版本自动配置
+		}), &gorm.Config{})
 	}
-	db, err := gorm.Open(drive.New(drive.Config{
-		DSN:                       d,
-		DefaultStringSize:         256,   // string 类型字段的默认长度
-		SkipInitializeWithVersion: false, // 根据当前 MySQL 版本自动配置
-	}), &gorm.Config{})
 	if err != nil {
 		return nil, err
+	}
+	// 目标库连接与元库同款池参数:查询页会话、OSC 估算等长持连接,
+	// 不设参数时 MaxIdleConns 默认 2、无 lifetime,空闲连接被对端掐断后重连风暴。
+	if pool, perr := db.DB(); perr == nil {
+		pool.SetConnMaxIdleTime(time.Minute)
+		pool.SetConnMaxLifetime(time.Minute * 3)
+		pool.SetMaxOpenConns(50)
+		pool.SetMaxIdleConns(5)
 	}
 	return db, nil
 }

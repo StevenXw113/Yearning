@@ -108,7 +108,8 @@ func cronTabSelfHeal() {
 		}
 		cutoff := time.Now().Add(-time.Duration(hours) * time.Hour).Format("2006-01-02 15:04")
 		var orders []model.CoreSqlOrder
-		model.DB().Model(model.CoreSqlOrder{}).
+		// 只取所需列:整行会拖出 SQL/OSCInfo 等 longtext 大列
+		model.DB().Model(model.CoreSqlOrder{}).Select("work_id", "status", "execute_time").
 			Where("`status` =? AND `execute_time` != '' AND `execute_time` <= ?", model.OrderStatusExecuting, cutoff).
 			Find(&orders)
 		for _, o := range orders {
