@@ -101,7 +101,7 @@ func sqlOrderPost(c yee.Context) (err error) {
 	pusher.NewMessagePusher(order.WorkId).Order().OrderBuild(pusher.SummitStatus).Push()
 
 	if order.Type == vars.DML {
-		autoTask(order, step)
+		goAutoTask(order, step)
 	}
 
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.ORDER_POST_SUCCESS)))

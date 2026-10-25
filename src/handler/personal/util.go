@@ -19,6 +19,19 @@ import (
 // autoTaskActor 自动任务写在流程明细里的操作者（与人工执行区分开）
 const autoTaskActor = "AutoTask Robot"
 
+// goAutoTask 自动任务后台执行:DML 提交请求不再同步等引擎 Exec(最长 5 分钟),
+// 提交响应本就不依赖执行结果。goroutine 内兜 recover,panic 不至拖垮进程。
+func goAutoTask(order *model.CoreSqlOrder, length int) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.DefaultLogger.Errorf("autoTask panic: %v", r)
+			}
+		}()
+		autoTask(order, length)
+	}()
+}
+
 func autoTask(order *model.CoreSqlOrder, length int) {
 	// todo 以下代码为autoTask代码
 	var autoTask model.CoreAutoTask

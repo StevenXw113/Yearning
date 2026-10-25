@@ -106,13 +106,9 @@
 
   const sock = computed(() => commonStore.sock);
 
-  watch(
-    () => sock.value.data as any,
-    (val: Blob) => {
-      val !== null ? recv(val) : null;
-    },
-  );
-
+  // 消息单通道:onmessage 直接挂 recv(幂等覆写)。vueuse 的 data ref 曾有
+  // 第二条 watch 通道,但它把裸 Blob 当事件传(取 .data 恒 undefined),从未生效;
+  // 覆写后 vueuse 仅保留发包/重连/心跳职责(服务端不回 ping,pongTimeout 已禁)。
   const runResults = (schema: string, sql: string) => {
     commonStore.SET_SPINNING();
     const encoded: Uint8Array = encode({ type: 4, sql: sql, schema: schema });

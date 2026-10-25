@@ -127,7 +127,7 @@ func BatchOrderPost(c yee.Context) (err error) {
 	for i, order := range orders {
 		pusher.NewMessagePusher(order.WorkId).Order().OrderBuild(pusher.SummitStatus).Push()
 		if order.Type == vars.DML {
-			autoTask(order, steps[i])
+			goAutoTask(order, steps[i])
 		}
 	}
 	return c.JSON(http.StatusOK, common.SuccessPayload(projectNo))
