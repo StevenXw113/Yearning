@@ -250,9 +250,8 @@ import { wsHeartbeat } from '@/socket';
   import { SQLTesting } from '@/types';
   import { useRoute } from 'vue-router';
   import JunoMixin from '@/mixins/juno';
-  import { debounce } from 'lodash-es';
   import { queryTimeline } from '@/apis/source';
-  import { useWebSocket } from '@vueuse/core';
+  import { useDebounceFn, useWebSocket } from '@vueuse/core';
   import { COMMON_URI } from '@/config/request';
   import editor from '@/components/editor/editor.vue';
 
@@ -329,11 +328,11 @@ import { wsHeartbeat } from '@/socket';
     spin.value = !spin.value;
   };
 
-  const testResults = debounce(() => {
+  const testResults = useDebounceFn(() => {
     checkSQL(sqls.value);
   }, 200);
 
-  const next = debounce(async () => {
+  const next = useDebounceFn(async () => {
     enabled.value = true;
     spinning.value = !spinning.value;
     emit('close');
@@ -346,7 +345,7 @@ import { wsHeartbeat } from '@/socket';
     spinning.value = !spinning.value;
   }, 200);
 
-  const undoNext = debounce(async () => {
+  const undoNext = useDebounceFn(async () => {
     spinning.value = !spinning.value;
     await changeOrderStateUndo({
       work_id: order.value.work_id as string,
@@ -355,7 +354,7 @@ import { wsHeartbeat } from '@/socket';
     spinning.value = !spinning.value;
   }, 200);
 
-  const executeNext = debounce(async () => {
+  const executeNext = useDebounceFn(async () => {
     spinning.value = !spinning.value;
     const { data } = await executeOrder(order.value.work_id as string);
     if (data.code === 1200) {

@@ -91,7 +91,7 @@
   import { useI18n } from 'vue-i18n';
   import CommonMixins from '@/mixins/common';
   import { StateQueryUsage } from '@/lib';
-  import { debounce } from 'lodash-es';
+  import { useDebounceFn } from '@vueuse/core';
 
   interface QueryRef {
     work_id: string;
@@ -141,11 +141,11 @@
 
   const order = ref<QueryRef>({} as QueryRef);
 
-  const queryAgree = debounce(() => {
+  const queryAgree = useDebounceFn(() => {
     queryAgreeOrder(order.value.work_id);
   }, 200);
 
-  const queryReject = debounce(() => {
+  const queryReject = useDebounceFn(() => {
     queryRejectOrder(order.value.work_id);
   }, 200);
 

@@ -225,7 +225,6 @@
     queryTableList,
     queryTableArch,
     queryTimeline,
-    queryHighlight,
   } from '@/apis/source';
   import dayjs, { Dayjs } from 'dayjs';
   import { App } from 'ant-design-vue';
@@ -240,9 +239,8 @@
   import router from '@/router';
   import { useCommonStore } from '@/store';
   import { useI18n } from 'vue-i18n';
-  import { debounce } from 'lodash-es';
-  import { createSQLToken } from '@/components/editor/impl';
-  import * as monaco from 'monaco-editor';
+  import { useDebounceFn } from '@vueuse/core';
+  import { useSqlCompletion } from '@/components/editor/impl';
 
   const { t } = useI18n();
 
@@ -271,8 +269,6 @@
   const enabled = ref(true);
 
   const { checkStepState } = CommonMixins();
-
-  let monaco_editor: any = null;
 
   const rules = {
     data_base: [
@@ -320,7 +316,7 @@
   // 数据源类型（2 = MongoDB、3 = Redis）：决定编辑器提示与审核方言
   const dbType = ref(0);
 
-  const nonFields = ref([] as any[]);
+  const { nonFields, register: registerCompletion, dispose: disposeCompletion } = useSqlCompletion();
 
   const disabledDate = (current: Dayjs) => {
     // Can not select days before today and today
@@ -469,7 +465,7 @@
     }
   };
 
-  const testResults = debounce(async (sql: string) => {
+  const testResults = useDebounceFn(async (sql: string) => {
     // SQL、MongoDB、Redis 都交给引擎审核：引擎按数据源的 kind 选方言，
     // MongoDB / Redis 走的是上游没有、本仓库自研的规则
     // （engine/internal/mongocheck、engine/internal/redischeck）
@@ -559,40 +555,8 @@
     return false; // 阻止组件自身上传（内容已进编辑器）
   };
 
-  const registerCompletionItemProvider = async (
-    source_id: string,
-    key: string,
-    is_fields: boolean,
-    source_fields: any[]
-  ) => {
-    const { data } = await queryHighlight(source_id, is_fields, key);
-    monaco_editor = monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (
-        model,
-        position
-      ): monaco.languages.ProviderResult<monaco.languages.CompletionList> => {
-        let word = model.getWordUntilPosition(position);
-        let range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn,
-        };
-        return {
-          suggestions: createSQLToken(range, [
-            ...data.payload,
-            ...source_fields,
-          ]),
-        };
-      },
-      triggerCharacters: ['.'],
-    });
-    !is_fields ? (nonFields.value = data.payload) : null;
-  };
-
   const fetchFields = async () => {
-    monaco_editor !== null ? monaco_editor.dispose() : null;
-    registerCompletionItemProvider(
+    await registerCompletion(
       orderItems.source_id,
       orderItems.data_base,
       true,
@@ -601,12 +565,7 @@
   };
 
   const fetchHighLight = async () => {
-    registerCompletionItemProvider(
-      orderItems.source_id,
-      orderItems.source_id,
-      false,
-      []
-    );
+    await registerCompletion(orderItems.source_id, orderItems.source_id, false, []);
   };
 
   const fetchSchema = async () => {
@@ -670,7 +629,7 @@
 
   onUnmounted(() => {
     window.onbeforeunload = null;
-    monaco_editor.dispose();
+    disposeCompletion();
   });
 </script>
 

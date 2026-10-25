@@ -11,4 +11,3 @@ export { useUserStore } from './module/user';
 export { useMenuStore } from './module/menu';
 export { useOrderStore } from './module/order';
 export { useCommonStore } from './module/common';
-export { useHighlightStore } from './module/highlight';

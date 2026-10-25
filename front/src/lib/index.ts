@@ -5,7 +5,6 @@ import {
   SyncOutlined,
   CloseCircleOutlined,
 } from '@ant-design/icons-vue';
-import mitt from 'mitt';
 // @ts-ignore
 const { t } = i18n.global;
 
@@ -140,5 +139,3 @@ export const checkSchema = () => {
   }
   return `${scheme}${baseURL}`;
 };
-
-export const EventBus = mitt();

@@ -112,15 +112,13 @@
   import {
     querySchemaList,
     queryTableList,
-    queryHighlight,
     queryIDCList,
     querySourceList,
     ISource,
   } from '@/apis/source';
   import { useI18n } from 'vue-i18n';
-  import { debounce } from 'lodash-es';
-  import { createSQLToken } from '@/components/editor/impl';
-  import * as monaco from 'monaco-editor';
+  import { useDebounceFn } from '@vueuse/core';
+  import { useSqlCompletion } from '@/components/editor/impl';
   import { FetchSQLAdvisor } from '../../apis/advisor';
   import Vditor from 'vditor';
   import 'vditor/dist/index.css';
@@ -137,8 +135,6 @@
   const route = useRoute();
 
   const enabled = ref(true);
-
-  let monaco_editor: any = null;
 
   const rules = {
     data_base: [
@@ -164,7 +160,7 @@
     sql: orderItems.sql as string,
   }));
 
-  const nonFields = ref([] as any[]);
+  const { nonFields, register: registerCompletion } = useSqlCompletion();
 
   const fetch = async (type: string) => {
     const { data } = await FetchSQLAdvisor(orderItems, type);
@@ -184,60 +180,28 @@
     orderProfileArch.table = data.payload;
     fetchFields();
   };
-  const advisor = debounce(async (sql: string) => {
+  const advisor = useDebounceFn(async (sql: string) => {
     orderItems.sql = sql;
     spin.value = true;
     await fetch('advisor');
     spin.value = false;
   }, 200);
 
-  const text2sql = debounce(async (sql: string) => {
+  const text2sql = useDebounceFn(async (sql: string) => {
     orderItems.sql = sql;
     spin.value = true;
     await fetch('text2sql');
     spin.value = false;
   }, 200);
 
-  const registerCompletionItemProvider = async (
-    source_id: string,
-    key: string,
-    is_fields: boolean,
-    source_fields: any[]
-  ) => {
-    const { data } = await queryHighlight(source_id, is_fields, key);
-    monaco_editor = monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (
-        model,
-        position
-      ): monaco.languages.ProviderResult<monaco.languages.CompletionList> => {
-        let word = model.getWordUntilPosition(position);
-        let range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn,
-        };
-        return {
-          suggestions: createSQLToken(range, [
-            ...data.payload,
-            ...source_fields,
-          ]),
-        };
-      },
-      triggerCharacters: ['.'],
-    });
-    !is_fields ? (nonFields.value = data.payload) : null;
-  };
-
-  const fetchFields = async () => {
-    monaco_editor !== null ? monaco_editor.dispose() : null;
-    registerCompletionItemProvider(
-      orderItems.source_id,
-      orderItems.data_base,
+  // 字段级补全注册(useSqlCompletion 内部先 dispose 上一份 provider)
+  const fetchFields = () =>
+    registerCompletion(
+      orderItems.source_id as string,
+      orderItems.data_base as string,
       true,
       nonFields.value
     );
-  };
 
   const fetchSchema = async () => {
     const { data } = await querySchemaList(orderItems.source_id, true);

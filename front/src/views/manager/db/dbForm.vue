@@ -134,12 +134,14 @@
   import { ref, computed, reactive } from 'vue';
   import { Source, createSource as cs } from '@/apis/db';
   import { useCommonStore } from '@/store';
-  import { EventBus } from '@/lib';
   import { RuleObject } from 'ant-design-vue/es/form';
   import { useI18n } from 'vue-i18n';
   import ssl_model from './sslModal.vue';
 
   const { t } = useI18n();
+
+  // 新建数据源成功后通知父组件(由其刷新列表),替代原全局 EventBus('postOk')
+  const emit = defineEmits<{ created: [] }>();
 
   const checked = ref(false);
 
@@ -266,7 +268,7 @@
   const createSource = () => {
     formRef.value.validate().then(async () => {
       await cs({ db: dbForm.value, tp: 'create' });
-      EventBus.emit('postOk');
+      emit('created');
       resetFields();
     });
   };

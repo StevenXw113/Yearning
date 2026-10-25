@@ -6,11 +6,12 @@
   <a-row :gutter="[16, 16]">
     <a-col :xs="24" :sm="6">
       <a-card :title="$t('common.new') + ' ' + $t('menu.manage.source')">
-        <DBForm></DBForm>
+        <!-- 新建成功后由本组件中继给右栏列表刷新（替代原全局 EventBus） -->
+        <DBForm @created="dbTable?.refresh()"></DBForm>
       </a-card>
     </a-col>
     <a-col :xs="24" :sm="18">
-      <DBTable></DBTable>
+      <DBTable ref="dbTable"></DBTable>
     </a-col>
   </a-row>
 </template>
@@ -18,11 +19,13 @@
 <script lang="ts" setup>
   import PageHeader from '@/components/pageHeader/pageHeader.vue';
   import { updateUserPrincipal } from '@/apis/user';
-  import { onMounted } from 'vue';
+  import { onMounted, ref } from 'vue';
   import DBForm from './dbForm.vue';
   import DBTable from './dbTable.vue';
   import { useCommonStore } from '@/store';
   import { queryIDCList } from '@/apis/source';
+
+  const dbTable = ref<InstanceType<typeof DBTable>>();
 
     const commonStore = useCommonStore();
 

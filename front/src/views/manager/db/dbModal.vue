@@ -146,12 +146,14 @@
   import { useCommonStore } from '@/store';
   import { createSource, Source } from '@/apis/db';
   import { querySchemaList } from '@/apis/source';
-  import { EventBus } from '@/lib';
   import { CustomRule } from '@/apis/rules';
 
   defineProps<{
     rules: CustomRule[];
   }>();
+
+  // 编辑保存成功后通知父组件(刷新列表),替代原全局 EventBus('postOk')
+  const emit = defineEmits<{ edited: [] }>();
 
   const { is_open, turnState, layout } = CommonMixins();
 
@@ -204,7 +206,7 @@
     dbForm.value.insulate_word_list = insulateWord.value.join(',');
     await createSource({ db: dbForm.value, tp: 'edit' });
     turnState();
-    EventBus.emit('postOk');
+    emit('edited');
   };
 
   const fetchSchema = async () => {

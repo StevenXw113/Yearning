@@ -14,11 +14,7 @@
         <a-list-item-meta>
           <template #title>
             <a-row>
-              <div
-                class="paste"
-                style="cursor: pointer"
-                :data-clipboard-text="item"
-              >
+              <div style="cursor: pointer" @click="copyHistory(item)">
                 <a-tooltip placement="top">
                   <template #title>
                     <span>{{ item }}</span>
@@ -38,11 +34,13 @@
   import { useOrderStore } from '@/store';
   import { App } from 'ant-design-vue';
   const { message } = App.useApp();
-  import ClipboardJS from 'clipboard';
+  import { useClipboard } from '@vueuse/core';
   import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  const clipboard = new ClipboardJS('.paste');
+  // legacy: 内网 http 部署没有 navigator.clipboard(安全上下文限制),
+  // 退回 execCommand,与原 ClipboardJS 行为一致
+  const { copy } = useClipboard({ legacy: true });
 
   const { t } = useI18n();
 
@@ -50,8 +48,8 @@
 
   const data = computed(() => orderStore.history);
 
-  clipboard.on('success', (e) => {
+  const copyHistory = async (item: string) => {
+    await copy(item);
     message.info(t('query.clip.is.paste'));
-    e.clearSelection();
-  });
+  };
 </script>

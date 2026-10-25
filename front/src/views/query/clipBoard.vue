@@ -7,17 +7,11 @@
   >
     <template #extra>
       <a-space :size="15">
-        <CopyOutlined
-          :class="btnId"
-          data-clipboard-action="copy"
-          :data-clipboard-target="`#${barId}`"
-        ></CopyOutlined>
+        <CopyOutlined @click="copyClip"></CopyOutlined>
         <CloseOutlined @click="delBtn" />
       </a-space>
     </template>
-    <div @click="btnClip()">
-      <div :id="barId">{{ clips.desc }}</div>
-    </div>
+    <div>{{ clips.desc }}</div>
   </a-card>
 </template>
 
@@ -25,7 +19,7 @@
   import { Clip } from '@/types';
   import { App } from 'ant-design-vue';
   const { message } = App.useApp();
-  import ClipboardJS from 'clipboard';
+  import { useClipboard } from '@vueuse/core';
   import { useI18n } from 'vue-i18n';
   import { CloseOutlined, CopyOutlined } from '@ant-design/icons-vue';
 
@@ -38,17 +32,13 @@
 
   const { t } = useI18n();
 
-  const btnId = `copyBtn${props.idRef}`;
+  // legacy: 内网 http 部署没有 navigator.clipboard(安全上下文限制),
+  // 退回 execCommand,与原 ClipboardJS 行为一致
+  const { copy } = useClipboard({ legacy: true });
 
-  const barId = `bar${props.idRef}`;
-
-  const clipboard = new ClipboardJS(`.${btnId}`);
-
-  const btnClip = () => {
-    clipboard.on('success', (e) => {
-      message.info(t('query.clip.is.paste'));
-      e.clearSelection();
-    });
+  const copyClip = async () => {
+    await copy(props.clips.desc);
+    message.info(t('query.clip.is.paste'));
   };
 
   const delBtn = () => {

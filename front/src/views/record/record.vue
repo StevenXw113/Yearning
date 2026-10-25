@@ -32,7 +32,6 @@
   import { Chart } from '@antv/g2';
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import insertCss from 'insert-css';
   import RecordOrder from './order.vue';
   import RecordQuery from './query.vue';
   import RecordArchive from './archive.vue';
@@ -44,64 +43,6 @@
   };
 
   const current = ref<string>('order');
-
-  insertCss(`
-#app-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-}
-
-#g2-container {
-  flex: auto;
-}
-
-#g2-customize-tooltip {
-  margin-bottom: 16px;
-  font-size: 12px;
-}
-
-
-#g2-customize-tooltip .tooltip-title {
-  
-}
-
-#g2-customize-tooltip .tooltip-items {
-  display: flex;
-  flex-direction: row;
-}
-
-#g2-customize-tooltip .tooltip-item {
-  flex-basis: 240px;
-  padding-left: 8px;
-  margin-right: 12px;
-}
-
-#g2-customize-tooltip .tooltip-item .tooltip-item-value {
-  font-size: 16px;
-  font-weight: bold;
-}
-
-
-
-#g2-customize-tooltip .tooltip-item-info {
-  display: flex;
-  justify-content: space-between;
-}
-
-#g2-customize-tooltip .tooltip-item-info .info-item {
-  display: flex;
-}
-
-#g2-customize-tooltip .tooltip-item-info .info-item .info-item-name {
-  opacity: 0.65;
-}
-
-#g2-customize-tooltip .tooltip-item-info .info-item .info-item-value {
-  margin-left: 8px;
-}
-`);
 
   const orderTypeChart = (id: string, data: any) => {
     const chart = new Chart({
@@ -205,3 +146,56 @@
     orderTypeChart('container', data.payload);
   });
 </script>
+
+<!-- 原 insertCss 运行时注入的全局样式（G2 图表容器 + 自定义 tooltip），
+     改为随组件打包的非 scoped 样式块；按 id 选择器命中，全局生效 -->
+<style>
+#app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+#g2-container {
+  flex: auto;
+}
+
+#g2-customize-tooltip {
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+#g2-customize-tooltip .tooltip-items {
+  display: flex;
+  flex-direction: row;
+}
+
+#g2-customize-tooltip .tooltip-item {
+  flex-basis: 240px;
+  padding-left: 8px;
+  margin-right: 12px;
+}
+
+#g2-customize-tooltip .tooltip-item .tooltip-item-value {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#g2-customize-tooltip .tooltip-item-info {
+  display: flex;
+  justify-content: space-between;
+}
+
+#g2-customize-tooltip .tooltip-item-info .info-item {
+  display: flex;
+}
+
+#g2-customize-tooltip .tooltip-item-info .info-item .info-item-name {
+  opacity: 0.65;
+}
+
+#g2-customize-tooltip .tooltip-item-info .info-item .info-item-value {
+  margin-left: 8px;
+}
+</style>

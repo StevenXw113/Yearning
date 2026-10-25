@@ -60,7 +60,11 @@
 
     <a-modal v-model:open="is_open" :title="$t('user.form.title')">
       <template #footer></template>
-      <Register ref="register" :is-manager="false"></Register>
+      <Register
+        ref="register"
+        :is-manager="false"
+        @registered="is_open = false"
+      ></Register>
     </a-modal>
   </div>
 </template>
@@ -72,7 +76,6 @@
   import CommonMixin from '@/mixins/common';
   import Register from '@/components/user/registerForm.vue';
   import Announce from '../common/announce.vue';
-  import { EventBus } from '@/lib';
   import { systemRegisterState } from '@/apis/loginApi';
 
   const is_register = ref(false);
@@ -86,9 +89,6 @@
   onMounted(async () => {
     const { data } = await systemRegisterState();
     is_register.value = data.payload.reg;
-    EventBus.on('closeState', () => {
-      is_open.value = false;
-    });
   });
 </script>
 

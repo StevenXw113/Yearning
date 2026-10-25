@@ -37,7 +37,7 @@
               <template #title>
                 <span>{{ text }}</span>
               </template>
-              <div class="ellipsis" @click="copy(text)">{{ text }}</div>
+              <div class="ellipsis" @click="copyText(text)">{{ text }}</div>
             </a-tooltip>
           </template>
         </a-table>
@@ -55,7 +55,7 @@
   import { useI18n } from 'vue-i18n';
   import * as XLSX from 'xlsx';
   import { encode, decode } from '@msgpack/msgpack';
-  import useClipboard from 'vue-clipboard3';
+  import { useClipboard } from '@vueuse/core';
 
   defineProps<{
     height: number;
@@ -64,7 +64,9 @@
 
   const activeKey = ref(0);
 
-  const { toClipboard } = useClipboard();
+  // legacy: 内网 http 部署没有 navigator.clipboard(安全上下文限制),
+  // 退回 execCommand,与原 vue-clipboard3 行为一致
+  const { copy } = useClipboard({ legacy: true });
 
     const commonStore = useCommonStore();
 
@@ -150,9 +152,9 @@
     commonStore.SET_DISABLED_SPINNING();
   };
 
-  const copy = async (text: string) => {
+  const copyText = async (text: string) => {
     try {
-      await toClipboard(text);
+      await copy(text);
       message.info(t('query.clip.is.paste'));
     } catch (e) {
       console.error(e);

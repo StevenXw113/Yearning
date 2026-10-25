@@ -87,8 +87,7 @@ import { wsHeartbeat } from '@/socket';
   import { queryHighlight } from '@/apis/source';
   import router from '@/router';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
-  import * as monaco from 'monaco-editor';
-  import { createSQLToken } from '@/components/editor/impl';
+  import { useSqlCompletion } from '@/components/editor/impl';
   import { useElementSize, useWebSocket } from '@vueuse/core';
   import { checkSchema } from '@/lib';
   import { COMMON_URI } from '@/config/request';
@@ -142,9 +141,8 @@ import { wsHeartbeat } from '@/socket';
 
   const route = useRoute();
 
-  const nonFields = ref([] as any[]);
-
-  let monaco_editor: any = null;
+  const { nonFields, register: registerCompletion, dispose: disposeCompletion } =
+    useSqlCompletion();
 
   const spinning = computed(() => commonStore.spinning);
 
@@ -214,40 +212,9 @@ import { wsHeartbeat } from '@/socket';
     commonStore.QUERY_CONN(sock);
   };
 
-  const registerCompletionItemProvider = async (
-    source_id: string,
-    key: string,
-    is_fields: boolean,
-    source_fields: any[]
-  ) => {
-    const { data } = await queryHighlight(source_id, is_fields, key);
-    monaco_editor = monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (
-        model,
-        position
-      ): monaco.languages.ProviderResult<monaco.languages.CompletionList> => {
-        let word = model.getWordUntilPosition(position);
-        let range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn,
-        };
-        return {
-          suggestions: createSQLToken(range, [
-            ...data.payload,
-            ...source_fields,
-          ]),
-        };
-      },
-      triggerCharacters: ['.'],
-    });
-    !is_fields ? (nonFields.value = data.payload) : null;
-  };
-
-  const fetchFields = async () => {
-    monaco_editor !== null ? monaco_editor.dispose() : null;
-    registerCompletionItemProvider(
+  // SQL 补全:字段级(带 schema)注册时并入 nonFields 里缓存的库/表名词条
+  const fetchFields = () => {
+    registerCompletion(
       route.query.source_id as string,
       commonStore.schema,
       true,
@@ -255,12 +222,12 @@ import { wsHeartbeat } from '@/socket';
     );
   };
 
-  const initial = async (source_id: string) => {
-    registerCompletionItemProvider(source_id, source_id, false, []);
+  const initial = (source_id: string) => {
+    registerCompletion(source_id, source_id, false, []);
   };
 
   onBeforeRouteUpdate((to) => {
-    monaco_editor.dispose();
+    disposeCompletion();
     initial(to.query.source_id as string);
     initQuery(to.query.source_id as string);
   });
@@ -273,6 +240,6 @@ import { wsHeartbeat } from '@/socket';
   });
 
   onUnmounted(() => {
-    monaco_editor.dispose();
+    disposeCompletion();
   });
 </script>

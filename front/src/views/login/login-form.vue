@@ -68,7 +68,7 @@
   import router from '@/router';
   import { useUserStore, useMenuStore } from '@/store';
   import { useRoute } from 'vue-router';
-  import { debounce } from 'lodash-es';
+  import { useDebounceFn } from '@vueuse/core';
   import { App } from 'ant-design-vue';
   const { message } = App.useApp();
 
@@ -122,7 +122,7 @@
     window.location.href = oidcSignInUrl.value;
   };
 
-  const userSignIn = debounce(async () => {
+  const userSignIn = useDebounceFn(async () => {
     const { data } = await signIn(loginForm);
     if (data.code === 1301) {
       return;
@@ -140,7 +140,7 @@
     router.replace('/home');
   }, 200);
 
-  const mfaConfirm = debounce(async () => {
+  const mfaConfirm = useDebounceFn(async () => {
     if (!mfaForm.code.trim()) return;
     const { data } = await mfaSignIn(mfaForm.ticket, mfaForm.code.trim());
     if (data.code !== 1200) {

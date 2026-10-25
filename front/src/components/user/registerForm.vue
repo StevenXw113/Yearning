@@ -43,7 +43,6 @@
   import { reactive, UnwrapRef, ref } from 'vue';
   import { RegisterForm, signUpUser } from '@/apis/user';
   import { RuleObject } from 'ant-design-vue/es/form/interface';
-  import { EventBus } from '@/lib';
   import { useI18n } from 'vue-i18n';
 
   const { t } = useI18n();
@@ -54,6 +53,10 @@
 
   // vue 3.5 响应式 props 解构（编译器宏，默认值一等公民）——替代 withDefaults
   const { isManager = false } = defineProps<propsAttr>();
+
+  // 注册成功后通知父组件（登录页关弹窗 / 管理页刷新用户表），
+  // 替代原全局 EventBus('closeState')
+  const emit = defineEmits<{ registered: [] }>();
 
   const registerForm: UnwrapRef<RegisterForm> = reactive({
     username: '',
@@ -117,7 +120,7 @@
     formRef.value.validate().then(async () => {
       await signUpUser(registerForm, isManager);
       resetFields();
-      EventBus.emit('closeState');
+      emit('registered');
     });
 
   const resetFields = () => {

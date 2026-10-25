@@ -111,7 +111,7 @@
 <script lang="ts" setup>
   import UserTableSearch from './userTableSearch.vue';
   import UserRules from '@/components/user/userRules.vue';
-  import { ref, onMounted, reactive } from 'vue';
+  import { ref, reactive } from 'vue';
   import {
     UserExpr,
     UserTableData,
@@ -123,7 +123,6 @@
     updateUserInfo,
     resetUserMfa,
   } from '@/apis/user';
-  import { EventBus } from '@/lib';
   import ChangePassword from '@/components/user/changePassword.vue';
   import { App } from 'ant-design-vue';
   const { message } = App.useApp();
@@ -229,10 +228,13 @@
     isOpen.value = false;
   };
 
-  onMounted(() => {
-    EventBus.on('closeState', () => {
-      tbl.value.manual();
-    });
+  // 供父组件中继调用：新增用户(注册表单提交)后刷新列表
+  const refresh = () => {
+    tbl.value?.manual();
+  };
+
+  defineExpose({
+    refresh,
   });
 </script>
 

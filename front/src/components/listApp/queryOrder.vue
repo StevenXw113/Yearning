@@ -52,7 +52,7 @@
   import { onMounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { ISource, querySourceList } from '@/apis/source';
-  import { debounce } from 'lodash-es';
+  import { useDebounceFn } from '@vueuse/core';
 
   defineProps<{
     isExport: boolean;
@@ -77,7 +77,7 @@
 
   const loading = ref(true);
 
-  const postQuery = debounce(() => {
+  const postQuery = useDebounceFn(() => {
     queryPostOrder(form);
   }, 200);
 

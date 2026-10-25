@@ -35,7 +35,12 @@
     </c-table>
   </a-card>
 
-  <DBModal ref="modal" :idc="idc" :rules="rules"></DBModal>
+  <DBModal
+    ref="modal"
+    :idc="idc"
+    :rules="rules"
+    @edited="refresh"
+  ></DBModal>
 </template>
 
 <script lang="ts" setup>
@@ -49,7 +54,6 @@
   import DBModal from './dbModal.vue';
   import DBTableSearch from './dbTableSearch.vue';
   import { ref, reactive, onMounted } from 'vue';
-  import { EventBus } from '@/lib';
   import { tableRef } from '@/components/table';
   import { useI18n } from 'vue-i18n';
   import { CustomRule, getCustomRulesList } from '@/apis/rules';
@@ -97,10 +101,16 @@
     modal.value.fillInfo(vl);
   };
 
+  // 刷新列表:编辑弹窗保存后本组件自行调用;新建表单提交后由父组件(db.vue)中继调用
+  const refresh = () => {
+    tbl.value?.manual();
+  };
+
+  defineExpose({
+    refresh,
+  });
+
   onMounted(async () => {
-    EventBus.on('postOk', () => {
-      tbl.value.manual();
-    });
     const { data } = await getCustomRulesList();
     rules.value = data.payload;
   });
