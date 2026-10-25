@@ -35,13 +35,13 @@ func TestValidateQueryAllowsReadOnly(t *testing.T) {
 // 等于绕过了整个工单审批链路。
 func TestValidateQueryRejectsWrites(t *testing.T) {
 	deny := map[string]string{
-		`{"update":"users","updates":[{"q":{"_id":1},"u":{"$set":{"a":2}}}]}`: "只读",
-		`{"delete":"users","deletes":[{"q":{"age":1},"limit":0}]}`:            "只读",
-		`{"insert":"users","documents":[{"a":1}]}`:                           "只读",
+		`{"update":"users","updates":[{"q":{"_id":1},"u":{"$set":{"a":2}}}]}`:   "只读",
+		`{"delete":"users","deletes":[{"q":{"age":1},"limit":0}]}`:              "只读",
+		`{"insert":"users","documents":[{"a":1}]}`:                              "只读",
 		`{"findAndModify":"users","query":{"_id":1},"update":{"$set":{"a":1}}}`: "只读",
-		`{"createIndexes":"users","indexes":[{"key":{"a":1},"name":"a_1"}]}`:  "只读",
-		`{"drop":"users"}`:          "只读",
-		`{"dropDatabase":1}`:        "只读",
+		`{"createIndexes":"users","indexes":[{"key":{"a":1},"name":"a_1"}]}`:    "只读",
+		`{"drop":"users"}`:             "只读",
+		`{"dropDatabase":1}`:           "只读",
 		`{"createUser":"x","pwd":"y"}`: "只读",
 		// 这两个"看起来像查询"，实际上能在服务端执行脚本/写数据，白名单天然挡住
 		`{"mapReduce":"users","map":"function(){}","reduce":"function(){}","out":"r"}`: "只读",

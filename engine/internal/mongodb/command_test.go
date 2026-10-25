@@ -68,7 +68,7 @@ func TestValidate(t *testing.T) {
 		`{"eval":"while(true){}"}`: "服务端脚本",
 		`{"delete":"users","deletes":[{"q":{"$where":"1"},"limit":0}]}`: "$where",
 		// $function / $accumulator 与 $where 等价，硬保底也要拦（与引擎规则同一组）
-		`{"update":"users","updates":[{"q":{"$function":{"body":"f"}},"u":{"$set":{"a":1}}}]}`: "$function",
+		`{"update":"users","updates":[{"q":{"$function":{"body":"f"}},"u":{"$set":{"a":1}}}]}`:    "$function",
 		`{"update":"users","updates":[{"q":{"$accumulator":{"init":"f"}},"u":{"$set":{"a":1}}}]}`: "$accumulator",
 		`{"find":"users"}`: "不是变更命令",
 	}

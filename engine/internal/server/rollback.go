@@ -459,7 +459,7 @@ func literalFromExpr(n ast.ExprNode) (string, bool) {
 }
 
 // quote 渲染字符串字面量。含单引号或反斜杠的值改用十六进制字面量：
-// 引号用 '' 双写在两种 sql_mode 下都成立，但反斜杠无论转不转义都必踩一种模式
+// 引号用 ” 双写在两种 sql_mode 下都成立，但反斜杠无论转不转义都必踩一种模式
 // （默认模式不转义会丢反斜杠；NO_BACKSLASH_ESCAPES 下转义会写坏）。
 // 十六进制与 sql_mode 无关：MySQL 按二进制串接受，按列字符集落库。
 func quote(s string) string {
@@ -470,7 +470,7 @@ func quote(s string) string {
 }
 
 // quoteIdent 渲染标识符：内部反引号双写。语句里允许出现带反引号的标识符
-// （CREATE TABLE `we``ird`），不双写会闭合引用、把回滚文本拼出注入面。
+// （CREATE TABLE `we“ird`），不双写会闭合引用、把回滚文本拼出注入面。
 func quoteIdent(s string) string {
 	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
 }

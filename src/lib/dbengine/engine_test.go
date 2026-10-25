@@ -9,7 +9,7 @@ import (
 // TestFor 核对 db_type → 引擎方言的注册关系（与 model.DBType* 常量一一对应）。
 func TestFor(t *testing.T) {
 	cases := map[int]string{
-		0:                     "mysql",
+		0:                      "mysql",
 		model.DBTypePostgreSQL: "postgres",
 		model.DBTypeMongoDB:    "mongodb",
 		model.DBTypeRedis:      "redis",

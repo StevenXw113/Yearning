@@ -20,7 +20,6 @@ func TestUnique(t *testing.T) {
 	}
 }
 
-
 // TestIsSuperUser 超管判定：内置 admin 恒为超管；[General].SuperUsers 追加
 // 名单（逗号分隔、容忍空白）；普通用户不是。lazy 解析依赖 model.C，
 // 测试里直接写配置再触发解析。

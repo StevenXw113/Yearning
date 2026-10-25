@@ -262,4 +262,3 @@ type QueryReply struct {
 	Error   string    `json:"error"`
 	Records []*Record `json:"records"`
 }
-

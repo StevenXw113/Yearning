@@ -93,7 +93,6 @@ func TestEngineHTTPWire(t *testing.T) {
 		t.Fatalf("Query unexpected: status=%d ok=%v records=%d body=%s", rep.StatusCode, qr.Ok, len(qr.Records), body)
 	}
 
-
 	// 方法不匹配 → 405(Go 1.22 method routing 默认行为)。
 	res, err := http.Get(base + "/v1/check")
 	if err != nil {
