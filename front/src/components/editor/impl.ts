@@ -6,7 +6,7 @@ import { queryHighlight } from '@/apis/source';
 
 const createSQLToken = (
   range: any,
-  exact: lightWord[]
+  exact: lightWord[],
 ): monaco.languages.CompletionItem[] => {
   const token = [] as any;
   MysqlKeywords.forEach((item: string) => {
@@ -56,14 +56,14 @@ export function useSqlCompletion(options: UseSqlCompletionOptions = {}) {
     source_id: string,
     key: string,
     is_fields: boolean,
-    source_fields: lightWord[]
+    source_fields: lightWord[],
   ) => {
     const { data } = await queryHighlight(source_id, is_fields, key);
     provider?.dispose();
     provider = monaco.languages.registerCompletionItemProvider(language, {
       provideCompletionItems: (
         model,
-        position
+        position,
       ): monaco.languages.ProviderResult<monaco.languages.CompletionList> => {
         const word = model.getWordUntilPosition(position);
         const range = {

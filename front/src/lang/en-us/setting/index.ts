@@ -40,7 +40,8 @@ export default {
   'setting.data.clear.alert':
     '1. After the maximum Limit is set, the results of all query statements cannot exceed the Limit. <br><br>2. After the query audit switch is enabled, all queries must be approved by the administrator. Off can be independent query',
   'setting.ai.protocol': 'Protocol',
-  'setting.ai.protocol.openai': 'OpenAI compatible (OpenAI / Ollama / vLLM ...)',
+  'setting.ai.protocol.openai':
+    'OpenAI compatible (OpenAI / Ollama / vLLM ...)',
   'setting.ai.protocol.deepseek':
     'DeepSeek (model: deepseek-flash or deepseek-v4-pro)',
   'setting.ai.protocol.anthropic': 'Anthropic Messages (Claude)',

@@ -12,7 +12,7 @@ export type ThemeName = 'dark' | 'light';
 const THEME_KEY = 'theme';
 
 export const isDark = ref<ThemeName>(
-  (localStorage.getItem(THEME_KEY) as ThemeName) || 'dark'
+  (localStorage.getItem(THEME_KEY) as ThemeName) || 'dark',
 );
 
 export function applyTheme(name: ThemeName) {

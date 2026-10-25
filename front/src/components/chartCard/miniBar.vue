@@ -31,7 +31,8 @@
     chart.axis('x', { title: false });
     chart.legend(false);
     chart.coordinate({ transform: [{ type: 'transpose' }] });
-    chart.interval()
+    chart
+      .interval()
       .encode('x', 'source')
       .encode('y', 'count')
       .encode('size', 26)

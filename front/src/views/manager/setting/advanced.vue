@@ -119,7 +119,7 @@
     if (config.value.other.query_expire !== undefined) {
       await deleteOrderRecords({
         date: config.value.other.query_expire.map((item) =>
-          item.format('YYYY-MM-DD HH:mm')
+          item.format('YYYY-MM-DD HH:mm'),
         ),
         tp: true,
       });
@@ -150,7 +150,7 @@
     if (config.value.other.overdue !== undefined) {
       await deleteOrderRecords({
         date: config.value.other.overdue.map((item) =>
-          item.format('YYYY-MM-DD HH:mm')
+          item.format('YYYY-MM-DD HH:mm'),
         ),
         tp: false,
       });
@@ -164,13 +164,13 @@
 </script>
 
 <style scoped>
-/* 设置项标签偏长且长短不一：12px 字号 + 行距 10px，标签最小 8.5em 让各行的控件左对齐，
+  /* 设置项标签偏长且长短不一：12px 字号 + 行距 10px，标签最小 8.5em 让各行的控件左对齐，
    更长的标签自动撑开，不会被输入框截断 */
-:deep(.ant-form-item) {
-  margin-bottom: 10px;
-}
-:deep(.ant-form-item .ant-form-item-label) {
-  min-width: 8.5em;
-  font-size: 12px;
-}
+  :deep(.ant-form-item) {
+    margin-bottom: 10px;
+  }
+  :deep(.ant-form-item .ant-form-item-label) {
+    min-width: 8.5em;
+    font-size: 12px;
+  }
 </style>

@@ -100,7 +100,7 @@
 
   const emit = defineEmits(['close']);
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
   const menuStore = useMenuStore();
 
   const selectedKey = ref(menuStore.selectedKey);

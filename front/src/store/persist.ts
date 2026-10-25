@@ -12,7 +12,10 @@
 import { watch } from 'vue';
 import { useUserStore, useMenuStore, useOrderStore, pinia } from '@/store';
 
-function wire(store: { $patch: (s: unknown) => void; $state: unknown }, key: string) {
+function wire(
+  store: { $patch: (s: unknown) => void; $state: unknown },
+  key: string,
+) {
   const raw = sessionStorage.getItem(key);
   if (raw) {
     try {
@@ -25,7 +28,7 @@ function wire(store: { $patch: (s: unknown) => void; $state: unknown }, key: str
   watch(
     () => store.$state,
     (state) => sessionStorage.setItem(key, JSON.stringify(state)),
-    { deep: true }
+    { deep: true },
   );
 }
 

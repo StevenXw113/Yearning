@@ -1,12 +1,11 @@
 <template>
   <pre style="height: 500px; overflow: auto">
             {{ pre }}
-      </pre
-  >
+      </pre>
 </template>
 
 <script lang="ts" setup>
-import { wsHeartbeat } from '@/socket';
+  import { wsHeartbeat } from '@/socket';
   import { onMounted, ref } from 'vue';
   import { useUserStore } from '@/store';
   import { checkSchema } from '@/lib';
@@ -18,7 +17,7 @@ import { wsHeartbeat } from '@/socket';
 
   const pre = ref('');
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
 
   const props = defineProps<{
     workId: string;
@@ -42,7 +41,7 @@ import { wsHeartbeat } from '@/socket';
         onMessage: (e, event) => {
           pre.value = event.data;
         },
-      }
+      },
     );
   });
 </script>

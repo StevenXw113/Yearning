@@ -12,12 +12,9 @@
       <a-button style="margin-right: 8px" @click="helpOpen = true">{{
         $t('ruleHelp')
       }}</a-button>
-      <a-button
-        v-if="!isAdd"
-        style="margin-right: 8px"
-        @click="onHistory"
-        >{{ $t('ruleHistory') }}</a-button
-      >
+      <a-button v-if="!isAdd" style="margin-right: 8px" @click="onHistory">{{
+        $t('ruleHistory')
+      }}</a-button>
       <a-button
         v-if="global"
         style="margin-right: 8px"
@@ -38,7 +35,7 @@
     :data-source="rules"
     :pagination="{
       pageSize: 20,
-      showTotal: (total:number) => $t('common.count', { count: total }),
+      showTotal: (total: number) => $t('common.count', { count: total }),
     }"
     size="small"
   >
@@ -121,7 +118,14 @@
 </template>
 
 <script lang="ts" setup>
-  import { Rule, rule, RULE_CATEGORIES, filterRules, categoryCounts, type RuleCategory } from './rules';
+  import {
+    Rule,
+    rule,
+    RULE_CATEGORIES,
+    filterRules,
+    categoryCounts,
+    type RuleCategory,
+  } from './rules';
   import { computed, ref } from 'vue';
   import {
     Rules,
@@ -221,8 +225,8 @@
   ];
   const rules = computed(() =>
     filterRules(rule, activeCat.value).filter(
-      (item) => keyword.value === '' || item.desc.indexOf(keyword.value) !== -1
-    )
+      (item) => keyword.value === '' || item.desc.indexOf(keyword.value) !== -1,
+    ),
   );
 
   const id = ref(0);
@@ -234,9 +238,8 @@
   // 后端把级别放在 audit_role.RuleLevel 里，取回来单独渲染，保存时再合并回去。
   const applyRules = (r: Rules) => {
     engine.value = r;
-    levels.value =
-      ((r as unknown as { RuleLevel?: Record<string, string> }).RuleLevel ||
-        {}) as Record<string, string>;
+    levels.value = ((r as unknown as { RuleLevel?: Record<string, string> })
+      .RuleLevel || {}) as Record<string, string>;
   };
 
   // 级别下拉：未配置就是「默认」——引擎按规则自带的默认级别处理

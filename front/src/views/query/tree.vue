@@ -54,7 +54,9 @@
   import { TreeNodeProps } from 'ant-design-vue/lib/vc-tree';
 
   // 树高由父级传入（原来写死 700，比右侧 SQL 卡片高出一大截）
-  const props = withDefaults(defineProps<{ height?: number }>(), { height: 700 });
+  const props = withDefaults(defineProps<{ height?: number }>(), {
+    height: 700,
+  });
 
   const emit = defineEmits(['showTableRef']);
 
@@ -62,7 +64,7 @@
 
   const searchValue = ref<string>('');
 
-    const commonStore = useCommonStore();
+  const commonStore = useCommonStore();
 
   const expandedKeys = ref<string[]>([]);
 
@@ -104,7 +106,7 @@
       try {
         const { data } = await queryTable(
           route.query.source_id as string,
-          node.dataRef.title
+          node.dataRef.title,
         );
         // 同上：接口失败时 payload 为 null，取 .table 会抛，spinner 也关不掉
         const tables = data.payload?.table || [];
@@ -135,12 +137,12 @@
         dbType.value === 2
           ? JSON.stringify({ find: key, limit: 20 })
           : dbType.value === 3
-            // Redis 没有通用的「看这个键的数据」命令：GET 对 string 直接给值，
-            // 其它类型会回 WRONGTYPE 错误——提示用户这个键不是 string，再自行换命令
-            ? `GET ${key}`
+            ? // Redis 没有通用的「看这个键的数据」命令：GET 对 string 直接给值，
+              // 其它类型会回 WRONGTYPE 错误——提示用户这个键不是 string，再自行换命令
+              `GET ${key}`
             : dbType.value === 1
-              // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
-              ? `SELECT * FROM "${key}"`
+              ? // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
+                `SELECT * FROM "${key}"`
               : `select * from ${key}`,
     });
   };
@@ -153,11 +155,11 @@
         dbType.value === 2
           ? JSON.stringify({ listIndexes: key })
           : dbType.value === 3
-            // Redis 的键没有字段结构，类型是最接近「结构」的信息
-            ? `TYPE ${key}`
+            ? // Redis 的键没有字段结构，类型是最接近「结构」的信息
+              `TYPE ${key}`
             : dbType.value === 1
-              // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
-              ? `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
+              ? // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
+                `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
               : `SHOW COLUMNS FROM ${key}`,
     });
   };

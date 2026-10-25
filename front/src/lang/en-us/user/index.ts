@@ -48,9 +48,10 @@ export default {
     'A code from your authenticator is required after the password at sign-in. To switch devices, unbind first and re-enroll.',
   'user.mfa.disable': 'Unbind',
   'user.mfa.disable.tips': 'Sign-in will no longer require a code. Unbind?',
-  'user.mfa.login.tips': 'Enter the 6-digit code from your authenticator to finish signing in',
+  'user.mfa.login.tips':
+    'Enter the 6-digit code from your authenticator to finish signing in',
   'user.mfa.back': 'Back to sign-in',
   'user.mfa.reset': 'Reset MFA',
   'user.mfa.reset.tips':
-    'Reset this user\'s MFA binding? After reset the next sign-in needs the password only (the unlock path for a lost authenticator).',
+    "Reset this user's MFA binding? After reset the next sign-in needs the password only (the unlock path for a lost authenticator).",
 };

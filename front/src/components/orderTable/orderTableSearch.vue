@@ -60,10 +60,10 @@
                   >{{ $t('order.state.error') }}
                 </a-select-option>
                 <a-select-option :value="OrderState.WAIT"
-                >{{ $t('order.state.wait') }}
+                  >{{ $t('order.state.wait') }}
                 </a-select-option>
                 <a-select-option :value="OrderState.Undo"
-                >{{ $t('order.undo') }}
+                  >{{ $t('order.undo') }}
                 </a-select-option>
                 <a-select-option :value="OrderState.Terminate"
                   >{{ $t('order.terminate') }}

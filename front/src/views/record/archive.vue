@@ -6,13 +6,15 @@
         :placeholder="$t('record.archive.workIdPh')"
         style="width: 260px"
         allow-clear
-        @pressEnter="load(1)"
+        @press-enter="load(1)"
       />
       <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" />
       <a-button type="primary" size="small" @click="load(1)">{{
         $t('common.query')
       }}</a-button>
-      <a-button size="small" @click="resetFilters">{{ $t('common.cancel') }}</a-button>
+      <a-button size="small" @click="resetFilters">{{
+        $t('common.cancel')
+      }}</a-button>
     </a-space>
 
     <a-table
@@ -42,22 +44,40 @@
     >
       <a-spin :spinning="detailLoading">
         <a-tabs size="small">
-          <a-tab-pane key="records" :tab="`${$t('record.archive.records')} (${detail?.records.length ?? 0})`">
+          <a-tab-pane
+            key="records"
+            :tab="`${$t('record.archive.records')} (${detail?.records.length ?? 0})`"
+          >
             <a-empty v-if="!detail?.records.length" />
             <div v-for="(r, i) in detail?.records" :key="i" class="arch-item">
               <div class="arch-meta">
-                <a-tag :color="r.state === '已执行' ? 'green' : 'red'">{{ r.state }}</a-tag>
-                <span class="arch-dim">{{ r.time }} · {{ $t('record.archive.rows') }}: {{ r.affect_row }}</span>
+                <a-tag :color="r.state === '已执行' ? 'green' : 'red'">{{
+                  r.state
+                }}</a-tag>
+                <span class="arch-dim"
+                  >{{ r.time }} · {{ $t('record.archive.rows') }}:
+                  {{ r.affect_row }}</span
+                >
               </div>
               <pre class="arch-sql">{{ r.sql }}</pre>
               <div v-if="r.error" class="arch-err">{{ r.error }}</div>
             </div>
           </a-tab-pane>
-          <a-tab-pane key="rollbacks" :tab="`${$t('record.archive.rollbacks')} (${detail?.rollbacks.length ?? 0})`">
+          <a-tab-pane
+            key="rollbacks"
+            :tab="`${$t('record.archive.rollbacks')} (${detail?.rollbacks.length ?? 0})`"
+          >
             <a-empty v-if="!detail?.rollbacks.length" />
-            <pre v-for="(r, i) in detail?.rollbacks" :key="i" class="arch-sql">{{ r.sql }}</pre>
+            <pre
+              v-for="(r, i) in detail?.rollbacks"
+              :key="i"
+              class="arch-sql"
+              >{{ r.sql }}</pre>
           </a-tab-pane>
-          <a-tab-pane key="details" :tab="`${$t('record.archive.timeline')} (${detail?.details.length ?? 0})`">
+          <a-tab-pane
+            key="details"
+            :tab="`${$t('record.archive.timeline')} (${detail?.details.length ?? 0})`"
+          >
             <a-timeline style="margin-top: 8px">
               <a-timeline-item v-for="(d, i) in detail?.details" :key="i">
                 <span class="arch-dim">{{ d.time }} · {{ d.username }}</span>
@@ -65,7 +85,10 @@
               </a-timeline-item>
             </a-timeline>
           </a-tab-pane>
-          <a-tab-pane key="comments" :tab="`${$t('record.archive.comments')} (${detail?.comments.length ?? 0})`">
+          <a-tab-pane
+            key="comments"
+            :tab="`${$t('record.archive.comments')} (${detail?.comments.length ?? 0})`"
+          >
             <a-empty v-if="!detail?.comments.length" />
             <div v-for="(c, i) in detail?.comments" :key="i" class="arch-item">
               <div class="arch-dim">{{ c.time }} · {{ c.username }}</div>
@@ -108,8 +131,18 @@
   });
 
   const columns = [
-    { title: t('common.order'), dataIndex: 'work_id', key: 'work_id', width: 200 },
-    { title: t('common.table.state'), dataIndex: 'status', key: 'status', width: 90 },
+    {
+      title: t('common.order'),
+      dataIndex: 'work_id',
+      key: 'work_id',
+      width: 200,
+    },
+    {
+      title: t('common.table.state'),
+      dataIndex: 'status',
+      key: 'status',
+      width: 90,
+    },
     { title: 'DML/DDL', dataIndex: 'type', key: 'type', width: 80 },
     { title: t('common.table.source'), dataIndex: 'source', width: 120 },
     { title: t('common.table.schema'), dataIndex: 'data_base', width: 120 },

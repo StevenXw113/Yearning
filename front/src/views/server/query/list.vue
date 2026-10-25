@@ -91,7 +91,7 @@
 
   const { t } = useI18n();
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
 
   const profile = ref();
 
@@ -160,7 +160,7 @@
           tblRef.data = payload.payload.data;
           tblRef.pageCount = payload.payload.page;
         },
-      }
+      },
     ),
     fn: async (expr: QueryParams) => {
       tblRef.websocket?.send(JSON.stringify(expr));

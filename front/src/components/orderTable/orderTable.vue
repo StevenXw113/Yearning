@@ -11,28 +11,26 @@
         "
       >
       </order-table-search>
-      <c-table
-        ref="tbl"
-        :tbl-ref="tblRef"
-        :size="props.size"
-      >
+      <c-table ref="tbl" :tbl-ref="tblRef" :size="props.size">
         <template #bodyCell="{ column, text, record }">
           <template v-if="column.dataIndex === 'type'">
             <span>{{ text === 0 ? 'DDL' : 'DML' }}</span>
           </template>
           <template v-if="column.dataIndex === 'assigned'">
-            <a-tag v-for="i in (text || '').split(',').filter(Boolean)" :key="i">{{
-              i
-            }}</a-tag>
+            <a-tag
+              v-for="i in (text || '').split(',').filter(Boolean)"
+              :key="i"
+              >{{ i }}</a-tag
+            >
           </template>
           <template v-if="column.dataIndex === 'delay'">{{
             text === 'none'
               ? $t('order.table.delay')
               : text === 'manual'
-              ? $t('order.exec.manual')
-              : text === 'handled'
-              ? $t('order.exec.handled')
-              : text
+                ? $t('order.exec.manual')
+                : text === 'handled'
+                  ? $t('order.exec.handled')
+                  : text
           }}</template>
           <template v-if="column.dataIndex === 'status'">
             <state-tags :state="text"></state-tags>
@@ -75,7 +73,7 @@
   import OrderTableSearch from './orderTableSearch.vue';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
   import { onMounted, reactive, ref } from 'vue';
-  import { OrderExpr, OrderParams, checkUri } from '@/apis/orderPostApis';
+  import { OrderExpr, checkUri } from '@/apis/orderPostApis';
   import { OrderTableData, OrderState } from '@/types';
   import { useUserStore, useOrderStore } from '@/store';
   import { useI18n } from 'vue-i18n';
@@ -111,7 +109,7 @@
 
   const { width } = useElementSize(container);
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
   const orderStore = useOrderStore();
 
   const tbl = ref();
@@ -153,7 +151,9 @@
       if (r.status === OrderState.AUDIT) p.status = OrderState.AUDIT;
       p.children.push({ ...r, key: r.work_id });
     }
-    projects.forEach((p) => (p.text = `${p.text}（共 ${p.children.length} 条）`));
+    projects.forEach(
+      (p) => (p.text = `${p.text}（共 ${p.children.length} 条）`),
+    );
     return out;
   };
 
@@ -260,7 +260,7 @@
           tblRef.data = groupByProject(payload.payload.data);
           tblRef.pageCount = payload.payload.page;
         },
-      }
+      },
     ),
     fn: async (params: any) => {
       params.expr = applyFilters(tblRef.expr, params.filters);
@@ -274,8 +274,10 @@
     const next = { ...(expr || {}) };
     if (filters) {
       if ('type' in filters) next.type = filters.type ? filters.type[0] : 2; // null = 取消筛选
-      if ('status' in filters) next.status = filters.status ? filters.status[0] : 8;
-      if ('source' in filters) next.source = filters.source ? filters.source[0] : '';
+      if ('status' in filters)
+        next.status = filters.status ? filters.status[0] : 8;
+      if ('source' in filters)
+        next.source = filters.source ? filters.source[0] : '';
     }
     return next;
   };
@@ -309,20 +311,20 @@
 </script>
 
 <style scoped>
-/* 列多且都是短内容，换行会让行高翻倍；统一不换行，超出宽度时表格内部横向滚动 */
-:deep(.ant-table-thead th),
-:deep(.ant-table-tbody td) {
-  white-space: nowrap;
-}
+  /* 列多且都是短内容，换行会让行高翻倍；统一不换行，超出宽度时表格内部横向滚动 */
+  :deep(.ant-table-thead th),
+  :deep(.ant-table-tbody td) {
+    white-space: nowrap;
+  }
 
-/* 筛选图标紧贴标题：标题默认 flex:1 会撑满整列，把图标顶到列的最右边 */
-:deep(.ant-table-column-title) {
-  flex: none;
-}
-:deep(.ant-table-filter-column) {
-  justify-content: flex-start;
-}
-:deep(.ant-table-filter-trigger) {
-  margin-left: 4px;
-}
+  /* 筛选图标紧贴标题：标题默认 flex:1 会撑满整列，把图标顶到列的最右边 */
+  :deep(.ant-table-column-title) {
+    flex: none;
+  }
+  :deep(.ant-table-filter-column) {
+    justify-content: flex-start;
+  }
+  :deep(.ant-table-filter-trigger) {
+    margin-left: 4px;
+  }
 </style>

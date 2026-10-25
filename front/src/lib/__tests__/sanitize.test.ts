@@ -21,8 +21,12 @@ describe('sanitizeHTML', () => {
   });
 
   it('剔除 FORBID_TAGS 清单(iframe/object/embed/form)', () => {
-    expect(sanitizeHTML('<iframe src="https://evil"></iframe>')).not.toContain('iframe');
-    expect(sanitizeHTML('<form action="https://evil"><input></form>')).not.toContain('<form');
+    expect(sanitizeHTML('<iframe src="https://evil"></iframe>')).not.toContain(
+      'iframe',
+    );
+    expect(
+      sanitizeHTML('<form action="https://evil"><input></form>'),
+    ).not.toContain('<form');
   });
 
   it('剔除 style 与 data-* 属性（文本内容保留）', () => {

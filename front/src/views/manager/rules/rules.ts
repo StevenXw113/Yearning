@@ -1,13 +1,7 @@
 import i18n from '@/lang';
 
 export type RuleCategory =
-  | 'statement'
-  | 'table'
-  | 'column'
-  | 'index'
-  | 'naming'
-  | 'system'
-  | 'engine';
+  'statement' | 'table' | 'column' | 'index' | 'naming' | 'system' | 'engine';
 
 interface Rule {
   desc: string;
@@ -25,105 +19,120 @@ const { t } = i18n.global;
 
 const rule: Rule[] = [
   {
-    name: 'DDLCheckTableComment',    category: 'table',
+    name: 'DDLCheckTableComment',
+    category: 'table',
 
     desc: t('DDLCheckTableComment'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDlCheckColumnComment',    category: 'column',
+    name: 'DDlCheckColumnComment',
+    category: 'column',
 
     desc: t('DDlCheckColumnComment'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLCheckColumnNullable',    category: 'column',
+    name: 'DDLCheckColumnNullable',
+    category: 'column',
 
     desc: t('DDLCheckColumnNullable'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLCheckColumnDefault',    category: 'column',
+    name: 'DDLCheckColumnDefault',
+    category: 'column',
 
     desc: t('DDLCheckColumnDefault'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLCheckFloatDouble',    category: 'column',
+    name: 'DDLCheckFloatDouble',
+    category: 'column',
 
     desc: t('DDLCheckFloatDouble'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableAutoincrementInit',    category: 'column',
+    name: 'DDLEnableAutoincrementInit',
+    category: 'column',
 
     desc: t('DDLEnableAutoincrementInit'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnablePrimaryKey',    category: 'table',
+    name: 'DDLEnablePrimaryKey',
+    category: 'table',
 
     desc: t('DDLEnablePrimaryKey'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLPrimaryKeyMust',    category: 'table',
+    name: 'DDLPrimaryKeyMust',
+    category: 'table',
 
     desc: t('DDLPrimaryKeyMust'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableAutoIncrement',    category: 'column',
+    name: 'DDLEnableAutoIncrement',
+    category: 'column',
 
     desc: t('DDLEnableAutoIncrement'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableAutoincrementUnsigned',    category: 'column',
+    name: 'DDLEnableAutoincrementUnsigned',
+    category: 'column',
 
     desc: t('DDLEnableAutoincrementUnsigned'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLIndexNameSpec',    category: 'naming',
+    name: 'DDLIndexNameSpec',
+    category: 'naming',
 
     desc: t('DDLIndexNameSpec'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'CheckIdentifier',    category: 'naming',
+    name: 'CheckIdentifier',
+    category: 'naming',
 
     desc: t('CheckIdentifier'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableAcrossDBRename',    category: 'table',
+    name: 'DDLEnableAcrossDBRename',
+    category: 'table',
 
     desc: t('DDLEnableAcrossDBRename'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableDropTable',    category: 'table',
+    name: 'DDLEnableDropTable',
+    category: 'table',
 
     desc: t('DDLEnableDropTable'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableDropDatabase',    category: 'table',
+    name: 'DDLEnableDropDatabase',
+    category: 'table',
 
     desc: t('DDLEnableDropDatabase'),
     type: 'DDL',
@@ -131,14 +140,16 @@ const rule: Rule[] = [
   },
   {
     // 自研规则（engine/internal/customrules）的开关，作为新增自定义规则的接线示例
-    name: 'DDLForbidTruncate',    category: 'table',
+    name: 'DDLForbidTruncate',
+    category: 'table',
 
     desc: t('DDLForbidTruncate'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableForeignKey',    category: 'table',
+    name: 'DDLEnableForeignKey',
+    category: 'table',
 
     desc: t('DDLEnableForeignKey'),
     type: 'DDL',
@@ -146,210 +157,240 @@ const rule: Rule[] = [
   },
   {
     // 表名前缀：与「表名最大长度」合成同一条命名规则（tp=2 为文本输入）
-    name: 'DDLTablePrefix',    category: 'naming',
+    name: 'DDLTablePrefix',
+    category: 'naming',
 
     desc: t('DDLTablePrefix'),
     type: 'DDL',
     tp: 2,
   },
   {
-    name: 'DDLAllowPRINotInt',    category: 'table',
+    name: 'DDLAllowPRINotInt',
+    category: 'table',
 
     desc: t('DDLAllowPRINotInt'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLEnableNullIndexName',    category: 'index',
+    name: 'DDLEnableNullIndexName',
+    category: 'index',
 
     desc: t('DDLEnableNullIndexName'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLMultiToCommit',    category: 'engine',
+    name: 'DDLMultiToCommit',
+    category: 'engine',
 
     desc: t('DDLMultiToCommit'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLAllowMultiAlter',    category: 'table',
+    name: 'DDLAllowMultiAlter',
+    category: 'table',
 
     desc: t('DDLAllowMultiAlter'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLAllowColumnType',    category: 'column',
+    name: 'DDLAllowColumnType',
+    category: 'column',
 
     desc: t('DDLAllowColumnType'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'DDLAllowChangeColumnPosition',    category: 'column',
+    name: 'DDLAllowChangeColumnPosition',
+    category: 'column',
 
     desc: t('DDLAllowChangeColumnPosition'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'AllowCreateView',    category: 'table',
+    name: 'AllowCreateView',
+    category: 'table',
 
     desc: t('AllowCreateView'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'AllowCreatePartition',    category: 'table',
+    name: 'AllowCreatePartition',
+    category: 'table',
 
     desc: t('AllowCreatePartition'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'AllowSpecialType',    category: 'system',
+    name: 'AllowSpecialType',
+    category: 'system',
 
     desc: t('AllowSpecialType'),
     type: 'DDL',
     tp: 0,
   },
   {
-    name: 'SupportCollation',    category: 'system',
+    name: 'SupportCollation',
+    category: 'system',
 
     desc: t('SupportCollation'),
     type: 'DDL',
     tp: 2,
   },
   {
-    name: 'SupportCharset',    category: 'system',
+    name: 'SupportCharset',
+    category: 'system',
 
     desc: t('SupportCharset'),
     type: 'DDL',
     tp: 2,
   },
   {
-    name: 'MustHaveColumns',    category: 'system',
+    name: 'MustHaveColumns',
+    category: 'system',
 
     desc: t('MustHaveColumns'),
     type: 'DDL',
     tp: 2,
   },
   {
-    name: 'DDLMaxKeyParts',    category: 'index',
+    name: 'DDLMaxKeyParts',
+    category: 'index',
 
     desc: t('DDLMaxKeyParts'),
     type: 'DDL',
     tp: 1,
   },
   {
-    name: 'DDLMaxKey',    category: 'index',
+    name: 'DDLMaxKey',
+    category: 'index',
 
     desc: t('DDLMaxKey'),
     type: 'DDL',
     tp: 1,
   },
   {
-    name: 'MaxDDLAffectRows',    category: 'engine',
+    name: 'MaxDDLAffectRows',
+    category: 'engine',
 
     desc: t('MaxDDLAffectRows'),
     type: 'DDL',
     tp: 1,
   },
   {
-    name: 'DDLMaxCharLength',    category: 'column',
+    name: 'DDLMaxCharLength',
+    category: 'column',
 
     desc: t('DDLMaxCharLength'),
     type: 'DDL',
     tp: 1,
   },
   {
-    name: 'MaxTableNameLen',    category: 'naming',
+    name: 'MaxTableNameLen',
+    category: 'naming',
 
     desc: t('MaxTableNameLen'),
     type: 'DDL',
     tp: 1,
   },
   {
-    name: 'DMLMaxInsertRows',    category: 'engine',
+    name: 'DMLMaxInsertRows',
+    category: 'engine',
 
     desc: t('DMLMaxInsertRows'),
     type: 'DML',
     tp: 1,
   },
   {
-    name: 'DMLWhereExprValueIsNull',    category: 'statement',
+    name: 'DMLWhereExprValueIsNull',
+    category: 'statement',
 
     desc: t('DMLWhereExprValueIsNull'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLAllowLimitSTMT',    category: 'statement',
+    name: 'DMLAllowLimitSTMT',
+    category: 'statement',
 
     desc: t('DMLAllowLimitSTMT'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLAllowInsertNull',    category: 'statement',
+    name: 'DMLAllowInsertNull',
+    category: 'statement',
 
     desc: t('DMLAllowInsertNull'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DDLImplicitTypeConversion',    category: 'statement',
+    name: 'DDLImplicitTypeConversion',
+    category: 'statement',
 
     desc: t('DDLImplicitTypeConversion'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLInsertColumns',    category: 'statement',
+    name: 'DMLInsertColumns',
+    category: 'statement',
 
     desc: t('DMLInsertColumns'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLInsertMustExplicitly',    category: 'statement',
+    name: 'DMLInsertMustExplicitly',
+    category: 'statement',
 
     desc: t('DMLInsertMustExplicitly'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLWhere',    category: 'statement',
+    name: 'DMLWhere',
+    category: 'statement',
 
     desc: t('DMLWhere'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLOrder',    category: 'statement',
+    name: 'DMLOrder',
+    category: 'statement',
 
     desc: t('DMLOrder'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'DMLSelect',    category: 'statement',
+    name: 'DMLSelect',
+    category: 'statement',
 
     desc: t('DMLSelect'),
     type: 'DML',
     tp: 0,
   },
   {
-    name: 'MaxAffectRows',    category: 'engine',
+    name: 'MaxAffectRows',
+    category: 'engine',
 
     desc: t('MaxAffectRows'),
     type: 'DML',
     tp: 1,
   },
   {
-    name: 'DMLTransaction',    category: 'engine',
+    name: 'DMLTransaction',
+    category: 'engine',
 
     desc: t('DMLTransaction'),
     type: 'DML',
@@ -357,21 +398,24 @@ const rule: Rule[] = [
   },
 
   {
-    name: 'IsOSC',    category: 'engine',
+    name: 'IsOSC',
+    category: 'engine',
 
     desc: t('IsOSC'),
     type: 'Online-DDL',
     tp: 0,
   },
   {
-    name: 'OscSize',    category: 'engine',
+    name: 'OscSize',
+    category: 'engine',
 
     desc: t('OscSize'),
     type: 'Online-DDL',
     tp: 1,
   },
   {
-    name: 'OSCExpr',    category: 'engine',
+    name: 'OSCExpr',
+    category: 'engine',
 
     desc: t('OSCExpr'),
     type: 'Online-DDL',
@@ -380,7 +424,8 @@ const rule: Rule[] = [
   // --- MongoDB 变更规则 ---
   // 与 SQL 规则同构：开关 + 级别（级别走 RuleLevel，默认 error）
   {
-    name: 'MongoForbidEmptyFilter',    category: 'statement',
+    name: 'MongoForbidEmptyFilter',
+    category: 'statement',
 
     desc: t('MongoForbidEmptyFilter'),
     level: 'error',
@@ -388,7 +433,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidDangerous',    category: 'statement',
+    name: 'MongoForbidDangerous',
+    category: 'statement',
 
     desc: t('MongoForbidDangerous'),
     level: 'error',
@@ -396,7 +442,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidWhere',    category: 'statement',
+    name: 'MongoForbidWhere',
+    category: 'statement',
 
     desc: t('MongoForbidWhere'),
     level: 'error',
@@ -404,7 +451,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidDropCollection',    category: 'table',
+    name: 'MongoForbidDropCollection',
+    category: 'table',
 
     desc: t('MongoForbidDropCollection'),
     level: 'error',
@@ -412,7 +460,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidSystemCollection',    category: 'table',
+    name: 'MongoForbidSystemCollection',
+    category: 'table',
 
     desc: t('MongoForbidSystemCollection'),
     level: 'error',
@@ -420,7 +469,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidAdminCommand',    category: 'statement',
+    name: 'MongoForbidAdminCommand',
+    category: 'statement',
 
     desc: t('MongoForbidAdminCommand'),
     level: 'error',
@@ -428,7 +478,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidImmutableId',    category: 'table',
+    name: 'MongoForbidImmutableId',
+    category: 'table',
 
     desc: t('MongoForbidImmutableId'),
     level: 'error',
@@ -436,7 +487,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidCappedConvert',    category: 'table',
+    name: 'MongoForbidCappedConvert',
+    category: 'table',
 
     desc: t('MongoForbidCappedConvert'),
     level: 'error',
@@ -444,7 +496,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoForbidCollMod',    category: 'table',
+    name: 'MongoForbidCollMod',
+    category: 'table',
 
     desc: t('MongoForbidCollMod'),
     level: 'warn',
@@ -452,7 +505,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoIndexKeyLimit',    category: 'index',
+    name: 'MongoIndexKeyLimit',
+    category: 'index',
 
     desc: t('MongoIndexKeyLimit'),
     level: 'warn',
@@ -460,7 +514,8 @@ const rule: Rule[] = [
     tp: 1,
   },
   {
-    name: 'MongoIndexNameSpec',    category: 'naming',
+    name: 'MongoIndexNameSpec',
+    category: 'naming',
 
     desc: t('MongoIndexNameSpec'),
     level: 'warn',
@@ -468,7 +523,8 @@ const rule: Rule[] = [
     tp: 2,
   },
   {
-    name: 'MongoCollectionPrefix',    category: 'naming',
+    name: 'MongoCollectionPrefix',
+    category: 'naming',
 
     desc: t('MongoCollectionPrefix'),
     level: 'warn',
@@ -476,7 +532,8 @@ const rule: Rule[] = [
     tp: 2,
   },
   {
-    name: 'MongoMaxCollectionNameLen',    category: 'naming',
+    name: 'MongoMaxCollectionNameLen',
+    category: 'naming',
 
     desc: t('MongoMaxCollectionNameLen'),
     level: 'warn',
@@ -484,7 +541,8 @@ const rule: Rule[] = [
     tp: 1,
   },
   {
-    name: 'MongoRegexUnanchored',    category: 'statement',
+    name: 'MongoRegexUnanchored',
+    category: 'statement',
 
     desc: t('MongoRegexUnanchored'),
     level: 'warn',
@@ -492,7 +550,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoNegationOperator',    category: 'statement',
+    name: 'MongoNegationOperator',
+    category: 'statement',
 
     desc: t('MongoNegationOperator'),
     level: 'warn',
@@ -500,7 +559,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoOrClause',    category: 'statement',
+    name: 'MongoOrClause',
+    category: 'statement',
 
     desc: t('MongoOrClause'),
     level: 'warn',
@@ -508,7 +568,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoLargeInList',    category: 'statement',
+    name: 'MongoLargeInList',
+    category: 'statement',
 
     desc: t('MongoLargeInList'),
     level: 'warn',
@@ -516,7 +577,8 @@ const rule: Rule[] = [
     tp: 1,
   },
   {
-    name: 'MongoQueryForbidNoFilter',    category: 'statement',
+    name: 'MongoQueryForbidNoFilter',
+    category: 'statement',
 
     desc: t('MongoQueryForbidNoFilter'),
     level: 'warn',
@@ -524,7 +586,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoQueryForbidLookup',    category: 'statement',
+    name: 'MongoQueryForbidLookup',
+    category: 'statement',
 
     desc: t('MongoQueryForbidLookup'),
     level: 'warn',
@@ -532,7 +595,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoQueryForbidNoLimit',    category: 'statement',
+    name: 'MongoQueryForbidNoLimit',
+    category: 'statement',
 
     desc: t('MongoQueryForbidNoLimit'),
     level: 'warn',
@@ -540,7 +604,8 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
-    name: 'MongoMaxAffectRows',    category: 'engine',
+    name: 'MongoMaxAffectRows',
+    category: 'engine',
 
     desc: t('MongoMaxAffectRows'),
     level: 'error',
@@ -550,133 +615,152 @@ const rule: Rule[] = [
   // --- Redis 命令规则 ---
   // 安全类默认 error；结构/性能类默认只提示（可在级别列调成 error 来强制）
   {
-    name: 'RedisForbidDangerous',    category: 'statement',
+    name: 'RedisForbidDangerous',
+    category: 'statement',
 
     desc: t('RedisForbidDangerous'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidAdmin',    category: 'statement',
+    name: 'RedisForbidAdmin',
+    category: 'statement',
 
     desc: t('RedisForbidAdmin'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidScript',    category: 'statement',
+    name: 'RedisForbidScript',
+    category: 'statement',
 
     desc: t('RedisForbidScript'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidReplica',    category: 'statement',
+    name: 'RedisForbidReplica',
+    category: 'statement',
 
     desc: t('RedisForbidReplica'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidKeysCommand',    category: 'statement',
+    name: 'RedisForbidKeysCommand',
+    category: 'statement',
 
     desc: t('RedisForbidKeysCommand'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidRename',    category: 'system',
+    name: 'RedisForbidRename',
+    category: 'system',
 
     desc: t('RedisForbidRename'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisKeyPrefix',    category: 'naming',
+    name: 'RedisKeyPrefix',
+    category: 'naming',
 
     desc: t('RedisKeyPrefix'),
     type: 'Redis',
     tp: 2,
   },
   {
-    name: 'RedisMaxKeyLen',    category: 'naming',
+    name: 'RedisMaxKeyLen',
+    category: 'naming',
 
     desc: t('RedisMaxKeyLen'),
     type: 'Redis',
     tp: 1,
   },
   {
-    name: 'RedisForbidMove',    category: 'engine',
+    name: 'RedisForbidMove',
+    category: 'engine',
 
     desc: t('RedisForbidMove'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisMaxAffectKeys',    category: 'engine',
+    name: 'RedisMaxAffectKeys',
+    category: 'engine',
 
     desc: t('RedisMaxAffectKeys'),
     type: 'Redis',
     tp: 1,
   },
   {
-    name: 'RedisMaxValueLen',    category: 'engine',
+    name: 'RedisMaxValueLen',
+    category: 'engine',
 
     desc: t('RedisMaxValueLen'),
     type: 'Redis',
     tp: 1,
   },
   {
-    name: 'RedisRequireTTL',    category: 'system',
+    name: 'RedisRequireTTL',
+    category: 'system',
 
     desc: t('RedisRequireTTL'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidPersist',    category: 'system',
+    name: 'RedisForbidPersist',
+    category: 'system',
 
     desc: t('RedisForbidPersist'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisScanRequireMatch',    category: 'statement',
+    name: 'RedisScanRequireMatch',
+    category: 'statement',
 
     desc: t('RedisScanRequireMatch'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'RedisForbidBlocking',    category: 'statement',
+    name: 'RedisForbidBlocking',
+    category: 'statement',
 
     desc: t('RedisForbidBlocking'),
     type: 'Redis',
     tp: 0,
   },
   {
-    name: 'DorisRequireDistribution',    category: 'table',
+    name: 'DorisRequireDistribution',
+    category: 'table',
 
     desc: t('DorisRequireDistribution'),
     type: 'Doris',
     tp: 0,
   },
   {
-    name: 'DorisBucketLimit',    category: 'table',
+    name: 'DorisBucketLimit',
+    category: 'table',
 
     desc: t('DorisBucketLimit'),
     type: 'Doris',
     tp: 1,
   },
   {
-    name: 'DorisReplicationNum',    category: 'table',
+    name: 'DorisReplicationNum',
+    category: 'table',
 
     desc: t('DorisReplicationNum'),
     type: 'Doris',
     tp: 1,
   },
   {
-    name: 'DorisKeyModel',    category: 'table',
+    name: 'DorisKeyModel',
+    category: 'table',
 
     desc: t('DorisKeyModel'),
     type: 'Doris',
@@ -701,7 +785,9 @@ export function filterRules(list: Rule[], cat: RuleCategory | 'all'): Rule[] {
   return cat === 'all' ? list : list.filter((r) => r.category === cat);
 }
 
-export function categoryCounts(list: Rule[]): Record<RuleCategory | 'all', number> {
+export function categoryCounts(
+  list: Rule[],
+): Record<RuleCategory | 'all', number> {
   const out = { all: list.length } as Record<RuleCategory | 'all', number>;
   for (const c of RULE_CATEGORIES) out[c.key] = 0;
   for (const r of list) out[r.category] += 1;

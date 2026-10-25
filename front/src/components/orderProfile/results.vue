@@ -120,7 +120,7 @@
 
   const router = useRouter();
 
-    const orderStore = useOrderStore();
+  const orderStore = useOrderStore();
 
   const currentRolling = async (vl: number) => {
     const { data } = await getOrderRollSQLS(props.workId, vl);
@@ -135,10 +135,10 @@
       const order = orderStore.order;
       const { data } = await querySourceList(order.type === 1 ? 'dml' : 'ddl');
       const hit = (data.payload as ISource[] | null)?.find(
-        (i) => i.source_id === order.source_id
+        (i) => i.source_id === order.source_id,
       );
       dbType.value = hit?.db_type ?? 0;
-    } catch (e) {
+    } catch {
       dbType.value = 0; // 取不到就按 SQL 处理（与改动前一致）
     }
   };

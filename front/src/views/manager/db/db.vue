@@ -27,7 +27,7 @@
 
   const dbTable = ref<InstanceType<typeof DBTable>>();
 
-    const commonStore = useCommonStore();
+  const commonStore = useCommonStore();
 
   const getPrincipal = async () => {
     const { data } = await updateUserPrincipal();

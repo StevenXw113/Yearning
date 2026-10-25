@@ -19,9 +19,7 @@
           :maxlength="6"
         />
         <a-popconfirm :title="$t('user.mfa.disable.tips')" @confirm="doDisable">
-          <a-button danger ghost>{{
-            $t('user.mfa.disable')
-          }}</a-button>
+          <a-button danger ghost>{{ $t('user.mfa.disable') }}</a-button>
         </a-popconfirm>
       </a-space>
     </template>
@@ -33,7 +31,11 @@
           <canvas ref="qrRef" width="200" height="200"></canvas>
           <div style="word-break: break-all; color: #888; font-size: 12px">
             {{ $t('user.mfa.manual') }}:
-            <a-typography-paragraph :copyable="{ text: setup.secret }" style="display: inline" code>
+            <a-typography-paragraph
+              :copyable="{ text: setup.secret }"
+              style="display: inline"
+              code
+            >
               {{ setup.secret }}
             </a-typography-paragraph>
           </div>

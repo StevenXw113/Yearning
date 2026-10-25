@@ -11,15 +11,10 @@
       :filter-option="filterOption"
       @change="handleChange"
     >
-      <a-select-option value="all">{{
-        $t('order.state.all')
+      <a-select-option value="all">{{ $t('order.state.all') }}</a-select-option>
+      <a-select-option v-for="i in options" :key="i.source" :value="i.source">{{
+        i.source
       }}</a-select-option>
-      <a-select-option
-        v-for="i in options"
-        :key="i.source"
-        :value="i.source"
-        >{{ i.source }}</a-select-option
-      >
     </a-select>
   </div>
   <br />
@@ -137,7 +132,7 @@
     value === '' || value === undefined || value === 'all'
       ? (source.value = tmpSource)
       : (source.value = tmpSource.filter(
-          (item: ISource) => item.source === value
+          (item: ISource) => item.source === value,
         ));
   };
 
@@ -163,77 +158,80 @@
 </script>
 
 <style scoped>
-/* 数据源筛选框：左侧放大镜 + 圆角胶囊，颜色用中性透明度叠加，
+  /* 数据源筛选框：左侧放大镜 + 圆角胶囊，颜色用中性透明度叠加，
    深/浅主题都不需要单独适配（强调色用主题的 primary #527590） */
-.source-filter {
-  position: relative;
-  /* 宽度对齐下方 a-list 卡片的第一列，与列表栅格同一套断点：
+  .source-filter {
+    position: relative;
+    /* 宽度对齐下方 a-list 卡片的第一列，与列表栅格同一套断点：
      xs/sm 1 列、md/lg 2 列、xl+ 4 列，gutter 16。
      卡片宽 = (容器宽 + 16) / 列数 - 16，又因为 a-list 的 row 有 -8px 外边距，
      换算到容器百分比就是下面这三个值（1440 下 25% - 12px = 299px，与卡片一致）*/
-  width: 100%;
-}
-
-@media (min-width: 768px) {
-  .source-filter {
-    width: calc(50% - 8px);
+    width: 100%;
   }
-}
 
-@media (min-width: 1200px) {
-  .source-filter {
-    width: calc(25% - 12px);
+  @media (min-width: 768px) {
+    .source-filter {
+      width: calc(50% - 8px);
+    }
   }
-}
 
-.source-filter-icon {
-  position: absolute;
-  top: 50%;
-  left: 11px;
-  z-index: 1;
-  font-size: 13px;
-  color: inherit;
-  opacity: 0.4;
-  pointer-events: none;
-  transform: translateY(-50%);
-  transition: opacity 0.2s;
-}
+  @media (min-width: 1200px) {
+    .source-filter {
+      width: calc(25% - 12px);
+    }
+  }
 
-.source-filter:focus-within .source-filter-icon {
-  opacity: 1;
-}
+  .source-filter-icon {
+    position: absolute;
+    top: 50%;
+    left: 11px;
+    z-index: 1;
+    font-size: 13px;
+    color: inherit;
+    opacity: 0.4;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity 0.2s;
+  }
 
-.source-filter :deep(.ant-select-single) {
-  height: 36px;
-}
+  .source-filter:focus-within .source-filter-icon {
+    opacity: 1;
+  }
 
-.source-filter :deep(.ant-select-single .ant-select-selector) {
-  height: 36px;
-  padding-left: 30px;
-  border-radius: 8px;
-  background: rgba(128, 128, 128, 0.08);
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-}
+  .source-filter :deep(.ant-select-single) {
+    height: 36px;
+  }
 
-/* 输入光标与文字跟放大镜对齐 */
-.source-filter :deep(.ant-select-selection-search) {
-  left: 30px;
-  inset-inline-start: 30px;
-}
+  .source-filter :deep(.ant-select-single .ant-select-selector) {
+    height: 36px;
+    padding-left: 30px;
+    border-radius: 8px;
+    background: rgba(128, 128, 128, 0.08);
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
 
-.source-filter :deep(.ant-select-single .ant-select-selection-item),
-.source-filter :deep(.ant-select-single .ant-select-selection-placeholder) {
-  line-height: 34px;
-}
+  /* 输入光标与文字跟放大镜对齐 */
+  .source-filter :deep(.ant-select-selection-search) {
+    left: 30px;
+    inset-inline-start: 30px;
+  }
 
-.source-filter
-  :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
-  border-color: rgba(82, 117, 144, 0.9);
-  background: rgba(128, 128, 128, 0.14);
-}
+  .source-filter :deep(.ant-select-single .ant-select-selection-item),
+  .source-filter :deep(.ant-select-single .ant-select-selection-placeholder) {
+    line-height: 34px;
+  }
 
-.source-filter :deep(.ant-select-focused .ant-select-selector) {
-  border-color: #527590;
-  box-shadow: 0 0 0 2px rgba(82, 117, 144, 0.25);
-}
+  .source-filter
+    :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
+    border-color: rgba(82, 117, 144, 0.9);
+    background: rgba(128, 128, 128, 0.14);
+  }
+
+  .source-filter :deep(.ant-select-focused .ant-select-selector) {
+    border-color: #527590;
+    box-shadow: 0 0 0 2px rgba(82, 117, 144, 0.25);
+  }
 </style>

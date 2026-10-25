@@ -5,7 +5,8 @@ import { useIntervalFn } from '@vueuse/core';
 // 「仅保活不判死」,因此关掉判死,保留 5s 一次的 keep-alive(穿透代理空闲超时)。
 export function wsHeartbeat() {
   return {
-    scheduler: (cb: () => void) => useIntervalFn(cb, 5000, { immediate: false }),
+    scheduler: (cb: () => void) =>
+      useIntervalFn(cb, 5000, { immediate: false }),
     pongTimeout: Number.MAX_SAFE_INTEGER,
     message: 'ping',
   };

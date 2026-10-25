@@ -107,7 +107,8 @@ export default {
   'order.retry.skip': 'Skip and continue',
   'order.retry.skip.tips':
     'Confirm the failed statement has been handled on the database (or abandoned) and continue with the following statements?',
-  'order.retry.nofailed': 'No failed records (the order may not have run at all)',
+  'order.retry.nofailed':
+    'No failed records (the order may not have run at all)',
   'order.tx': 'Transaction',
   'order.tx.tips':
     'With this on, DML of this order runs in a transaction: all-or-nothing rollback on failure (MySQL DDL implicitly commits and cannot be transactional). Takes precedence over the DML-transaction rule.',

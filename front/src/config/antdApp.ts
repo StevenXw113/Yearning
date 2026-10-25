@@ -9,7 +9,10 @@
 //
 // 类型按消费者实际用到的最小形状声明：静态 API 与 useApp 实例的函数签名
 // 在细节参数上有差异（duration 联合类型等），直接抄实例类型会互相赋不上。
-import { message as staticMessage, notification as staticNotification } from 'ant-design-vue';
+import {
+  message as staticMessage,
+  notification as staticNotification,
+} from 'ant-design-vue';
 
 interface FeedbackBridge {
   message: {

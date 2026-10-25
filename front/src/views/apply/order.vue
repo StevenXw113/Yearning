@@ -61,7 +61,9 @@
           <a-form-item :label="$t('order.profile.exec')">
             <a-radio-group v-model:value="execMode" name="execMode">
               <a-radio value="now">{{ $t('order.exec.now') }}</a-radio>
-              <a-radio value="schedule">{{ $t('order.exec.schedule') }}</a-radio>
+              <a-radio value="schedule">{{
+                $t('order.exec.schedule')
+              }}</a-radio>
               <a-tooltip :title="$t('order.exec.manual.tips')" placement="top">
                 <a-radio value="manual">{{ $t('order.exec.manual') }}</a-radio>
               </a-tooltip>
@@ -264,7 +266,7 @@
 
   const route = useRoute();
 
-    const commonStore = useCommonStore();
+  const commonStore = useCommonStore();
 
   const enabled = ref(true);
 
@@ -316,7 +318,11 @@
   // 数据源类型（2 = MongoDB、3 = Redis）：决定编辑器提示与审核方言
   const dbType = ref(0);
 
-  const { nonFields, register: registerCompletion, dispose: disposeCompletion } = useSqlCompletion();
+  const {
+    nonFields,
+    register: registerCompletion,
+    dispose: disposeCompletion,
+  } = useSqlCompletion();
 
   const disabledDate = (current: Dayjs) => {
     // Can not select days before today and today
@@ -368,7 +374,7 @@
       else if (v === 'manual') orderItems.delay = 'manual';
       else orderItems.delay = ''; // 选完时间后再由 delayTime 填
     },
-    { immediate: true }
+    { immediate: true },
   );
 
   const delayTime = (date: Dayjs) => {
@@ -426,7 +432,7 @@
   const columnsFrom = (
     rows: any[],
     titles: Record<string, string>,
-    widths: Record<string, number>
+    widths: Record<string, number>,
   ) =>
     Object.keys(rows[0] || {}).map((k) => ({
       title: titles[k] || k,
@@ -560,12 +566,17 @@
       orderItems.source_id,
       orderItems.data_base,
       true,
-      nonFields.value
+      nonFields.value,
     );
   };
 
   const fetchHighLight = async () => {
-    await registerCompletion(orderItems.source_id, orderItems.source_id, false, []);
+    await registerCompletion(
+      orderItems.source_id,
+      orderItems.source_id,
+      false,
+      [],
+    );
   };
 
   const fetchSchema = async () => {
@@ -634,24 +645,24 @@
 </script>
 
 <style scoped>
-/* 左栏是 xl=6 的窄卡（1600 下实测 340px 宽），antd 默认每个表单项 24px 的下间距
+  /* 左栏是 xl=6 的窄卡（1600 下实测 340px 宽），antd 默认每个表单项 24px 的下间距
    已经和行高(32px)差不多，整列显得很空。压到 10px，8 行省下约 110px 高度。 */
-:deep(.ant-form-item) {
-  margin-bottom: 10px;
-}
-/* 标签列 6/24 约 65px，「执行方式」+ 冒号约 64px 卡在边缘；
+  :deep(.ant-form-item) {
+    margin-bottom: 10px;
+  }
+  /* 标签列 6/24 约 65px，「执行方式」+ 冒号约 64px 卡在边缘；
    antd 给冒号留了 8px 右间距，收到 3px（并收左间距）腾出余量，避免被裁 */
-:deep(.ant-form-item-label > label)::after {
-  margin: 0 3px 0 1px;
-}
-/* 执行方式/是否回滚的单选组：控件区 187px，默认每个选项各占一行（实测 3 行 66px）。
+  :deep(.ant-form-item-label > label)::after {
+    margin: 0 3px 0 1px;
+  }
+  /* 执行方式/是否回滚的单选组：控件区 187px，默认每个选项各占一行（实测 3 行 66px）。
    去掉 antd 的 8px 右间距后，列间距 ≤8px 才能两两排下（实测 2 行 46px） */
-:deep(.ant-radio-group) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-}
-:deep(.ant-radio-group .ant-radio-wrapper) {
-  margin-right: 0; /* 间距交给上面的 gap，避免和 antd 的 8px 叠加 */
-}
+  :deep(.ant-radio-group) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+  :deep(.ant-radio-group .ant-radio-wrapper) {
+    margin-right: 0; /* 间距交给上面的 gap，避免和 antd 的 8px 叠加 */
+  }
 </style>

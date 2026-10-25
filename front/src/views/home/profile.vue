@@ -13,10 +13,7 @@
           :rules="rules"
         >
           <a-form-item :label="$t('user.form.user')">
-            <a-input
-              v-model:value="userStore.account.user"
-              disabled
-            ></a-input>
+            <a-input v-model:value="userStore.account.user" disabled></a-input>
           </a-form-item>
           <a-form-item :label="$t('user.form.dept')">
             <a-input v-model:value="formItem.department"></a-input>
@@ -85,7 +82,7 @@
   import { getUserInfo, RegisterForm, updateUserInfo } from '@/apis/user';
   import { useI18n } from 'vue-i18n';
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
 
   const formItem = ref<RegisterForm>({
     password: '',
@@ -138,8 +135,6 @@
       ? (formItem.value.theme = 'dark')
       : (formItem.value.theme = localStorage.getItem('theme') as string);
     formItem.value.lang =
-      localStorage.getItem('lang') ||
-      sessionStorage.getItem('lang') ||
-      'zh_CN';
+      localStorage.getItem('lang') || sessionStorage.getItem('lang') || 'zh_CN';
   });
 </script>

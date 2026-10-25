@@ -76,7 +76,7 @@
           width: colWidth(col.width),
           __idx: idx, // 拖拽回写时用来找回父组件的原列
         }))
-      : (props.tblRef.col as any[])
+      : (props.tblRef.col as any[]),
   );
 
   const handleResizeColumn = (w: number, col: any) => {
@@ -113,8 +113,8 @@
   const scrollX = computed(() =>
     renderCols.value.reduce(
       (sum, col: any) => sum + (Number(col.width) || defaultColWidth),
-      0
-    )
+      0,
+    ),
   );
 
   const attrs = useAttrs();
@@ -147,7 +147,7 @@
           showSizeChanger: true,
           current: pNumber.value,
           defaultPageSize: props.tblRef.defaultPageSize,
-        }
+        },
   );
 
   const loading = ref(true);
@@ -163,7 +163,7 @@
   // a-table 的 change 事件：分页与表头筛选一并交给业务侧处理（服务端筛选）
   const currentPage = (
     page: { current: number; pageSize: number },
-    filters?: any
+    filters?: any,
   ) => {
     pSize.value = page.pageSize;
     pNumber.value = page.current;
@@ -232,20 +232,20 @@
 </script>
 
 <style scoped>
-/* 仅工单相关表格（tblRef.resizable === true）：拖窄后内容溢出就截断（配省略号），
+  /* 仅工单相关表格（tblRef.resizable === true）：拖窄后内容溢出就截断（配省略号），
    而不是把列顶回去；表宽布局由 a-table 的 table-layout="fixed" 保证。
    注意类落在 a-table 的根节点 .ant-table-wrapper 上。 */
-.ant-table-wrapper.tbl-fixed :deep(.ant-table-tbody > tr > td) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .ant-table-wrapper.tbl-fixed :deep(.ant-table-tbody > tr > td) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-/* antd 会给表格内联 min-width:100%：列宽之和小于容器时表格被拉宽，多出的宽度会被
+  /* antd 会给表格内联 min-width:100%：列宽之和小于容器时表格被拉宽，多出的宽度会被
    摊到各列上，拖动又被抵消。这里取消拉伸，列宽严格等于所设值（表格右侧可能留白）。 */
-.ant-table-wrapper.tbl-fixed :deep(.ant-table-content > table),
-.ant-table-wrapper.tbl-fixed :deep(.ant-table-header > table),
-.ant-table-wrapper.tbl-fixed :deep(.ant-table-body > table) {
-  min-width: 0 !important;
-}
+  .ant-table-wrapper.tbl-fixed :deep(.ant-table-content > table),
+  .ant-table-wrapper.tbl-fixed :deep(.ant-table-header > table),
+  .ant-table-wrapper.tbl-fixed :deep(.ant-table-body > table) {
+    min-width: 0 !important;
+  }
 </style>

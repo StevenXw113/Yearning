@@ -72,7 +72,7 @@
             v-model:page-size="pagination.pageSize"
             v-model:current="pagination.current"
             :total="pagination.pageCount"
-            :show-total="(total:number) => `共 ${total} 条`"
+            :show-total="(total: number) => `共 ${total} 条`"
             @change="currentPage"
           />
         </a-tab-pane>

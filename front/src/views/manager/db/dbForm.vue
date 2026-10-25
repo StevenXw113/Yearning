@@ -10,12 +10,9 @@
     </a-form-item>
     <a-form-item :label="$t('common.table.db_type')">
       <a-select v-model:value="dbForm.db_type">
-        <a-select-option
-          v-for="i in db_type"
-          :key="i.value"
-          :value="i.value"
-          >{{ i.label }}</a-select-option
-        >
+        <a-select-option v-for="i in db_type" :key="i.value" :value="i.value">{{
+          i.label
+        }}</a-select-option>
       </a-select>
     </a-form-item>
     <a-form-item :label="$t('common.rules')">
@@ -127,17 +124,32 @@
   <ssl_model
     v-model:open="open.ca"
     title="CA"
-    @save="(text:string) =>{ dbForm.ca_file = text;open.ca = false}"
+    @save="
+      (text: string) => {
+        dbForm.ca_file = text;
+        open.ca = false;
+      }
+    "
   ></ssl_model>
   <ssl_model
     v-model:open="open.cert"
     title="Cert"
-    @save="(text:string) => {dbForm.cert = text;open.cert = false}"
+    @save="
+      (text: string) => {
+        dbForm.cert = text;
+        open.cert = false;
+      }
+    "
   ></ssl_model>
   <ssl_model
     v-model:open="open.key"
     title="KeyFile"
-    @save="(text:string) => {dbForm.key_file = text;open.key = false}"
+    @save="
+      (text: string) => {
+        dbForm.key_file = text;
+        open.key = false;
+      }
+    "
   ></ssl_model>
 </template>
 
@@ -170,11 +182,11 @@
     key: false,
   });
 
-    const commonStore = useCommonStore();
+  const commonStore = useCommonStore();
 
   const regExp_Name = (rule: RuleObject, value: string) => {
     let pPattern = new RegExp(
-      "[`~!@#$^&*()={}':;',\\[\\]<>/?~！@#￥……&*（）——{}【】‘；：”“'。，、？]"
+      "[`~!@#$^&*()={}':;',\\[\\]<>/?~！@#￥……&*（）——{}【】‘；：”“'。，、？]",
     );
     if (pPattern.test(value)) {
       return Promise.reject(t('db.exp.name'));
@@ -305,12 +317,12 @@
 </script>
 
 <style scoped>
-/* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
+  /* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
    标签宽度交给内容，长标签（英文）自动撑开，不会被输入框截断 */
-:deep(.ant-form-item) {
-  margin-bottom: 10px;
-}
-:deep(.ant-form-item .ant-form-item-label) {
-  font-size: 12px;
-}
+  :deep(.ant-form-item) {
+    margin-bottom: 10px;
+  }
+  :deep(.ant-form-item .ant-form-item-label) {
+    font-size: 12px;
+  }
 </style>

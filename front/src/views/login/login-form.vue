@@ -59,12 +59,7 @@
 
 <script setup lang="ts">
   import { UnwrapRef, reactive, ref, onMounted, computed } from 'vue';
-  import {
-    signIn,
-    mfaSignIn,
-    LoginFrom,
-    getOIDCState,
-  } from '@/apis/loginApi';
+  import { signIn, mfaSignIn, LoginFrom, getOIDCState } from '@/apis/loginApi';
   import router from '@/router';
   import { useUserStore, useMenuStore } from '@/store';
   import { useRoute } from 'vue-router';
@@ -82,7 +77,7 @@
   const mfaRequired = ref(false);
   const mfaForm = reactive({ ticket: '', code: '', user: '' });
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
   const menuStore = useMenuStore();
   const route = useRoute();
 
@@ -105,13 +100,12 @@
       // OIDC 回调把登录态放在查询参数里（token/user/real_name/is_record）。
       // 显式构造 LoginRespPayload：route.query 的值是 string|string[]，
       // 直接透传曾让 is_record 以字符串入 store，导致 is_record === 1 判断失效。
-      const { oidcLogin, ...rest } = query;
       userStore.USER_STORE({
-        token: String(rest.token ?? ''),
-        user: String(rest.user ?? ''),
-        real_name: String(rest.real_name ?? ''),
-        is_record: Number(rest.is_record ?? 2),
-        rule: String(rest.rule ?? ''),
+        token: String(query.token ?? ''),
+        user: String(query.user ?? ''),
+        real_name: String(query.real_name ?? ''),
+        is_record: Number(query.is_record ?? 2),
+        rule: String(query.rule ?? ''),
       });
       menuStore.CHANGE_SELECTED(['/home']);
       router.replace('/home');

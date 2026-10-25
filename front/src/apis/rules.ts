@@ -48,7 +48,9 @@ export interface RuleHistory {
 }
 
 // rule_id 语义与后端一致：0 = 全局规则，>0 = 规则集 id。
-export function getRuleHistory(rule_id: number): AxiosPromise<Res<RuleHistory[]>> {
+export function getRuleHistory(
+  rule_id: number,
+): AxiosPromise<Res<RuleHistory[]>> {
   return request.post(`${COMMON_URI}/manage/roles/history`, { rule_id });
 }
 

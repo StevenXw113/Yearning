@@ -105,16 +105,21 @@ export default {
   MongoCollectionPrefix: 'MongoDB：集合名前缀规范（留空不生效）',
   MongoMaxCollectionNameLen: 'MongoDB：集合名长度上限（0 不限，建议 120）',
   MongoRegexUnanchored: 'MongoDB：禁止未以 ^ 锚定的 $regex（无法走索引）',
-  MongoNegationOperator: 'MongoDB：不推荐 $ne / $nin / $not / $nor（通常全集合扫描）',
+  MongoNegationOperator:
+    'MongoDB：不推荐 $ne / $nin / $not / $nor（通常全集合扫描）',
   MongoOrClause: 'MongoDB：不推荐 $or（各分支需分别走索引）',
   MongoLargeInList: 'MongoDB：$in 元素个数上限（0 不限，建议 1000）',
-  MongoQueryForbidNoFilter: 'MongoDB 查询：禁止无过滤条件（find 无 filter / aggregate 无 $match）',
+  MongoQueryForbidNoFilter:
+    'MongoDB 查询：禁止无过滤条件（find 无 filter / aggregate 无 $match）',
   MongoQueryForbidLookup: 'MongoDB 查询：禁止 $lookup / $graphLookup',
   MongoQueryForbidNoLimit: 'MongoDB 查询：find 带 sort 时必须带 limit',
   MongoMaxAffectRows: 'MongoDB：单次变更命中文档数上限（0 不限）',
-  RedisForbidDangerous: '禁止 FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE 等影响整个实例的命令',
-  RedisForbidAdmin: '禁止 CONFIG / DEBUG / MODULE / MONITOR / CLIENT 等运维管理命令',
-  RedisForbidScript: '禁止 EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL（服务端执行脚本）',
+  RedisForbidDangerous:
+    '禁止 FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE 等影响整个实例的命令',
+  RedisForbidAdmin:
+    '禁止 CONFIG / DEBUG / MODULE / MONITOR / CLIENT 等运维管理命令',
+  RedisForbidScript:
+    '禁止 EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL（服务端执行脚本）',
   RedisForbidReplica: '禁止 REPLICAOF / SLAVEOF（改变主从关系）',
   RedisForbidKeysCommand: '禁止 KEYS：会遍历整个键空间并阻塞实例，请改用 SCAN',
   RedisForbidRename: '禁止 RENAME / RENAMENX：会静默覆盖目标键，旧值无法找回',
@@ -126,11 +131,14 @@ export default {
   RedisRequireTTL: 'SET 必须带过期时间（EX / PX / EXAT），避免键无上限增长',
   RedisForbidPersist: '禁止 PERSIST：会移除键的过期时间，变成常驻内存',
   RedisScanRequireMatch: 'SCAN 应带 MATCH 限定范围，否则等同于全量遍历',
-  RedisForbidBlocking: '禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE 等）',
-  DorisRequireDistribution: 'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
+  RedisForbidBlocking:
+    '禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE 等）',
+  DorisRequireDistribution:
+    'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
   DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',
   DorisReplicationNum: 'Doris：建表副本数期望值（0 不校验）',
-  DorisKeyModel: 'Doris：提示 AGGREGATE KEY 聚合模型（聚合类型选错会导致结果错误）',
+  DorisKeyModel:
+    'Doris：提示 AGGREGATE KEY 聚合模型（聚合类型选错会导致结果错误）',
   ruleCatAll: '全部',
   ruleCatStatement: '语句',
   ruleCatTable: '表',

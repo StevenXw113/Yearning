@@ -63,7 +63,7 @@
 
   const { t } = useI18n();
 
-    const menuStore = useMenuStore();
+  const menuStore = useMenuStore();
 
   const activeKey = computed({
     get() {

@@ -149,7 +149,7 @@ export function updateUserInfo(user: RegisterForm, isManager: boolean) {
     isManager
       ? `${COMMON_URI}/manage/user?tp=edit`
       : `${COMMON_URI}/common/edit?tp=edit`,
-    user
+    user,
   );
 }
 
@@ -160,7 +160,7 @@ export function updateUserPrincipal() {
 export function signUpUser(register: RegisterForm, isManager: boolean) {
   return request.post(
     isManager ? `${COMMON_URI}/manage/user?tp=add` : '/register',
-    register
+    register,
   );
 }
 

@@ -147,9 +147,9 @@
               style="margin-bottom: 8px"
             />
             <Editor
-              :ref="el => setEditorRef(el, b.uid)"
+              :ref="(el) => setEditorRef(el, b.uid)"
               :container-id="`batch-editor-${b.uid}`"
-              @get-values="sql => checkBlock(b.uid, sql as string)"
+              @get-values="(sql) => checkBlock(b.uid, sql as string)"
             ></Editor>
             <a-alert
               v-if="b.errCount > 0"
@@ -167,7 +167,7 @@
         <a-button
           type="primary"
           :loading="posting"
-          :disabled="blocks.some(b => b.errCount > 0)"
+          :disabled="blocks.some((b) => b.errCount > 0)"
           @click="postBatch"
           >提交项目工单</a-button
         >
@@ -281,9 +281,7 @@
 
   const route = useRoute();
 
-  const type = ref<number>(
-    route.query.type === 'ddl' ? 0 : 1
-  );
+  const type = ref<number>(route.query.type === 'ddl' ? 0 : 1);
 
   const text = ref('');
   const backup = ref(0);
@@ -300,12 +298,12 @@
   // 执行方式映射到后端 delay 字段：now='none'、manual='manual'、schedule=选完时间后填
   watch(
     execMode,
-    v => {
+    (v) => {
       if (v === 'now') delay.value = 'none';
       else if (v === 'manual') delay.value = 'manual';
       else delay.value = '';
     },
-    { immediate: true }
+    { immediate: true },
   );
 
   const editorRefs = ref<Record<number, any>>({});
@@ -313,7 +311,7 @@
     if (el) editorRefs.value[uid] = el;
   };
 
-  const findBlock = (uid: number) => blocks.value.find(b => b.uid === uid);
+  const findBlock = (uid: number) => blocks.value.find((b) => b.uid === uid);
 
   const sourceOptions = ref<{ label: string; value: string }[]>([]);
   // source_id → db_type，供判断该明细是不是 MongoDB（决定提示条与 table 提取）
@@ -352,7 +350,7 @@
   const fetchSources = async () => {
     const { data } = await querySourceList(type.value === 1 ? 'dml' : 'ddl');
     const map: Record<string, number> = {};
-    sourceOptions.value = (data.payload as any[]).map(i => {
+    sourceOptions.value = (data.payload as any[]).map((i) => {
       map[i.source_id] = i.db_type ?? 0;
       return { label: `${i.source}（${i.idc}）`, value: i.source_id };
     });
@@ -364,7 +362,7 @@
   // 避免带着旧类型下的检测结论提交
   watch(type, () => {
     fetchSources();
-    blocks.value.forEach(b => {
+    blocks.value.forEach((b) => {
       b.source_id = '';
       b.data_base = '';
       b.dbList = [];
@@ -423,9 +421,7 @@
       kind: type.value,
       sql: sql,
     });
-    b.errCount = (data.payload || []).filter(
-      (x: any) => x.level === 1
-    ).length;
+    b.errCount = (data.payload || []).filter((x: any) => x.level === 1).length;
   };
 
   // 换目标库后对已有 SQL 重新检测：审核/影响行数估算是按库算的，
@@ -437,11 +433,11 @@
   };
 
   const postBatch = async () => {
-    if (blocks.value.some(b => !b.source_id || !b.data_base)) {
+    if (blocks.value.some((b) => !b.source_id || !b.data_base)) {
       message.error('每条明细都需要选择数据源与目标库');
       return;
     }
-    const items = blocks.value.map(b => {
+    const items = blocks.value.map((b) => {
       const sql = editorRefs.value[b.uid]?.GetValue() || '';
       return {
         source_id: b.source_id,
@@ -452,7 +448,7 @@
         table: isMongoBlock(b) ? mongoCollection(sql) : '',
       };
     });
-    if (items.some(it => it.sql.trim() === '')) {
+    if (items.some((it) => it.sql.trim() === '')) {
       message.error('SQL 内容不能为空');
       return;
     }
@@ -531,36 +527,36 @@
 </script>
 
 <style scoped>
-/* 与「工单填写」左栏同样的处理：antd 默认表单项下间距 24px，而这里行高只有 32px，
+  /* 与「工单填写」左栏同样的处理：antd 默认表单项下间距 24px，而这里行高只有 32px，
    间距快赶上行高本身。压到 10px（本页控件区够宽，单选组本来就是一行，不需要再收紧） */
-:deep(.ant-form-item) {
-  margin-bottom: 10px;
-}
+  :deep(.ant-form-item) {
+    margin-bottom: 10px;
+  }
 
-/* 明细左栏：a-row 是 flex + align-items:stretch，列本身拉满行高。
+  /* 明细左栏：a-row 是 flex + align-items:stretch，列本身拉满行高。
    把列改成纵向 flex 后，上传按钮用 margin-top:auto 贴到底部，
    左栏就不会在右边编辑器下方留出一块空白 */
-.block-side {
-  display: flex;
-  flex-direction: column;
-}
+  .block-side {
+    display: flex;
+    flex-direction: column;
+  }
 
-/* 明细里的数据源/目标库下拉：宽度跟着左栏走（xl 下约 278px），
+  /* 明细里的数据源/目标库下拉：宽度跟着左栏走（xl 下约 278px），
    但窄屏（<xl）左栏会整行铺满，没有这个上限下拉又会被拉到 800px+，
    所以封在 280px —— 与查询页（200px）、工单填写页（187px）同类下拉同一量级 */
-.block-select {
-  width: 100%;
-  max-width: 280px;
-}
-.block-upload {
-  margin-top: auto;
-}
+  .block-select {
+    width: 100%;
+    max-width: 280px;
+  }
+  .block-upload {
+    margin-top: auto;
+  }
 
-/* 页面级动作条：与上方卡片同间距 */
-.batch-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 16px;
-}
+  /* 页面级动作条：与上方卡片同间距 */
+  .batch-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+  }
 </style>

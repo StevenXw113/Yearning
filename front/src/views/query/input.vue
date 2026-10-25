@@ -20,7 +20,7 @@
       </a-select>
     </a-form-item>
   </a-form>
-  <div style="height: 5px;"></div>
+  <div style="height: 5px"></div>
   <Editor
     ref="query_editor"
     :container-id="props.id"
@@ -45,7 +45,7 @@
 
   const query_editor = ref();
 
-    const orderStore = useOrderStore();
+  const orderStore = useOrderStore();
   const commonStore = useCommonStore();
 
   const tbl = ref();

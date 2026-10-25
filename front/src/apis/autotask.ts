@@ -48,4 +48,3 @@ export function updateAutoTask(tp: string, params: AutoTask) {
 export function deleteAutoTask(id: string) {
   return request.delete(`${COMMON_URI}/manage/task?task_id=${id}`);
 }
-

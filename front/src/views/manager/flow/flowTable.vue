@@ -10,7 +10,7 @@
     bordered
     :pagination="{
       total: tblRef.pageCount,
-      showTotal: (total:number) => $t('common.count', { count: total }),
+      showTotal: (total: number) => $t('common.count', { count: total }),
       position: ['bottomLeft'],
       showSizeChanger: true,
       defaultPageSize: 10,
@@ -54,7 +54,7 @@
           :value="selectedKeys[0]"
           style="width: 188px; margin-bottom: 8px; display: block"
           @change="
-            (e:any) => setSelectedKeys(e.target.value ? [e.target.value] : [])
+            (e: any) => setSelectedKeys(e.target.value ? [e.target.value] : [])
           "
           @press-enter="handleSearch(selectedKeys, confirm, column.dataIndex)"
         />
@@ -102,7 +102,7 @@
         customFilterDropdown: true,
         onFilter: (
           value: string,
-          record: { source: { toString: () => string } }
+          record: { source: { toString: () => string } },
         ) =>
           record.source.toString().toLowerCase().includes(value.toLowerCase()),
         onFilterDropdownVisibleChange: (visible: any) => {
@@ -133,7 +133,7 @@
   const handleSearch = (
     selectedKeys: string[],
     confirm: () => void,
-    dataIndex: string
+    dataIndex: string,
   ) => {
     confirm();
     state.searchText = selectedKeys[0];

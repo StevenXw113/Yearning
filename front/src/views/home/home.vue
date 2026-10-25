@@ -173,4 +173,3 @@
     order.value?.makeBuild(banner.value.total_order);
   });
 </script>
-

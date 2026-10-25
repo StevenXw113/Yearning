@@ -50,7 +50,7 @@ export function checkIsQuery() {
 export function queryList(args: QueryParams, tp: string) {
   return request.put<Res<IQueryListResp>>(
     `${COMMON_URI}/audit/query/list?tp=${tp}`,
-    args
+    args,
   );
 }
 

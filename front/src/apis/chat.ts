@@ -15,7 +15,7 @@ export const SSE_DONE = '[DONE]';
  * 帧以空行分隔（后端每帧形如 `data: {"v":"..."}\n\n`）。
  */
 export const takeSSEFrames = (
-  buffer: string
+  buffer: string,
 ): { frames: string[]; rest: string } => {
   const frames: string[] = [];
   let rest = buffer;
@@ -35,7 +35,7 @@ export const takeSSEFrames = (
 export async function chatStream(
   messages: ChatMessage[],
   onDelta: (text: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   const token = userStore.account?.token;
   const res = await fetch(`${COMMON_URI}/chat`, {

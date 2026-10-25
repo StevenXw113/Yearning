@@ -72,7 +72,7 @@
 </template>
 
 <script lang="ts" setup>
-import { wsHeartbeat } from '@/socket';
+  import { wsHeartbeat } from '@/socket';
   import History from './history.vue';
   import Tree from './tree.vue';
   import Input from './input.vue';
@@ -84,7 +84,6 @@ import { wsHeartbeat } from '@/socket';
   import { useUserStore, useCommonStore } from '@/store';
   import { ArrowLeftOutlined } from '@ant-design/icons-vue';
   import { checkIsQuery, queryUndoOrder } from '@/apis/query';
-  import { queryHighlight } from '@/apis/source';
   import router from '@/router';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
   import { useSqlCompletion } from '@/components/editor/impl';
@@ -117,7 +116,7 @@ import { wsHeartbeat } from '@/socket';
   // 128 = 树上方占位（tabs 头 46 + 搜索框 40 + 卡片内边距 24 等），原值写死 700，
   // 比右侧 SQL 卡片高出一大截，左栏会比右栏长出一块。
   const treeHeight = computed(() =>
-    Math.max(240, Math.round(rightHeight.value) - 128)
+    Math.max(240, Math.round(rightHeight.value) - 128),
   );
 
   const hide = ref(false);
@@ -136,13 +135,16 @@ import { wsHeartbeat } from '@/socket';
 
   const ss = ref();
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
   const commonStore = useCommonStore();
 
   const route = useRoute();
 
-  const { nonFields, register: registerCompletion, dispose: disposeCompletion } =
-    useSqlCompletion();
+  const {
+    nonFields,
+    register: registerCompletion,
+    dispose: disposeCompletion,
+  } = useSqlCompletion();
 
   const spinning = computed(() => commonStore.spinning);
 
@@ -206,7 +208,7 @@ import { wsHeartbeat } from '@/socket';
         },
         heartbeat: wsHeartbeat(),
         protocols: [userStore.account.token],
-      }
+      },
     );
 
     commonStore.QUERY_CONN(sock);
@@ -218,7 +220,7 @@ import { wsHeartbeat } from '@/socket';
       route.query.source_id as string,
       commonStore.schema,
       true,
-      nonFields.value
+      nonFields.value,
     );
   };
 

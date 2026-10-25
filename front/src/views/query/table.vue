@@ -28,8 +28,8 @@
           :columns="i.field"
           :data-source="i.data"
           :pagination="{
-              showTotal: (total:number) => $t('common.count', { count: total }),
-            }"
+            showTotal: (total: number) => $t('common.count', { count: total }),
+          }"
           @resize-column="handleResizeColumn"
         >
           <template #bodyCell="{ text }">
@@ -68,7 +68,7 @@
   // 退回 execCommand,与原 vue-clipboard3 行为一致
   const { copy } = useClipboard({ legacy: true });
 
-    const commonStore = useCommonStore();
+  const commonStore = useCommonStore();
 
   const executeTime = ref(0);
 
@@ -108,7 +108,7 @@
     () => sock.value.data as any,
     (val: Blob) => {
       val !== null ? recv(val) : null;
-    }
+    },
   );
 
   const runResults = (schema: string, sql: string) => {

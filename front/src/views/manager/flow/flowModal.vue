@@ -61,8 +61,8 @@
               element.type === 1
                 ? `(${$t('flow.execute') + ' ' + $t('flow.phase')})`
                 : element.type === 0
-                ? `(${$t('flow.audit') + ' ' + $t('flow.phase')})`
-                : ''
+                  ? `(${$t('flow.audit') + ' ' + $t('flow.phase')})`
+                  : ''
             }`"
             class="empty"
           >
@@ -209,7 +209,7 @@
     flow.value.steps[idx] = flow.value.steps.splice(
       idx - 1,
       1,
-      flow.value.steps[idx]
+      flow.value.steps[idx],
     )[0];
   };
 
@@ -220,7 +220,7 @@
     flow.value.steps[idx] = flow.value.steps.splice(
       idx + 1,
       1,
-      flow.value.steps[idx]
+      flow.value.steps[idx],
     )[0];
   };
 

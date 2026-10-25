@@ -13,8 +13,8 @@
       <a-form-item v-show="props.isManager" :label="$t('common.policy')">
         <a-transfer
           v-model:target-keys="rules.own"
-          :row-key="(record:any) => record.group_id"
-          :render="(item:any) => `${item.name}`"
+          :row-key="(record: any) => record.group_id"
+          :render="(item: any) => `${item.name}`"
           :titles="[' ' + $t('common.all'), ' ' + $t('common.selected')]"
           :data-source="rules.groups"
           :list-style="{

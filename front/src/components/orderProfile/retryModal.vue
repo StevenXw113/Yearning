@@ -46,7 +46,7 @@
                 padding: 8px;
                 font-size: 12px;
               "
-            >{{ preview.remaining }}</pre>
+              >{{ preview.remaining }}</pre>
           </a-tab-pane>
           <a-tab-pane
             v-if="preview.skip_available"
@@ -61,7 +61,7 @@
                 padding: 8px;
                 font-size: 12px;
               "
-            >{{ preview.remaining_skip }}</pre>
+              >{{ preview.remaining_skip }}</pre>
           </a-tab-pane>
         </a-tabs>
         <!-- 两条人工介入路径：重试=把失败语句再跑一遍；跳过并继续=失败语句已在库上
@@ -147,8 +147,7 @@
   };
 
   const postRetry = () => post(() => retryOrder(props.workId), confirmLoading);
-  const postSkip = () =>
-    post(() => skipAndContinue(props.workId), skipLoading);
+  const postSkip = () => post(() => skipAndContinue(props.workId), skipLoading);
 
   const { is_open, turnState } = CommonMixins();
 

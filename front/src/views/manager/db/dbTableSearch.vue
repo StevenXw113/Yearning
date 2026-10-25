@@ -61,7 +61,7 @@
   import { useCommonStore } from '@/store';
   import { UnwrapRef, reactive, ref, unref, computed } from 'vue';
 
-    const commonStore = useCommonStore();
+  const commonStore = useCommonStore();
 
   const advanced = ref(false);
 

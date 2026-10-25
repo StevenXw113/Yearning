@@ -22,10 +22,10 @@
               `${i.toLocaleUpperCase()} ` +
               $t('common.policy'),
           ]"
-          :row-key="(record:any) => record.source_id"
+          :row-key="(record: any) => record.source_id"
           :data-source="i === 'query' ? ruse.query : ruse.source"
           show-search
-          :render="(item:any) => item.source"
+          :render="(item: any) => item.source"
           :list-style="{
             width: '400px',
             height: '300px',

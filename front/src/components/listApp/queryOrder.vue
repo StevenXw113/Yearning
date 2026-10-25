@@ -18,7 +18,10 @@
             v-model:value="form.source_id"
             show-search
             :filter-option="filterOption"
-            @select="(e: string, a: any) => form.text = t('common.table.source') + `:${a.key}\n`"
+            @select="
+              (e: string, a: any) =>
+                (form.text = t('common.table.source') + `:${a.key}\n`)
+            "
           >
             <a-select-option
               v-for="i in options"

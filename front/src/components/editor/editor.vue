@@ -36,7 +36,7 @@
   };
 
   interface Props {
-    containerId: string;
+    containerId?: string;
     readonly?: boolean;
     isQuery?: boolean;
     isAdvisor?: boolean;
@@ -53,8 +53,8 @@
   const getValBtnName = props.isQuery
     ? t('query.editor.query')
     : props.isAdvisor
-    ? t('query.editor.advisor')
-    : t('query.editor.test');
+      ? t('query.editor.advisor')
+      : t('query.editor.test');
 
   const emit = defineEmits(['getValues', 'changeContent', 'getSQLGen']);
 
@@ -148,7 +148,7 @@
   //   const height = ref(250);
 
   const { height } = useElementSize(
-    document.getElementById('app') as HTMLElement
+    document.getElementById('app') as HTMLElement,
   );
 
   onMounted(() => {
@@ -162,7 +162,7 @@
         automaticLayout: true,
         readOnly: props.readonly,
         accessibilityHelpUrl: 'https://next.yearning.io',
-      }
+      },
     );
     // Add a valid expression here
     model.addAction(GetValueFunc);

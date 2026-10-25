@@ -63,7 +63,7 @@
         <template
           v-if="
             ['real_name', 'department', 'email', 'is_recorder'].includes(
-              column.dataIndex
+              column.dataIndex,
             )
           "
         >

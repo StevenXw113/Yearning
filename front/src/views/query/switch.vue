@@ -7,7 +7,7 @@
     <a-list
       item-layout="horizontal"
       :data-source="source"
-      :row-key="(item:any) => item.source_id"
+      :row-key="(item: any) => item.source_id"
     >
       <template #renderItem="{ item }">
         <a-list-item>

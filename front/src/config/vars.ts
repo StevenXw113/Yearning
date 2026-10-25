@@ -29,7 +29,7 @@ const AnnounceEN = [
 const Version = 'ver.3.2.0';
 
 const Copyright = `Yearning © 2018-${dayjs().format(
-  'YYYY'
+  'YYYY',
 )}  Created by HenryYee ${Version}`;
 
 export { Version, Copyright, Announce, AnnounceEN };

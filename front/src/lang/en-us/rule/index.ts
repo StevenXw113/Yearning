@@ -74,8 +74,10 @@ export default {
     'Current {current}, upstream latest {latest}. Updating happens in the source tree: run ./scripts/upgrade-engine.sh inside engine/ (syncs upstream and regenerates the rule list; add --preview to dry-run first), then redeploy the engine (see engine/README.md). This page only detects.',
   ruleHistory: 'Change history',
   ruleHelp: 'How to use',
-  ruleDeleteConfirm: 'Delete this rule set? (refused if a data source still uses it)',
-  ruleDeleteDone: 'Rule set deleted — you can restore it from the change history',
+  ruleDeleteConfirm:
+    'Delete this rule set? (refused if a data source still uses it)',
+  ruleDeleteDone:
+    'Rule set deleted — you can restore it from the change history',
   ruleHelpIntro:
     'Every row on this page (including custom rules that default to off) is defined in engine code; the page only controls the switch and the level. Data sources bind a rule set and configure masked fields in Data source management.',
   ruleHelpAdd:
@@ -104,42 +106,69 @@ export default {
   MongoForbidDangerous: 'MongoDB: forbid dropDatabase / eval / mapReduce',
   MongoForbidWhere: 'MongoDB: forbid $where (server-side script)',
   MongoForbidDropCollection: 'MongoDB: forbid drop / renameCollection',
-  MongoForbidSystemCollection: 'MongoDB: forbid changes on system.* collections',
-  MongoForbidAdminCommand: 'MongoDB: forbid user/role management commands (createUser, ...)',
+  MongoForbidSystemCollection:
+    'MongoDB: forbid changes on system.* collections',
+  MongoForbidAdminCommand:
+    'MongoDB: forbid user/role management commands (createUser, ...)',
   MongoForbidImmutableId: 'MongoDB: forbid modifying _id (immutable field)',
-  MongoForbidCappedConvert: 'MongoDB: forbid convertToCapped (rebuilds the collection)',
+  MongoForbidCappedConvert:
+    'MongoDB: forbid convertToCapped (rebuilds the collection)',
   MongoForbidCollMod: 'MongoDB: forbid collMod (validator / index options)',
-  MongoIndexKeyLimit: 'MongoDB: max keys per index (0 = unlimited, recommended 5)',
-  MongoIndexNameSpec: 'MongoDB: index name pattern (regex, empty = off, e.g. ^idx_)',
+  MongoIndexKeyLimit:
+    'MongoDB: max keys per index (0 = unlimited, recommended 5)',
+  MongoIndexNameSpec:
+    'MongoDB: index name pattern (regex, empty = off, e.g. ^idx_)',
   MongoCollectionPrefix: 'MongoDB: collection name prefix (empty = off)',
-  MongoMaxCollectionNameLen: 'MongoDB: max collection name length (0 = unlimited, e.g. 120)',
-  MongoRegexUnanchored: 'MongoDB: forbid $regex without ^ anchor (cannot use index)',
-  MongoNegationOperator: 'MongoDB: discourage $ne / $nin / $not / $nor (usually a full scan)',
+  MongoMaxCollectionNameLen:
+    'MongoDB: max collection name length (0 = unlimited, e.g. 120)',
+  MongoRegexUnanchored:
+    'MongoDB: forbid $regex without ^ anchor (cannot use index)',
+  MongoNegationOperator:
+    'MongoDB: discourage $ne / $nin / $not / $nor (usually a full scan)',
   MongoOrClause: 'MongoDB: discourage $or (each branch needs its own index)',
-  MongoLargeInList: 'MongoDB: max elements in $in (0 = unlimited, recommended 1000)',
-  MongoQueryForbidNoFilter: 'MongoDB query: no filter allowed (find without filter / aggregate without $match)',
+  MongoLargeInList:
+    'MongoDB: max elements in $in (0 = unlimited, recommended 1000)',
+  MongoQueryForbidNoFilter:
+    'MongoDB query: no filter allowed (find without filter / aggregate without $match)',
   MongoQueryForbidLookup: 'MongoDB query: forbid $lookup / $graphLookup',
   MongoQueryForbidNoLimit: 'MongoDB query: find with sort must set limit',
-  MongoMaxAffectRows: 'MongoDB: max documents affected per change (0 = unlimited)',
-  RedisForbidDangerous: 'Forbid FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE (instance-wide commands)',
-  RedisForbidAdmin: 'Forbid CONFIG / DEBUG / MODULE / MONITOR / CLIENT (operations commands)',
-  RedisForbidScript: 'Forbid EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL (server-side scripts)',
-  RedisForbidReplica: 'Forbid REPLICAOF / SLAVEOF (changes replication topology)',
-  RedisForbidKeysCommand: 'Forbid KEYS: it scans the whole keyspace and blocks the instance, use SCAN',
-  RedisForbidRename: 'Forbid RENAME / RENAMENX: silently overwrites the destination key',
-  RedisKeyPrefix: 'Key names must start with this prefix (e.g. app:), empty = off',
+  MongoMaxAffectRows:
+    'MongoDB: max documents affected per change (0 = unlimited)',
+  RedisForbidDangerous:
+    'Forbid FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE (instance-wide commands)',
+  RedisForbidAdmin:
+    'Forbid CONFIG / DEBUG / MODULE / MONITOR / CLIENT (operations commands)',
+  RedisForbidScript:
+    'Forbid EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL (server-side scripts)',
+  RedisForbidReplica:
+    'Forbid REPLICAOF / SLAVEOF (changes replication topology)',
+  RedisForbidKeysCommand:
+    'Forbid KEYS: it scans the whole keyspace and blocks the instance, use SCAN',
+  RedisForbidRename:
+    'Forbid RENAME / RENAMENX: silently overwrites the destination key',
+  RedisKeyPrefix:
+    'Key names must start with this prefix (e.g. app:), empty = off',
   RedisMaxKeyLen: 'Max key name length in bytes, 0 = unlimited',
-  RedisForbidMove: 'Forbid MOVE / SELECT: cross-database operations are hard to trace',
-  RedisMaxAffectKeys: 'Max number of keys a single command may touch, 0 = unlimited',
-  RedisMaxValueLen: 'Max value size written per command in bytes, 0 = unlimited',
-  RedisRequireTTL: 'SET must carry a TTL (EX / PX / EXAT) to avoid unbounded growth',
-  RedisForbidPersist: 'Forbid PERSIST: it removes the TTL and the key stays forever',
-  RedisScanRequireMatch: 'SCAN should carry MATCH, otherwise it walks the whole keyspace',
-  RedisForbidBlocking: 'Forbid blocking commands (BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE)',
-  DorisRequireDistribution: 'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
+  RedisForbidMove:
+    'Forbid MOVE / SELECT: cross-database operations are hard to trace',
+  RedisMaxAffectKeys:
+    'Max number of keys a single command may touch, 0 = unlimited',
+  RedisMaxValueLen:
+    'Max value size written per command in bytes, 0 = unlimited',
+  RedisRequireTTL:
+    'SET must carry a TTL (EX / PX / EXAT) to avoid unbounded growth',
+  RedisForbidPersist:
+    'Forbid PERSIST: it removes the TTL and the key stays forever',
+  RedisScanRequireMatch:
+    'SCAN should carry MATCH, otherwise it walks the whole keyspace',
+  RedisForbidBlocking:
+    'Forbid blocking commands (BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE)',
+  DorisRequireDistribution:
+    'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',
   DorisReplicationNum: 'Doris: expected replication num (0 = no check)',
-  DorisKeyModel: 'Doris: warn on AGGREGATE KEY model (wrong aggregate type yields wrong results)',
+  DorisKeyModel:
+    'Doris: warn on AGGREGATE KEY model (wrong aggregate type yields wrong results)',
   ruleCatAll: 'All',
   ruleCatStatement: 'Statement',
   ruleCatTable: 'Table',

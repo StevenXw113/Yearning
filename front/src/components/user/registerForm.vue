@@ -48,7 +48,7 @@
   const { t } = useI18n();
 
   interface propsAttr {
-    isManager: boolean;
+    isManager?: boolean;
   }
 
   // vue 3.5 响应式 props 解构（编译器宏，默认值一等公民）——替代 withDefaults
@@ -134,12 +134,12 @@
 </script>
 
 <style scoped>
-/* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
+  /* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
    标签宽度交给内容，长标签自动撑开，不会被输入框截断 */
-:deep(.ant-form-item) {
-  margin-bottom: 10px;
-}
-:deep(.ant-form-item .ant-form-item-label) {
-  font-size: 12px;
-}
+  :deep(.ant-form-item) {
+    margin-bottom: 10px;
+  }
+  :deep(.ant-form-item .ant-form-item-label) {
+    font-size: 12px;
+  }
 </style>

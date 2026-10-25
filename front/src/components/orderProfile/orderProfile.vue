@@ -86,10 +86,10 @@
               order.delay === 'manual'
                 ? $t('order.exec.manual')
                 : order.delay === 'handled'
-                ? $t('order.exec.handled')
-                : order.delay === 'none'
-                ? $t('order.table.delay')
-                : order.delay
+                  ? $t('order.exec.handled')
+                  : order.delay === 'none'
+                    ? $t('order.table.delay')
+                    : order.delay
             }}</a-descriptions-item>
             <a-descriptions-item :label="$t('order.profile.auditor')">
               <template v-for="i in order.assigned.split(',')" :key="i">
@@ -224,7 +224,7 @@
 </template>
 
 <script lang="ts" setup>
-import { wsHeartbeat } from '@/socket';
+  import { wsHeartbeat } from '@/socket';
   import RejectModal from './rejectModal.vue';
   import MarkModal from './markModal.vue';
   import RetryModal from './retryModal.vue';
@@ -269,7 +269,7 @@ import { wsHeartbeat } from '@/socket';
 
   const sqls = ref('');
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
   const orderStore = useOrderStore();
   const commonStore = useCommonStore();
 
@@ -392,7 +392,7 @@ import { wsHeartbeat } from '@/socket';
         onMessage: (e, event) => {
           orderStore.SET_ORDER_STATUS(parseInt(event.data, 10));
         },
-      }
+      },
     );
   };
 
@@ -400,7 +400,7 @@ import { wsHeartbeat } from '@/socket';
     fetchState();
     const { data } = await queryTimeline(
       order.value.source_id as string,
-      order.value.work_id as string
+      order.value.work_id as string,
     );
     if (data.code === 5555) {
       router.go(-1);
@@ -408,9 +408,7 @@ import { wsHeartbeat } from '@/socket';
       orderProfileArch.timeline = data.payload;
       if (orderProfileArch.timeline[order.value.current_step] !== undefined) {
         let currentStep = orderProfileArch.timeline[order.value.current_step];
-        isCurrent.value = currentStep.auditor.indexOf(
-          userStore.account.user
-        );
+        isCurrent.value = currentStep.auditor.indexOf(userStore.account.user);
       }
     }
     const sql = await fetchProfileSQL(order.value.work_id);
@@ -422,8 +420,8 @@ import { wsHeartbeat } from '@/socket';
 </script>
 
 <style scoped>
-/* 表头文字不换行：否则「错误等级」这类中文表头会被 auto 布局压成两行 */
-:deep(.ant-table-thead th) {
-  white-space: nowrap;
-}
+  /* 表头文字不换行：否则「错误等级」这类中文表头会被 auto 布局压成两行 */
+  :deep(.ant-table-thead th) {
+    white-space: nowrap;
+  }
 </style>

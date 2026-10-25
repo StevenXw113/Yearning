@@ -65,13 +65,15 @@
       grid: false,
     });
 
-    chart.line()
+    chart
+      .line()
       .encode('x', 'time')
       .encode('y', 'count')
       .encode('color', 'type')
       .encode('shape', 'smooth');
 
-    chart.point()
+    chart
+      .point()
       .encode('x', 'time')
       .encode('y', 'count')
       .encode('color', 'type')
@@ -79,7 +81,7 @@
 
     // customize tooltip
     const $tooltip = document.getElementById(
-      'g2-customize-tooltip'
+      'g2-customize-tooltip',
     ) as HTMLElement;
 
     function getTooltipHTML(data: { title: string; items: any }) {
@@ -105,7 +107,7 @@
                        
                         </div>
         `;
-                      }
+                      },
                     )
                     .join('')}
     </div>
@@ -150,52 +152,52 @@
 <!-- 原 insertCss 运行时注入的全局样式（G2 图表容器 + 自定义 tooltip），
      改为随组件打包的非 scoped 样式块；按 id 选择器命中，全局生效 -->
 <style>
-#app-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-}
+  #app-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+  }
 
-#g2-container {
-  flex: auto;
-}
+  #g2-container {
+    flex: auto;
+  }
 
-#g2-customize-tooltip {
-  margin-bottom: 16px;
-  font-size: 12px;
-}
+  #g2-customize-tooltip {
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
 
-#g2-customize-tooltip .tooltip-items {
-  display: flex;
-  flex-direction: row;
-}
+  #g2-customize-tooltip .tooltip-items {
+    display: flex;
+    flex-direction: row;
+  }
 
-#g2-customize-tooltip .tooltip-item {
-  flex-basis: 240px;
-  padding-left: 8px;
-  margin-right: 12px;
-}
+  #g2-customize-tooltip .tooltip-item {
+    flex-basis: 240px;
+    padding-left: 8px;
+    margin-right: 12px;
+  }
 
-#g2-customize-tooltip .tooltip-item .tooltip-item-value {
-  font-size: 16px;
-  font-weight: bold;
-}
+  #g2-customize-tooltip .tooltip-item .tooltip-item-value {
+    font-size: 16px;
+    font-weight: bold;
+  }
 
-#g2-customize-tooltip .tooltip-item-info {
-  display: flex;
-  justify-content: space-between;
-}
+  #g2-customize-tooltip .tooltip-item-info {
+    display: flex;
+    justify-content: space-between;
+  }
 
-#g2-customize-tooltip .tooltip-item-info .info-item {
-  display: flex;
-}
+  #g2-customize-tooltip .tooltip-item-info .info-item {
+    display: flex;
+  }
 
-#g2-customize-tooltip .tooltip-item-info .info-item .info-item-name {
-  opacity: 0.65;
-}
+  #g2-customize-tooltip .tooltip-item-info .info-item .info-item-name {
+    opacity: 0.65;
+  }
 
-#g2-customize-tooltip .tooltip-item-info .info-item .info-item-value {
-  margin-left: 8px;
-}
+  #g2-customize-tooltip .tooltip-item-info .info-item .info-item-value {
+    margin-left: 8px;
+  }
 </style>

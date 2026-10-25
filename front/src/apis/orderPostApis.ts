@@ -96,7 +96,7 @@ export function executeOrder(work_id: string) {
 export function retryPreview(work_id: string) {
   return request.get<Res<RetryPreview>>(
     `${COMMON_URI}/audit/order/retry_preview`,
-    { params: { work_id } }
+    { params: { work_id } },
   );
 }
 
@@ -184,7 +184,7 @@ export function getBatchOrders(batch_id: string) {
 export function executeBatchOrder(batch_id: string) {
   return request.post<Res<BatchExecuteResult[]>>(
     `${COMMON_URI}/audit/order/batch`,
-    { batch_id }
+    { batch_id },
   );
 }
 
@@ -194,7 +194,7 @@ export function getOrderList(args: OrderParams, tp: string) {
 
 export function getOrderResult(
   work_id: string,
-  page: { current: number; pageSize: number }
+  page: { current: number; pageSize: number },
 ) {
   return request.get(`${COMMON_URI}/fetch/detail`, {
     params: {
@@ -217,4 +217,3 @@ export function getOrderRollSQLS(work_id: string, page: number) {
 export function postOrderComment(args: Comment) {
   return request.post(`${COMMON_URI}/fetch/comment`, args);
 }
-

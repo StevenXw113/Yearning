@@ -163,7 +163,7 @@
   const fetchTable = async (schema: string) => {
     const { data } = await queryTableList(
       autotask.value.sourceLabel.value,
-      schema
+      schema,
     );
     fetchList.tables = data.payload;
   };

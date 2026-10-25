@@ -90,7 +90,8 @@ export default {
   'order.reject': '驳回',
   'order.reject.tips': '确认驳回工单?',
   'order.execute': '执行',
-  'order.execute.tips': '立即执行该工单的 SQL？（人工执行模式下工单会停在此处等待）',
+  'order.execute.tips':
+    '立即执行该工单的 SQL？（人工执行模式下工单会停在此处等待）',
   'order.retry': '重试',
   'order.retry.tips':
     '重试只会执行上次未成功的语句，已执行成功的语句不会重复执行。确认重试？',

@@ -34,7 +34,15 @@ describe('session persistence', () => {
   it('启动时从 sessionStorage 恢复（重挂持久化后读到旧会话）', () => {
     sessionStorage.setItem(
       'user',
-      JSON.stringify({ account: { token: 'tk-2', user: 'bob', real_name: 'B', is_record: 2, rule: '' } })
+      JSON.stringify({
+        account: {
+          token: 'tk-2',
+          user: 'bob',
+          real_name: 'B',
+          is_record: 2,
+          rule: '',
+        },
+      }),
     );
     setupSessionPersistence();
     const user = useUserStore();

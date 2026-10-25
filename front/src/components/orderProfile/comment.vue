@@ -38,7 +38,7 @@
 </template>
 
 <script lang="ts" setup>
-import { wsHeartbeat } from '@/socket';
+  import { wsHeartbeat } from '@/socket';
   import dayjs, { extend } from 'dayjs';
   import relativeTime from 'dayjs/plugin/relativeTime';
   import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -74,7 +74,7 @@ import { wsHeartbeat } from '@/socket';
     });
   };
 
-    const userStore = useUserStore();
+  const userStore = useUserStore();
 
   const postComment = async () => {
     await postOrderComment({
@@ -111,7 +111,7 @@ import { wsHeartbeat } from '@/socket';
         onMessage: (e, event) => {
           data.value = JSON.parse(event.data);
         },
-      }
+      },
     );
   });
 </script>

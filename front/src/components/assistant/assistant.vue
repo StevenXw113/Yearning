@@ -21,7 +21,8 @@
         <!-- 流式过程中按纯文本展示；结束后才渲染 markdown（清洗后再挂载） -->
         <div v-if="m.html" class="assistant-bubble md" v-html="m.html"></div>
         <div v-else class="assistant-bubble">
-          {{ m.content }}<span v-if="m.streaming" class="assistant-caret"></span>
+          {{ m.content
+          }}<span v-if="m.streaming" class="assistant-caret"></span>
         </div>
       </div>
     </div>
@@ -39,7 +40,9 @@
           :disabled="streaming || !input.trim()"
           @click="send"
           >{{
-            streaming ? $t('order.assistant.thinking') : $t('order.assistant.send')
+            streaming
+              ? $t('order.assistant.thinking')
+              : $t('order.assistant.send')
           }}</a-button
         >
         <a-button v-if="streaming" danger @click="stop">{{
@@ -118,7 +121,8 @@
       .filter((m) => !m.streaming)
       .map((m) => ({ role: m.role, content: m.content }));
     const last = history[history.length - 1];
-    if (last && last.role === 'user') last.content = buildContext() + last.content;
+    if (last && last.role === 'user')
+      last.content = buildContext() + last.content;
 
     streaming.value = true;
     controller = new AbortController();
@@ -130,7 +134,7 @@
           reply.content += delta;
           scrollToBottom();
         },
-        controller.signal
+        controller.signal,
       );
       if (reply.content) {
         // AI 输出视为不可信内容（提示词注入风险）：先脱离 DOM 渲染再清洗后挂载。

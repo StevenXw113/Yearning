@@ -29,7 +29,13 @@ export interface ArchiveListResult {
 
 export interface ArchiveDetail {
   order: ArchiveOrder;
-  records: { sql: string; state: string; affect_row: number; time: string; error?: string }[];
+  records: {
+    sql: string;
+    state: string;
+    affect_row: number;
+    time: string;
+    error?: string;
+  }[];
   rollbacks: { sql: string }[];
   comments: { username: string; content: string; time: string }[];
   details: { username: string; time: string; action: string }[];
@@ -42,15 +48,16 @@ export function getArchiveList(params: {
   date_to?: string;
   work_id?: string;
 }) {
-  return request.get<{ payload: ArchiveListResult; code: number; msg?: string }>(
-    `${COMMON_URI}/record/archive`,
-    { params }
-  );
+  return request.get<{
+    payload: ArchiveListResult;
+    code: number;
+    msg?: string;
+  }>(`${COMMON_URI}/record/archive`, { params });
 }
 
 export function getArchiveDetail(work_id: string) {
   return request.get<{ payload: ArchiveDetail; code: number; msg?: string }>(
     `${COMMON_URI}/record/archive_detail`,
-    { params: { work_id } }
+    { params: { work_id } },
   );
 }

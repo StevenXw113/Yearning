@@ -6,7 +6,7 @@
     :pagination="{
       size: 'small',
       total: data.length,
-      showTotal: (total:number) => $t('common.count', { count: total }),
+      showTotal: (total: number) => $t('common.count', { count: total }),
     }"
   >
     <template #renderItem="{ item }">
@@ -44,7 +44,7 @@
 
   const { t } = useI18n();
 
-    const orderStore = useOrderStore();
+  const orderStore = useOrderStore();
 
   const data = computed(() => orderStore.history);
 

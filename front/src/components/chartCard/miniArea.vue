@@ -34,13 +34,15 @@
       height: 46,
     });
     chart.axis(false);
-    chart.line()
+    chart
+      .line()
       .data(Randomdata(total))
       .encode('x', 'x')
       .encode('y', 'totals')
       .encode('shape', 'smooth')
       .style('stroke', props.color);
-    chart.area()
+    chart
+      .area()
       .data(Randomdata(total))
       .encode('x', 'x')
       .encode('y', 'totals')

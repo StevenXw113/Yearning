@@ -76,7 +76,7 @@
             ref="editor"
             is-advisor
             container-id="apply"
-            @getSQLGen="text2sql"
+            @get-s-q-l-gen="text2sql"
             @get-values="advisor"
             @change-content="() => (!enabled ? (enabled = true) : null)"
           >
@@ -153,7 +153,7 @@
   const assistantContext = computed(() => ({
     source:
       (orderProfileArch.source as ISource[] | undefined)?.find(
-        (i) => i.source_id === orderItems.source_id
+        (i) => i.source_id === orderItems.source_id,
       )?.source || (orderItems.source as string),
     dataBase: orderItems.data_base as string,
     tables: orderItems.tables as string[],
@@ -200,7 +200,7 @@
       orderItems.source_id as string,
       orderItems.data_base as string,
       true,
-      nonFields.value
+      nonFields.value,
     );
 
   const fetchSchema = async () => {

@@ -41,13 +41,17 @@ export const useCommonStore = defineStore('common', {
     },
     GET_FLOWS() {
       getFlowList().then(
-        (res: AxiosResponse<Res<RespTPLs[]>>) => (this.flow = res.data.payload)
+        (res: AxiosResponse<Res<RespTPLs[]>>) => (this.flow = res.data.payload),
       );
     },
     SET_SOURCE_SCHEMA(query: QueryInfo) {
       this.queryInfo = query;
     },
-    SET_SCHEMA_List(f: { schema: string[]; source: string; source_id: string }) {
+    SET_SCHEMA_List(f: {
+      schema: string[];
+      source: string;
+      source_id: string;
+    }) {
       this.schemaList = f.schema;
       this.queryInfo.source = f.source;
       this.queryInfo.source_id = f.source_id;
