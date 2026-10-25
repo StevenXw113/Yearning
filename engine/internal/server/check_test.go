@@ -348,3 +348,35 @@ func TestCheckMultiDDLRulesPostgreSQL(t *testing.T) {
 		t.Fatalf("PostgreSQL 多条 DDL 也应触发整单校验, records=%+v", rep.Records)
 	}
 }
+
+// TestCheckTableCommentConvention 回归:DDLCheckTableComment 映射的
+// CommentConventionPayload 曾漏设 MaxLength,proto3 零值 0 命中上游 advisor 的
+// 「MaxLength>=0 且 len>MaxLength」分支,任何非空注释都被判超长——开关永不可满足。
+// 正确语义:只校验注释必填,不限长度(MaxLength=-1)。
+func TestCheckTableCommentConvention(t *testing.T) {
+	with := "CREATE TABLE t (id INT) COMMENT '业务表'"
+	rep, _ := testEngine().Check(context.Background(), &api.CheckRequest{
+		Sql:  with,
+		Rule: &api.AuditRole{DdlCheckTableComment: true},
+	})
+	for _, r := range rep.Records {
+		if strings.Contains(r.Error, "TABLE_COMMENT") {
+			t.Fatalf("带注释的建表不应命中 TABLE_COMMENT, got %+v", r)
+		}
+	}
+
+	without := "CREATE TABLE t (id INT)"
+	rep2, _ := testEngine().Check(context.Background(), &api.CheckRequest{
+		Sql:  without,
+		Rule: &api.AuditRole{DdlCheckTableComment: true},
+	})
+	found := false
+	for _, r := range rep2.Records {
+		if strings.Contains(r.Error, "TABLE_COMMENT") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("无注释的建表应命中 TABLE_COMMENT, got %+v", rep2.Records)
+	}
+}

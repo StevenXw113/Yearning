@@ -120,8 +120,11 @@ func reviewRules(r *api.AuditRole, engine storepb.Engine) reviewPlan {
 	}
 	commentRequired := func(t storepb.SQLReviewRule_Type, key string) {
 		rule := base(t)
+		// MaxLength 必须 -1(不限长):proto3 零值 0 会让上游 advisor 的
+		// 「len(comment) > MaxLength 且 MaxLength>=0」长度检查把任何非空注释判超长,
+		// 开关变成永不可满足。-1 走 advisor 的跳过分支,只做「必填」校验。
 		rule.Payload = &storepb.SQLReviewRule_CommentConventionPayload{
-			CommentConventionPayload: &storepb.SQLReviewRule_CommentConventionRulePayload{Required: true},
+			CommentConventionPayload: &storepb.SQLReviewRule_CommentConventionRulePayload{Required: true, MaxLength: -1},
 		}
 		put(rule, key)
 	}
