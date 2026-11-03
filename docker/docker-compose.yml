@@ -1,55 +1,150 @@
-# Yearning + MySQL 部署组合
-# 完整部署与“国内 Docker 镜像拉取/依赖源加速”说明见同目录 README.md（第 1~4 节）。
+# Yearning 部署：frontend + yearning(API) + engine + mysql，镜像全部由本仓库源码构建
 #
-# 国内拉取镜像慢时：1) 按 README.md 第 1 节配置 registry-mirrors；
-#   2) 或把下面 image 改为加速前缀，如 docker.m.daocloud.io/yeelabs/yearning:latest
-#      （mysql 同理：docker.m.daocloud.io/library/mysql:5.7）。
-#
-# ⚠️ SECRET_KEY 是 JWT 签名与数据源口令加密主密钥，请务必替换为随机串（≥32 字符）：
-#    openssl rand -base64 32
-#    下方值仅为演示占位，严禁生产使用。默认账号 admin，初始密码 Yearning_admin（登录后请立即修改）。
-#
-# 首次使用请先执行初始化（init 一次性；初始化完成后请把下面 command 的 install 去掉，避免重复建表）：
-#   docker compose run --rm yearning /opt/Yearning install
-# 日常启动 / 升级迁移 / 重置密码：
+# 首次部署：
+#   cp .env.example .env && vi .env
+#   docker compose build
+#   docker compose run --rm yearning /opt/Yearning install   # 仅一次，勿写进常驻 command
 #   docker compose up -d
-#   docker compose run --rm yearning /opt/Yearning migrate
-#   docker compose run --rm yearning /opt/Yearning reset_super
+#
+# 访问 http://<服务器IP>:8000 ；默认账号 admin / Yearning_admin
+# 详见 docs/DEPLOY_DOCKER.md 与同目录 README.md
 
 services:
-    yearning:
-        image: yeelabs/yearning:latest
-        environment:
-           MYSQL_USER: yearning
-           MYSQL_PASSWORD: ukC2ZkcG_ZTeb
-           MYSQL_ADDR: mysql
-           MYSQL_DB: yearning
-           # ⚠️ 生产必改：设为随机串（openssl rand -base64 32）。以下仅为“能启动的演示值”，切勿生产使用。
-           SECRET_KEY: please-replace-this-secret-key-0000
-           IS_DOCKER: is_docker
-           # 审核引擎 gRPC 地址与共享令牌（引擎侧用 ENGINE_AUTH_TOKEN 注入同一值）。
-           # RPC_TOKEN 两侧都配置时启用引擎认证；都留空则不认证（仅限完全可信内网）。
-           RPC_ADDR: "127.0.0.1:50001"
-           RPC_TOKEN: ""
-        ports:
-           - 8000:8000
-        # 首次使用请先初始化（生产建议去掉 install，单独执行 init 后再 up -d）
-        command: /bin/bash -c "./Yearning install && ./Yearning run"
-        depends_on:
-           - mysql
-        restart: always
-
     mysql:
         image: mysql:5.7
-        environment:
-           MYSQL_ROOT_PASSWORD: ukC2ZkcG_ZTeb
-           MYSQL_DATABASE: yearning
-           MYSQL_USER: yearning
-           MYSQL_PASSWORD: ukC2ZkcG_ZTeb
+        container_name: yearning-mysql
+        restart: always
+        # 元数据库必须 utf8mb4
         command:
-           - --character-set-server=utf8mb4
-           - --collation-server=utf8mb4_general_ci
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_general_ci
+            - --default-time-zone=+08:00
+        environment:
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?.env 中缺少 MYSQL_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${MYSQL_DB:-Yearning_go}
+            MYSQL_USER: ${MYSQL_USER:?.env 中缺少 MYSQL_USER}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD:?.env 中缺少 MYSQL_PASSWORD}
+            TZ: ${TZ:-Asia/Shanghai}
         volumes:
-           - ./data/mysql:/var/lib/mysql
+            - ./data/mysql:/var/lib/mysql
+        healthcheck:
+            test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+            interval: 10s
+            timeout: 5s
+            retries: 12
+            start_period: 30s
+        logging:
+            driver: json-file
+            options:
+                max-size: "50m"
+                max-file: "5"
+        networks:
+            - yearning
 
-# 默认账号：admin，默认密码：Yearning_admin
+    engine:
+        # 审核引擎：独立 Go module，镜像由 engine/Dockerfile 构建
+        build:
+            context: ../engine
+            dockerfile: Dockerfile
+        image: ${ENGINE_IMAGE:-yearning-engine:local}
+        container_name: yearning-engine
+        restart: always
+        # 仅容器网络内可达，勿映射宿主机端口
+        command: ["-addr", ":13307"]
+        environment:
+            TZ: ${TZ:-Asia/Shanghai}
+            # 与后端 RPC_TOKEN 保持一致才启用认证；留空 = 不认证（仅限可信内网）
+            ENGINE_AUTH_TOKEN: ${RPC_TOKEN:-}
+        expose:
+            - "13307"
+        logging:
+            driver: json-file
+            options:
+                max-size: "50m"
+                max-file: "5"
+        networks:
+            - yearning
+
+    yearning:
+        # 后端纯 API；context 必须是仓库根目录
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+            args:
+                GOPROXY_URL: ${GOPROXY_URL:-https://goproxy.cn,direct}
+        image: ${YEARNING_IMAGE:-yearning:local}
+        container_name: yearning
+        restart: always
+        depends_on:
+            mysql:
+                condition: service_healthy
+            # 引擎是 distroless，无探活工具，只能等启动
+            engine:
+                condition: service_started
+        environment:
+            IS_DOCKER: is_docker
+            # 主密钥，投产不要更换
+            SECRET_KEY: ${SECRET_KEY:?.env 中缺少 SECRET_KEY（openssl rand -base64 32）}
+            MYSQL_USER: ${MYSQL_USER}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+            MYSQL_ADDR: mysql:3306
+            MYSQL_DB: ${MYSQL_DB:-Yearning_go}
+            Y_LANG: ${Y_LANG:-zh_CN}
+            TZ: ${TZ:-Asia/Shanghai}
+            # 引擎地址与共享令牌；令牌两侧一致才生效（内网可信可留空）
+            RPC_ADDR: yearning-engine:13307
+            RPC_TOKEN: ${RPC_TOKEN:-}
+        # 后端不对外；调试可临时用 127.0.0.1:18000:8000（宿主机 8000 已给 frontend）
+        expose:
+            - "8000"
+        # 需改 LogLevel / OIDC / OSC 等时放开
+        # volumes:
+        #     - ./conf.toml:/opt/conf.toml:ro
+        healthcheck:
+            # 无专用健康接口，探活 GET /
+            test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/ || exit 1"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+        logging:
+            driver: json-file
+            options:
+                max-size: "50m"
+                max-file: "5"
+        networks:
+            - yearning
+
+    frontend:
+        # 前端：Nginx 托管静态产物并同源反代后端
+        build:
+            context: ..
+            dockerfile: docker/frontend.Dockerfile
+            args:
+                NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        image: ${FRONTEND_IMAGE:-yearning-frontend:local}
+        container_name: yearning-frontend
+        restart: always
+        depends_on:
+            yearning:
+                condition: service_started
+        ports:
+            # 唯一对外入口；前置 HTTPS 时设 FRONT_BIND_ADDR=127.0.0.1
+            - "${FRONT_BIND_ADDR:-0.0.0.0}:${FRONT_PORT:-8000}:80"
+        healthcheck:
+            test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/front/ || exit 1"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
+        logging:
+            driver: json-file
+            options:
+                max-size: "50m"
+                max-file: "5"
+        networks:
+            - yearning
+
+networks:
+    yearning:
+        driver: bridge

@@ -1,3 +1,7 @@
+# Yearning 审核引擎（独立服务）
+# docker build -f engine/Dockerfile -t yearning-engine:1.0.0 ./engine   （上下文为 engine/ 目录）
+# 运行时为 distroless：无 shell，无 curl，只能看日志排查
+
 # build stage
 FROM golang:1.26 AS build
 WORKDIR /src

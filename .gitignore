@@ -25,6 +25,10 @@ juno
 #   - engine/ 与 front/ 为纳入版本控制的源码目录，产物不入库，交由各自子 .gitignore 处理。
 src/service/dist/
 
+# ===== Docker 部署运行时数据（compose bind mount）=====
+docker/data/
+docker/.env
+
 # ===== 编辑器 / IDE =====
 .idea/
 .vscode/
