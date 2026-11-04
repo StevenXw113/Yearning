@@ -1,4 +1,7 @@
 export default {
+  'query.keytab': '键数据查看',
+  'query.redis.tips':
+    '在左侧展开库后右键键名 → 查看数据；命令与结果会显示在这里',
   'query.banner.title': '欢迎使用Yearning查询系统',
   'query.banner.sub':
     '使用前请详细阅读以下注意事项，了解完毕后点击 进入按钮 进入查询页面',

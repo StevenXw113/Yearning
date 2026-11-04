@@ -57,7 +57,19 @@
                   </a-tab-pane>
                 </a-tabs>
               </a-tab-pane>
-              <a-tab-pane key="table" :tab="$t('query.table')" force-render>
+              <!-- Redis 没有表：这个页签在 Redis 下展示的是「键数据」，标题与空态都跟着换 -->
+              <a-tab-pane
+                key="table"
+                :tab="dbType === 3 ? $t('query.keytab') : $t('query.table')"
+                force-render
+              >
+                <a-alert
+                  v-if="dbType === 3 && !tableShown"
+                  type="info"
+                  show-icon
+                  style="margin-bottom: 8px"
+                  :message="$t('query.redis.tips')"
+                />
                 <Table id="tblInfo" ref="tbl" :height="800"></Table>
               </a-tab-pane>
             </a-tabs>
@@ -140,6 +152,12 @@
 
   const route = useRoute();
 
+  // 数据源类型（3 = Redis）：键数据查看的标题与空态提示按它切换
+  const dbType = computed(() => parseInt(route.query.db_type as string) || 0);
+
+  // 是否已经通过右键「查看数据」执行过命令（未执行时给引导，而不是一张空表）
+  const tableShown = ref(false);
+
   const {
     nonFields,
     register: registerCompletion,
@@ -157,7 +175,12 @@
   };
 
   const showTableRef = (vl: any) => {
+    // 空命令不执行：会让查询页报「SQL 不能为空」，且把页签切成一张空表
+    if (!vl?.sql) {
+      return;
+    }
     tbl.value.runResults(vl.schema, vl.sql);
+    tableShown.value = true;
     feat.value = 'table';
   };
 
