@@ -4,6 +4,7 @@ package archguard
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,24 +21,16 @@ func frontendRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for {
-		if _, err := os.Stat(dir + "/front/src/types/index.ts"); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "front", "src", "types", "index.ts")); err == nil {
 			return dir
 		}
-		parent := parentDir(dir)
+		// filepath.Dir 跨平台：Windows 的 cwd 是反斜杠路径，手写按 '/' 切分永远切不动
+		parent := filepath.Dir(dir)
 		if parent == dir {
 			t.Fatal("向上未找到 front/src/types/index.ts")
 		}
 		dir = parent
 	}
-}
-
-func parentDir(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' {
-			return p[:i]
-		}
-	}
-	return p
 }
 
 // readOrderStateEnum 解析前端 OrderState 枚举：成员名 → 值（支持显式赋值与自增）。
