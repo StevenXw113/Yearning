@@ -29,32 +29,14 @@ const (
 	redisConnMaxIdle  = 30 * time.Minute
 )
 
-// redisOptions 按 DataSource 构造客户端选项。口令为空表示未开认证（Redis 允许无密码）。
-func redisOptions(ds *api.DataSource) *redis.Options {
-	opt := &redis.Options{
-		Addr:            net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port))),
-		Password:        ds.Password,
-		DB:              0,
-		DialTimeout:     redisDialTimeout,
-		ReadTimeout:     redisIOTimeout,
-		WriteTimeout:    redisIOTimeout,
-		PoolTimeout:     redisPoolTimeout,
-		PoolSize:        redisPoolSize,
-		MaxIdleConns:    redisMaxIdleConns,
-		MaxRetries:      redisMaxRetries,
-		ConnMaxIdleTime: redisConnMaxIdle,
-	}
-	if ds.Username != "" {
-		opt.Username = ds.Username
-	}
-	return opt
-}
-
-// redisClusterOptions 集群选项：数据源 ip:port 只作种子节点，其余节点经 CLUSTER SLOTS 自动发现。
-func redisClusterOptions(ds *api.DataSource) *redis.ClusterOptions {
-	opt := &redis.ClusterOptions{
+// redisUniversalOptions 单机/代理与集群共用一份选项（UniversalOptions 能构造两种客户端）。
+// 口令为空表示未开认证（Redis 允许无密码）。
+func redisUniversalOptions(ds *api.DataSource, db int) *redis.UniversalOptions {
+	return &redis.UniversalOptions{
 		Addrs:           []string{net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port)))},
+		Username:        ds.Username,
 		Password:        ds.Password,
+		DB:              db,
 		DialTimeout:     redisDialTimeout,
 		ReadTimeout:     redisIOTimeout,
 		WriteTimeout:    redisIOTimeout,
@@ -65,10 +47,6 @@ func redisClusterOptions(ds *api.DataSource) *redis.ClusterOptions {
 		ConnMaxIdleTime: redisConnMaxIdle,
 		MaxRedirects:    redisMaxRedirects,
 	}
-	if ds.Username != "" {
-		opt.Username = ds.Username
-	}
-	return opt
 }
 
 // connectRedisDB 建连并选中指定逻辑库（go-redis 在建连时按 Options.DB 发 SELECT）。
@@ -81,7 +59,7 @@ func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
 	defer cancel()
 
-	probe := redis.NewClient(redisOptions(ds))
+	probe := redis.NewClient(redisUniversalOptions(ds, 0).Simple())
 	if err := probe.Ping(ctx).Err(); err != nil {
 		_ = probe.Close()
 		return nil, err
@@ -93,7 +71,7 @@ func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 		if db > 0 {
 			return nil, fmt.Errorf("Redis Cluster 只有 db0，不支持 db%d", db)
 		}
-		cluster := redis.NewClusterClient(redisClusterOptions(ds))
+		cluster := redis.NewClusterClient(redisUniversalOptions(ds, 0).Cluster())
 		if err := cluster.Ping(ctx).Err(); err != nil {
 			_ = cluster.Close()
 			return nil, err
@@ -105,9 +83,7 @@ func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 	}
 	_ = probe.Close()
 
-	opt := redisOptions(ds)
-	opt.DB = db
-	client := redis.NewClient(opt)
+	client := redis.NewClient(redisUniversalOptions(ds, db).Simple())
 	if err := client.Ping(ctx).Err(); err != nil {
 		_ = client.Close()
 		return nil, err

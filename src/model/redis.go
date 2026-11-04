@@ -44,35 +44,17 @@ const RedisScanLimit = 200
 // RedisConn 统一单机与集群客户端：*redis.Client、*redis.ClusterClient 都实现该接口
 type RedisConn = redis.UniversalClient
 
-// RedisOptions 按数据源配置构造客户端选项。
-// 口令为空表示实例未开认证——redis 允许无密码，这里不做非空校验（Mongo 不同）。
-// 认证支持 Redis 6+ 的 ACL 用户名：留空即旧版的「只有密码」。
-func RedisOptions(s *CoreDataSource, password string) *redis.Options {
-	opt := &redis.Options{
-		Addr:            net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
-		Password:        password,
-		DB:              0,
-		DialTimeout:     redisDialTimeout,
-		ReadTimeout:     redisIOTimeout,
-		WriteTimeout:    redisIOTimeout,
-		PoolTimeout:     redisPoolTimeout,
-		PoolSize:        redisPoolSize,
-		MaxIdleConns:    redisMaxIdleConns,
-		MaxRetries:      redisMaxRetries,
-		ConnMaxIdleTime: redisConnMaxIdle,
-	}
-	if s.Username != "" {
-		opt.Username = s.Username
-	}
-	return opt
-}
-
-// RedisClusterOptions 集群选项：数据源的 ip:port 只作种子节点，
-// go-redis 会经 CLUSTER SLOTS 自动发现其余节点。
-func RedisClusterOptions(s *CoreDataSource, password string) *redis.ClusterOptions {
-	opt := &redis.ClusterOptions{
+// redisUniversalOptions 单机/代理与集群共用的连接选项：
+// go-redis 的 UniversalOptions 能同时构造 *redis.Client 与 *redis.ClusterClient，
+// 省掉 Options / ClusterOptions 两份逐字段抄写。
+// 口令为空表示实例未开认证——redis 允许无密码，这里不做非空校验（Mongo 不同）；
+// Username 留空即旧版「只有密码」的 ACL 形态。
+func redisUniversalOptions(s *CoreDataSource, password string, db int) *redis.UniversalOptions {
+	return &redis.UniversalOptions{
 		Addrs:           []string{net.JoinHostPort(s.IP, strconv.Itoa(s.Port))},
+		Username:        s.Username,
 		Password:        password,
+		DB:              db,
 		DialTimeout:     redisDialTimeout,
 		ReadTimeout:     redisIOTimeout,
 		WriteTimeout:    redisIOTimeout,
@@ -83,10 +65,17 @@ func RedisClusterOptions(s *CoreDataSource, password string) *redis.ClusterOptio
 		ConnMaxIdleTime: redisConnMaxIdle,
 		MaxRedirects:    redisMaxRedirects,
 	}
-	if s.Username != "" {
-		opt.Username = s.Username
-	}
-	return opt
+}
+
+// RedisOptions 单机 / 云厂商 Proxy 的客户端选项
+func RedisOptions(s *CoreDataSource, password string) *redis.Options {
+	return redisUniversalOptions(s, password, 0).Simple()
+}
+
+// RedisClusterOptions 集群选项：数据源的 ip:port 只作种子节点，
+// go-redis 会经 CLUSTER SLOTS 自动发现其余节点。
+func RedisClusterOptions(s *CoreDataSource, password string) *redis.ClusterOptions {
+	return redisUniversalOptions(s, password, 0).Cluster()
 }
 
 // RedisClusterEnabled 解析 CLUSTER INFO：集群模式返回 cluster_enabled:1。
@@ -122,28 +111,22 @@ func (s *CoreDataSource) ConnectRedisWith(password string) (RedisConn, error) {
 	}
 	// 探测是否直连集群：代理模式（腾讯云/华为云 Proxy）同样报 cluster_enabled:1，
 	// 但 CLUSTER SLOTS 给的是内网节点地址，客户端连不上；只有槽位地址与配置地址一致才切集群客户端。
-	if info, err := client.ClusterInfo(ctx).Result(); err == nil && RedisClusterEnabled(info) && slotHostMatch(client, s.IP) {
-		_ = client.Close()
-		cluster := redis.NewClusterClient(RedisClusterOptions(s, password))
-		if err := cluster.Ping(ctx).Err(); err != nil {
-			_ = cluster.Close()
-			return nil, err
+	if info, err := client.ClusterInfo(ctx).Result(); err == nil && RedisClusterEnabled(info) {
+		slots, serr := client.ClusterSlots(ctx).Result()
+		if serr == nil && slotsMatchHost(slots, s.IP) {
+			_ = client.Close()
+			cluster := redis.NewClusterClient(RedisClusterOptions(s, password))
+			if err := cluster.Ping(ctx).Err(); err != nil {
+				_ = cluster.Close()
+				return nil, err
+			}
+			return cluster, nil
 		}
-		return cluster, nil
 	}
 	return client, nil
 }
 
-// slotHostMatch CLUSTER SLOTS 的节点地址是否与配置地址同主机：
-// 直连模式返回分片地址（可连），代理模式返回实例内网地址（客户端不可达）。
-func slotHostMatch(client *redis.Client, host string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
-	defer cancel()
-	slots, err := client.ClusterSlots(ctx).Result()
-	return err == nil && slotsMatchHost(slots, host)
-}
-
-// slotsMatchHost 槽位节点里是否有与 host 同主机的地址
+// slotsMatchHost 槽位节点里是否有与 host 同主机的地址（直连返回分片地址，代理返回内网地址）
 func slotsMatchHost(slots []redis.ClusterSlot, host string) bool {
 	for _, s := range slots {
 		for _, n := range s.Nodes {
@@ -173,9 +156,7 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 	}
 	_ = probe.Close()
 
-	opt := RedisOptions(s, enc.Decrypt(C.General.SecretKey, s.Password))
-	opt.DB = db
-	client := redis.NewClient(opt)
+	client := redis.NewClient(redisUniversalOptions(s, enc.Decrypt(C.General.SecretKey, s.Password), db).Simple())
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {

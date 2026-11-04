@@ -3,6 +3,8 @@ package redischeck
 import (
 	"strconv"
 	"strings"
+
+	"engine/api"
 )
 
 // noKeyCommands 不访问键的命令：参数里出现的不是键（游标 / 频道 / 子命令 / 配置项）。
@@ -134,7 +136,7 @@ func commandKeys(args []string) (src, dst []string, ok bool) {
 	if _, ok := writeCommands[name]; ok {
 		return args[1:2], nil, true
 	}
-	if _, ok := readCommands[name]; ok {
+	if api.RedisIsReadCommand(name) {
 		return args[1:2], nil, true
 	}
 	return nil, nil, false

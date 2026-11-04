@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"engine/api"
 )
 
 // 变更类型，取值与工单 Type 对齐（vars.DDL=0 / vars.DML=1）
@@ -51,35 +53,6 @@ var scriptCommands = map[string]string{
 	"SCRIPT":   "禁止 SCRIPT（管理服务端脚本）",
 	"FUNCTION": "禁止 FUNCTION（管理服务端函数）",
 	"FCALL":    "禁止 FCALL（调用服务端函数）",
-}
-
-// readCommands 只读命令白名单。
-//
-// 刻意用白名单而不是黑名单：写命令种类繁多且会持续新增，
-// 漏一个就意味着「查询页可以执行写命令」。不在表里的命令一律按变更处理。
-var readCommands = map[string]struct{}{
-	// string
-	"GET": {}, "MGET": {}, "STRLEN": {}, "GETRANGE": {}, "SUBSTR": {},
-	// 通用
-	"EXISTS": {}, "TYPE": {}, "TTL": {}, "PTTL": {}, "SCAN": {}, "RANDOMKEY": {},
-	"DUMP": {}, "TOUCH": {}, "OBJECT": {}, "MEMORY": {},
-	// hash
-	"HGET": {}, "HMGET": {}, "HGETALL": {}, "HKEYS": {}, "HVALS": {}, "HLEN": {}, "HEXISTS": {}, "HSCAN": {}, "HRANDFIELD": {},
-	// list
-	"LRANGE": {}, "LLEN": {}, "LINDEX": {}, "LPOS": {},
-	// set
-	"SMEMBERS": {}, "SCARD": {}, "SISMEMBER": {}, "SMISMEMBER": {}, "SRANDMEMBER": {}, "SSCAN": {}, "SDIFF": {}, "SINTER": {}, "SUNION": {}, "SINTERCARD": {},
-	// zset
-	"ZRANGE": {}, "ZRANGEBYSCORE": {}, "ZREVRANGE": {}, "ZREVRANGEBYSCORE": {}, "ZCARD": {}, "ZSCORE": {}, "ZMSCORE": {},
-	"ZRANK": {}, "ZREVRANK": {}, "ZCOUNT": {}, "ZSCAN": {}, "ZRANGEBYLEX": {}, "ZREVRANGEBYLEX": {}, "ZRANDMEMBER": {},
-	// 位图 / HyperLogLog / 流（读取）
-	"GETBIT": {}, "BITCOUNT": {}, "BITPOS": {}, "PFCOUNT": {},
-	"XLEN": {}, "XRANGE": {}, "XREVRANGE": {}, "XREAD": {}, "XINFO": {},
-	// 地理
-	"GEOPOS": {}, "GEODIST": {}, "GEOHASH": {}, "GEOSEARCH": {},
-	// 服务端信息（只读）
-	"INFO": {}, "DBSIZE": {}, "PING": {}, "ECHO": {}, "TIME": {}, "LOLWUT": {},
-	"COMMAND": {}, "SLOWLOG": {}, "LATENCY": {},
 }
 
 // Split 按 redis-cli 的参数规则把一行命令切成参数。
@@ -163,7 +136,7 @@ func CommandName(args []string) string {
 
 // Classify 判断命令类别：白名单里的只读命令算查询，其余算变更。
 func Classify(name string) int {
-	if _, ok := readCommands[name]; ok {
+	if api.RedisIsReadCommand(name) {
 		return KindQuery
 	}
 	if isWriteCommand(name) {

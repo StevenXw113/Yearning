@@ -3,9 +3,10 @@ package redischeck
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
+
+	"engine/api"
 )
 
 // 变更类型，取值与工单 Type 对齐（主程序侧 vars.DDL=0 / vars.DML=1）
@@ -21,22 +22,7 @@ const (
 // 两处语义必须一致：主程序那份是**执行底线**（不受配置影响），
 // 这份是**可按规则集开关**的审核，改任何一边都要同步另一边。
 var (
-	// readCommands 只读命令白名单：不在表里的一律按变更处理。
-	// 用白名单而非黑名单——Redis 命令两百多个还在增加，漏一个就等于查询页能写数据。
-	readCommands = map[string]struct{}{
-		"GET": {}, "MGET": {}, "STRLEN": {}, "GETRANGE": {}, "SUBSTR": {},
-		"EXISTS": {}, "TYPE": {}, "TTL": {}, "PTTL": {}, "SCAN": {}, "RANDOMKEY": {},
-		"DUMP": {}, "TOUCH": {}, "OBJECT": {}, "MEMORY": {},
-		"HGET": {}, "HMGET": {}, "HGETALL": {}, "HKEYS": {}, "HVALS": {}, "HLEN": {}, "HEXISTS": {}, "HSCAN": {}, "HRANDFIELD": {},
-		"LRANGE": {}, "LLEN": {}, "LINDEX": {}, "LPOS": {},
-		"SMEMBERS": {}, "SCARD": {}, "SISMEMBER": {}, "SMISMEMBER": {}, "SRANDMEMBER": {}, "SSCAN": {}, "SDIFF": {}, "SINTER": {}, "SUNION": {}, "SINTERCARD": {},
-		"ZRANGE": {}, "ZRANGEBYSCORE": {}, "ZREVRANGE": {}, "ZREVRANGEBYSCORE": {}, "ZCARD": {}, "ZSCORE": {}, "ZMSCORE": {},
-		"ZRANK": {}, "ZREVRANK": {}, "ZCOUNT": {}, "ZSCAN": {}, "ZRANGEBYLEX": {}, "ZREVRANGEBYLEX": {}, "ZRANDMEMBER": {},
-		"GETBIT": {}, "BITCOUNT": {}, "BITPOS": {}, "PFCOUNT": {},
-		"XLEN": {}, "XRANGE": {}, "XREVRANGE": {}, "XREAD": {}, "XINFO": {},
-		"GEOPOS": {}, "GEODIST": {}, "GEOHASH": {}, "GEOSEARCH": {},
-		"INFO": {}, "DBSIZE": {}, "PING": {}, "ECHO": {}, "TIME": {}, "LOLWUT": {}, "COMMAND": {}, "SLOWLOG": {}, "LATENCY": {},
-	}
+	// 只读命令白名单已收敛到 engine/api（主程序查询页共用一份），见 api.RedisReadCommands。
 
 	// writeCommands 改数据的命令（分类用；安全校验不依赖它）
 	writeCommands = map[string]struct{}{
@@ -163,18 +149,6 @@ var (
 	}
 )
 
-// ReadCommandNames 只读命令名单（已排序）。
-// 导出给 archguard 与主程序 src/lib/rediscmd 的白名单比对：两边漂移会让同一命令
-// 在查询页与检测页得出相反的结论。
-func ReadCommandNames() []string {
-	out := make([]string, 0, len(readCommands))
-	for name := range readCommands {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
-}
-
 // inTable 命令是否在表里
 func inTable(table map[string]string, name string) bool {
 	_, ok := table[name]
@@ -192,7 +166,7 @@ var managementTables = []map[string]string{
 // knownCommand 命令是否已登记语义（用于 RedisUnknownCommand）。
 // 未登记的命令一律按「语义未知」处理：模块命令（JSON.SET 之类）与厂商扩展都落在这里。
 func knownCommand(name string) bool {
-	if _, ok := readCommands[name]; ok {
+	if api.RedisIsReadCommand(name) {
 		return true
 	}
 	if _, ok := writeCommands[name]; ok {
@@ -318,7 +292,7 @@ func classify(name string) int {
 	if _, ok := writeCommands[name]; ok {
 		return KindDML
 	}
-	if _, ok := readCommands[name]; ok {
+	if api.RedisIsReadCommand(name) {
 		return KindQuery
 	}
 	// 未知命令按变更处理：宁可走审批，也别把写命令当查询放行
@@ -372,5 +346,4 @@ func (c *Command) HasAnyArg(names ...string) bool {
 	return false
 }
 
-// KeyCount 受影响的键数
-func (c *Command) KeyCount() int { return len(c.Keys) }
+

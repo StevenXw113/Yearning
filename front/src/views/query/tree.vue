@@ -223,13 +223,10 @@
       sql:
         dbType.value === 2
           ? JSON.stringify({ listIndexes: key })
-          : dbType.value === 3
-            ? // Redis 的键没有字段结构，类型是最接近「结构」的信息
-              `TYPE ${key}`
-            : dbType.value === 1
-              ? // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
-                `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
-              : `SHOW COLUMNS FROM ${key}`,
+          : dbType.value === 1
+            ? // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
+              `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
+            : `SHOW COLUMNS FROM ${key}`,
     });
   };
 
