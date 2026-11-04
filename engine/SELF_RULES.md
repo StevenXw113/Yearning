@@ -45,23 +45,61 @@
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 
-## Redis 侧 · internal/redischeck（15 条）
+## Redis 侧 · internal/redischeck（53 条）
 
-- `RedisForbidAdmin` — 开关：`RedisForbidAdmin`；禁止 CONFIG / DEBUG / MODULE / MONITOR / CLIENT 等运维管理命令
-- `RedisForbidBlocking` — 开关：`RedisForbidBlocking`；禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE 等）
-- `RedisForbidDangerous` — 开关：`RedisForbidDangerous`；禁止 FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE 等影响整个实例的命令
-- `RedisForbidKeysCommand` — 开关：`RedisForbidKeysCommand`；禁止 KEYS：它会遍历整个键空间并阻塞实例，请改用 SCAN
-- `RedisForbidMove` — 开关：`RedisForbidMove`；禁止 MOVE / SELECT：跨库操作会让键的归属难以追踪
-- `RedisForbidPersist` — 开关：`RedisForbidPersist`；禁止 PERSIST：会把键的过期时间去掉，变成常驻内存
-- `RedisForbidRename` — 开关：`RedisForbidRename`；禁止 RENAME / RENAMENX：会静默覆盖目标键，旧值无法找回
-- `RedisForbidReplica` — 开关：`RedisForbidReplica`；禁止 REPLICAOF / SLAVEOF（改变主从关系）
-- `RedisForbidScript` — 开关：`RedisForbidScript`；禁止 EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL（服务端执行脚本）
-- `RedisKeyPrefix` — 开关：`RedisKeyPrefix`；键名必须以指定前缀开头（如 app:），空表示不检查
-- `RedisMaxAffectKeys` — 开关：`RedisMaxAffectKeys`；单条命令允许影响的键数上限，0 表示不限制
+- `RedisCommandSyntax` — 开关：`RedisCommandSyntax`；检查命令、子命令、参数数量及选项组合；语法非法或参数不完整时拦截
+- `RedisCopyOverwrite` — 开关：`RedisCopyOverwrite`；COPY 使用 REPLACE 等覆盖行为时提示，并检查源键、目标键及目标 DB 权限
+- `RedisDbScope` — 开关：`RedisDbScope`；命令只能访问指定 DB 范围；超出授权范围时拦截；格式如 0-15
+- `RedisDeleteKey` — 开关：`RedisDeleteKey`；执行 DEL、UNLINK 时提示数据删除风险
+- `RedisExpensiveRead` — 开关：`RedisExpensiveRead`；SORT、集合交并差及其他复杂读取，输入规模未知或超过预算时提示
+- `RedisForbidAclChange` — 开关：`RedisForbidAclChange`；禁止修改用户及权限的 ACL 子命令，如 SETUSER、DELUSER、LOAD
+- `RedisForbidAdmin` — 开关：`RedisForbidAdmin`；禁止修改实例配置或连接状态的管理子命令，如 CONFIG SET/REWRITE/RESETSTAT、CLIENT KILL/PAUSE；只读子命令单独审核
+- `RedisForbidBlockingCommand` — 开关：`RedisForbidBlockingCommand`；普通命令入口禁止列表阻塞、Stream 阻塞等等待型操作；专项场景另行配置
+- `RedisForbidClusterChange` — 开关：`RedisForbidClusterChange`；禁止修改集群拓扑和 Slot 状态的 CLUSTER 子命令；只读查询子命令单独审核
+- `RedisForbidConnectionControl` — 开关：`RedisForbidConnectionControl`；禁止提交 AUTH、HELLO 等认证或连接状态控制命令，连接状态由审核入口统一管理
+- `RedisForbidDangerous` — 开关：`RedisForbidDangerous`；禁止 FLUSHALL、FLUSHDB、SHUTDOWN、SWAPDB 等清库、关闭实例或交换数据库的命令
+- `RedisForbidDebug` — 开关：`RedisForbidDebug`；禁止 DEBUG 命令
+- `RedisForbidKeysCommand` — 开关：`RedisForbidKeysCommand`；禁止 KEYS，包括带业务前缀的 KEYS；建议改用受限 SCAN
+- `RedisForbidMigration` — 开关：`RedisForbidMigration`；禁止 MIGRATE、RESTORE 等迁移或恢复操作，转专项审核
+- `RedisForbidModuleChange` — 开关：`RedisForbidModuleChange`；禁止 MODULE LOAD、LOADEX、UNLOAD 等模块变更命令
+- `RedisForbidMonitor` — 开关：`RedisForbidMonitor`；禁止 MONITOR，避免持续监听带来的性能及数据暴露风险
+- `RedisForbidMove` — 开关：`RedisForbidMove`；禁止 MOVE，避免跨 DB 迁移数据；SELECT 另按 DB 权限及部署模式检查
+- `RedisForbidPersist` — 开关：`RedisForbidPersist`；禁止 PERSIST，避免将有过期时间的缓存转为永久保存；允许永久化的业务可单独豁免
+- `RedisForbidPersistence` — 开关：`RedisForbidPersistence`；禁止普通业务入口执行 SAVE、BGSAVE、BGREWRITEAOF 等持久化管理命令
+- `RedisForbidRandomKey` — 开关：`RedisForbidRandomKey`；禁止 RANDOMKEY，避免读取范围超出业务键授权范围
+- `RedisForbidRename` — 开关：`RedisForbidRename`；禁止 RENAME、RENAMENX；RENAME 可能覆盖目标键，RENAMENX 虽不覆盖但仍会改变键名与业务归属
+- `RedisForbidReplica` — 开关：`RedisForbidReplica`；禁止 REPLICAOF、SLAVEOF，避免改变复制关系
+- `RedisForbidScript` — 开关：`RedisForbidScript`；禁止未登记的 EVAL、EVALSHA、EVAL_RO、EVALSHA_RO、FCALL、FCALL_RO 等脚本或函数执行命令
+- `RedisForbidScriptManagement` — 开关：`RedisForbidScriptManagement`；禁止 SCRIPT 及 FUNCTION 中修改、加载、清理脚本或函数状态的子命令；只读子命令单独审核
+- `RedisForbidSubscription` — 开关：`RedisForbidSubscription`；禁止 SUBSCRIBE、PSUBSCRIBE、SSUBSCRIBE 等持续订阅操作
+- `RedisForbidWatch` — 开关：`RedisForbidWatch`；普通命令入口禁止 WATCH、UNWATCH；仅在明确支持完整会话语义时开放
+- `RedisForbiddenKeyPattern` — 开关：`RedisForbiddenKeyPattern`；禁止访问匹配保护规则的键，如系统键、核心锁及内部状态键；多个规则用逗号分隔
+- `RedisFullCollectionRead` — 开关：`RedisFullCollectionRead`；HGETALL、SMEMBERS、全量 LRANGE/ZRANGE 等操作，在集合规模未知或超过阈值时提示
+- `RedisImmediateExpire` — 开关：`RedisImmediateExpire`；指定立即过期或已过去的过期时间时，按删除操作处理并提示
+- `RedisKeyExtraction` — 开关：`RedisKeyExtraction`；必须完整识别命令访问的源键和目标键；无法识别时拦截
+- `RedisKeyPrefix` — 开关：`RedisKeyPrefix`；键名必须位于授权前缀范围内，所有源键和目标键均需检查；留空表示不检查前缀
+- `RedisLargeOffsetWrite` — 开关：`RedisLargeOffsetWrite`；SETRANGE、SETBIT 等按偏移写入的操作，预计对象最终大小超过阈值时拦截，0 表示不限制
+- `RedisLargeRangeDelete` — 开关：`RedisLargeRangeDelete`；集合范围删除、列表裁剪及 Stream 裁剪等操作，影响元素数量未知或超过阈值时提示
+- `RedisMaxCommandPayload` — 开关：`RedisMaxCommandPayload`；单条命令参数总字节数上限，0 表示不限制；防止多个小值绕过单值大小限制
+- `RedisMaxDeleteKeys` — 开关：`RedisMaxDeleteKeys`；单条删除命令键数上限，0 表示不限制；超过上限转批量删除审核
 - `RedisMaxKeyLen` — 开关：`RedisMaxKeyLen`；键名长度上限（字节），0 表示不限制
-- `RedisMaxValueLen` — 开关：`RedisMaxValueLen`；单次写入值的大小上限（字节），0 表示不限制
-- `RedisRequireTTL` — 开关：`RedisRequireTTL`；SET 必须带过期时间（EX / PX / EXAT），避免键无上限增长
-- `RedisScanRequireMatch` — 开关：`RedisScanRequireMatch`；SCAN 应带 MATCH 限定范围，否则等同于全量遍历
+- `RedisMaxReadElements` — 开关：`RedisMaxReadElements`；单次范围查询或随机读取请求的元素数上限，0 表示不限制；无法确定上限时提示
+- `RedisMaxReadKeys` — 开关：`RedisMaxReadKeys`；MGET 等单条批量读取命令的键数上限，0 表示不限制
+- `RedisMaxScanCount` — 开关：`RedisMaxScanCount`；SCAN、HSCAN、SSCAN、ZSCAN 的 COUNT 建议不超过配置值；COUNT 仅是工作量提示，不代表结果条数上限
+- `RedisMaxTtl` — 开关：`RedisMaxTtl`；过期时间超过业务最大值时提示；最大值按业务配置，0 表示不检查
+- `RedisMaxValueSize` — 开关：`RedisMaxValueSize`；单个新写入值的字节数上限，0 表示不限制；超过上限拦截
+- `RedisMaxWriteElements` — 开关：`RedisMaxWriteElements`；单条命令新增或修改的字段、成员、列表元素数上限，0 表示不限制
+- `RedisMaxWriteKeys` — 开关：`RedisMaxWriteKeys`；单条写入命令涉及的键数上限，0 表示不限制；超过上限转批量审核
+- `RedisMinTtl` — 开关：`RedisMinTtl`；过期时间低于业务最小值时提示；最小值按业务配置，0 表示不检查
+- `RedisNonIdempotentWrite` — 开关：`RedisNonIdempotentWrite`；INCR、DECR、计数增量、列表弹出等重复执行会改变结果的操作，提示重复执行风险
+- `RedisProtectedKeyDelete` — 开关：`RedisProtectedKeyDelete`；禁止删除匹配保护规则的锁、幂等键、核心状态及其他关键业务键；多个规则用逗号分隔
+- `RedisRequireTtl` — 开关：`RedisRequireTtl`；缓存类键新建后必须有过期时间；明确登记为永久数据的业务键可豁免
+- `RedisScanMatchRequired` — 开关：`RedisScanMatchRequired`；SCAN 必须指定允许的业务匹配范围；MATCH 规则无法确认属于授权范围时拦截
+- `RedisSensitiveKeyAccess` — 开关：`RedisSensitiveKeyAccess`；访问凭据、Token、个人信息等敏感业务键时提示；敏感范围由业务配置
+- `RedisStoreOperation` — 开关：`RedisStoreOperation`；集合计算或排序结果写入目标键时，检查输入规模、目标覆盖及所有源键和目标键权限
+- `RedisStreamStateChange` — 开关：`RedisStreamStateChange`；消费组变更、消息确认、认领等操作会改变消费状态，执行时提示
+- `RedisTtlLossOnOverwrite` — 开关：`RedisTtlLossOnOverwrite`；覆盖写入可能清除原 TTL，且未明确指定过期策略或保留 TTL 时提示
+- `RedisUnknownCommand` — 开关：`RedisUnknownCommand`；禁止尚未登记语义的命令、模块命令及厂商扩展命令
 
 ## Doris 侧 · internal/dorischeck（4 条）
 

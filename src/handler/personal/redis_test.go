@@ -123,7 +123,7 @@ func TestRedisDisplayBlobGuard(t *testing.T) {
 // 查询页只能执行只读命令：写命令必须在建连之前就被拒绝
 // （getClient 传 nil —— 如果校验没拦住，这里会 panic 而不是断言失败）
 func TestRunRedisCommandRejectsWrites(t *testing.T) {
-	nilClient := func(int) (*redis.Client, error) { return nil, nil }
+	nilClient := func(int) (model.RedisConn, error) { return nil, nil }
 	for _, cmd := range []string{"SET k v", "DEL k", "FLUSHALL", "KEYS *", "HSET h f v"} {
 		if _, err := runRedisCommand(nilClient, "db0", cmd, ""); err == nil {
 			t.Errorf("runRedisCommand(%q) 应被拒绝", cmd)
@@ -160,7 +160,7 @@ func TestRedisQueryIntegration(t *testing.T) {
 	}
 	// 只读命令走通，且结果能被转成表格
 	for _, cmd := range []string{"PING", "DBSIZE", "SCAN 0 MATCH yrn:test:* COUNT 10"} {
-		q, err := runRedisCommand(func(int) (*redis.Client, error) { return client, nil }, "db0", cmd, "")
+		q, err := runRedisCommand(func(int) (model.RedisConn, error) { return client, nil }, "db0", cmd, "")
 		if err != nil {
 			t.Errorf("runRedisCommand(%q) 失败: %v", cmd, err)
 			continue
@@ -170,7 +170,7 @@ func TestRedisQueryIntegration(t *testing.T) {
 		}
 	}
 	// 写命令即使能连上也必须被拦
-	if _, err := runRedisCommand(func(int) (*redis.Client, error) { return client, nil }, "db0", "SET yrn:test:x 1", ""); err == nil {
+	if _, err := runRedisCommand(func(int) (model.RedisConn, error) { return client, nil }, "db0", "SET yrn:test:x 1", ""); err == nil {
 		t.Error("写命令应被拒绝")
 	}
 }

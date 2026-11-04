@@ -90,24 +90,67 @@ type AuditRole struct {
 	// --- Redis 审核规则（自研，实现在 engine/internal/redischeck）---
 	// 上游 bytebase 同样没有 Redis 规则，这几项与 SQL/Mongo 规则同构：
 	// 开关 + RuleLevel 级别，都存在同一份规则集 JSON 里。
-	// 安全类（默认 error）
-	RedisForbidDangerous   bool `json:"RedisForbidDangerous"`
-	RedisForbidAdmin       bool `json:"RedisForbidAdmin"`
-	RedisForbidScript      bool `json:"RedisForbidScript"`
-	RedisForbidReplica     bool `json:"RedisForbidReplica"`
-	RedisForbidKeysCommand bool `json:"RedisForbidKeysCommand"`
-	// 结构类
-	RedisForbidRename bool   `json:"RedisForbidRename"`
-	RedisKeyPrefix    string `json:"RedisKeyPrefix"`
-	RedisMaxKeyLen    int    `json:"RedisMaxKeyLen"`
-	RedisForbidMove   bool   `json:"RedisForbidMove"`
-	// 性能 / 风险类（默认只提示）
-	RedisMaxAffectKeys    int  `json:"RedisMaxAffectKeys"`
-	RedisMaxValueLen      int  `json:"RedisMaxValueLen"`
-	RedisRequireTTL       bool `json:"RedisRequireTTL"`
-	RedisForbidPersist    bool `json:"RedisForbidPersist"`
-	RedisScanRequireMatch bool `json:"RedisScanRequireMatch"`
-	RedisForbidBlocking   bool `json:"RedisForbidBlocking"`
+	// 字段名必须与 redischeck 里的规则名逐字一致：规则页按它存开关、按它存级别。
+	// --- 基础校验与权限 ---
+	RedisCommandSyntax           bool   `json:"RedisCommandSyntax"`
+	RedisUnknownCommand          bool   `json:"RedisUnknownCommand"`
+	RedisKeyExtraction           bool   `json:"RedisKeyExtraction"`
+	RedisKeyPrefix               string `json:"RedisKeyPrefix"`
+	RedisMaxKeyLen               int    `json:"RedisMaxKeyLen"`
+	RedisForbiddenKeyPattern     string `json:"RedisForbiddenKeyPattern"`
+	RedisSensitiveKeyAccess      string `json:"RedisSensitiveKeyAccess"`
+	RedisDbScope                 string `json:"RedisDbScope"`
+	RedisForbidConnectionControl bool   `json:"RedisForbidConnectionControl"`
+	// --- 危险命令与管理命令 ---
+	RedisForbidDangerous     bool `json:"RedisForbidDangerous"`
+	RedisForbidAdmin         bool `json:"RedisForbidAdmin"`
+	RedisForbidDebug         bool `json:"RedisForbidDebug"`
+	RedisForbidMonitor       bool `json:"RedisForbidMonitor"`
+	RedisForbidAclChange     bool `json:"RedisForbidAclChange"`
+	RedisForbidModuleChange  bool `json:"RedisForbidModuleChange"`
+	RedisForbidReplica       bool `json:"RedisForbidReplica"`
+	RedisForbidClusterChange bool `json:"RedisForbidClusterChange"`
+	RedisForbidPersistence   bool `json:"RedisForbidPersistence"`
+	RedisForbidMigration     bool `json:"RedisForbidMigration"`
+	RedisForbidMove          bool `json:"RedisForbidMove"`
+	// --- 读取与扫描 ---
+	RedisForbidKeysCommand  bool `json:"RedisForbidKeysCommand"`
+	RedisForbidRandomKey    bool `json:"RedisForbidRandomKey"`
+	RedisScanMatchRequired  bool `json:"RedisScanMatchRequired"`
+	RedisMaxScanCount       int  `json:"RedisMaxScanCount"`
+	RedisFullCollectionRead bool `json:"RedisFullCollectionRead"`
+	RedisMaxReadElements    int  `json:"RedisMaxReadElements"`
+	RedisMaxReadKeys        int  `json:"RedisMaxReadKeys"`
+	RedisExpensiveRead      bool `json:"RedisExpensiveRead"`
+	// --- 写入与数据变更 ---
+	RedisMaxValueSize       int  `json:"RedisMaxValueSize"`
+	RedisMaxCommandPayload  int  `json:"RedisMaxCommandPayload"`
+	RedisMaxWriteKeys       int  `json:"RedisMaxWriteKeys"`
+	RedisMaxWriteElements   int  `json:"RedisMaxWriteElements"`
+	RedisNonIdempotentWrite bool `json:"RedisNonIdempotentWrite"`
+	RedisLargeOffsetWrite   int  `json:"RedisLargeOffsetWrite"`
+	RedisForbidRename       bool `json:"RedisForbidRename"`
+	RedisCopyOverwrite      bool `json:"RedisCopyOverwrite"`
+	RedisStoreOperation     bool `json:"RedisStoreOperation"`
+	// --- TTL 与缓存规范 ---
+	RedisRequireTTL         bool `json:"RedisRequireTtl"`
+	RedisTtlLossOnOverwrite bool `json:"RedisTtlLossOnOverwrite"`
+	RedisForbidPersist      bool `json:"RedisForbidPersist"`
+	RedisMinTTL             int  `json:"RedisMinTtl"`
+	RedisMaxTTL             int  `json:"RedisMaxTtl"`
+	RedisImmediateExpire    bool `json:"RedisImmediateExpire"`
+	// --- 删除与大 Key ---
+	RedisDeleteKey          bool   `json:"RedisDeleteKey"`
+	RedisMaxDeleteKeys      int    `json:"RedisMaxDeleteKeys"`
+	RedisProtectedKeyDelete string `json:"RedisProtectedKeyDelete"`
+	RedisLargeRangeDelete   bool   `json:"RedisLargeRangeDelete"`
+	// --- 事务、脚本与特殊操作 ---
+	RedisForbidScript           bool `json:"RedisForbidScript"`
+	RedisForbidScriptManagement bool `json:"RedisForbidScriptManagement"`
+	RedisForbidWatch            bool `json:"RedisForbidWatch"`
+	RedisForbidBlockingCommand  bool `json:"RedisForbidBlockingCommand"`
+	RedisForbidSubscription     bool `json:"RedisForbidSubscription"`
+	RedisStreamStateChange      bool `json:"RedisStreamStateChange"`
 	// Doris 建表审核规则（自研 dorischeck）：建表必须有分桶、BUCKETS 上限、副本数、KEY 模型
 	DorisRequireDistribution bool `json:"DorisRequireDistribution"`
 	DorisBucketLimit         int  `json:"DorisBucketLimit"`

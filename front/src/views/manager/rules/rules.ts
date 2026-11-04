@@ -17,6 +17,15 @@ interface Rule {
 
 const { t } = i18n.global;
 
+// Redis 规则条目较多，用工厂函数声明，避免几十份重复的对象字面量
+const redisRule = (name: string, category: RuleCategory, tp = 0): Rule => ({
+  name,
+  category,
+  desc: t(name),
+  type: 'Redis',
+  tp,
+});
+
 const rule: Rule[] = [
   {
     name: 'DDLCheckTableComment',
@@ -612,128 +621,60 @@ const rule: Rule[] = [
     type: 'Mongo',
     tp: 1,
   },
-  // --- Redis 命令规则 ---
-  // 安全类默认 error；结构/性能类默认只提示（可在级别列调成 error 来强制）
-  {
-    name: 'RedisForbidDangerous',
-    category: 'statement',
-
-    desc: t('RedisForbidDangerous'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidAdmin',
-    category: 'statement',
-
-    desc: t('RedisForbidAdmin'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidScript',
-    category: 'statement',
-
-    desc: t('RedisForbidScript'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidReplica',
-    category: 'statement',
-
-    desc: t('RedisForbidReplica'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidKeysCommand',
-    category: 'statement',
-
-    desc: t('RedisForbidKeysCommand'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidRename',
-    category: 'system',
-
-    desc: t('RedisForbidRename'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisKeyPrefix',
-    category: 'naming',
-
-    desc: t('RedisKeyPrefix'),
-    type: 'Redis',
-    tp: 2,
-  },
-  {
-    name: 'RedisMaxKeyLen',
-    category: 'naming',
-
-    desc: t('RedisMaxKeyLen'),
-    type: 'Redis',
-    tp: 1,
-  },
-  {
-    name: 'RedisForbidMove',
-    category: 'engine',
-
-    desc: t('RedisForbidMove'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisMaxAffectKeys',
-    category: 'engine',
-
-    desc: t('RedisMaxAffectKeys'),
-    type: 'Redis',
-    tp: 1,
-  },
-  {
-    name: 'RedisMaxValueLen',
-    category: 'engine',
-
-    desc: t('RedisMaxValueLen'),
-    type: 'Redis',
-    tp: 1,
-  },
-  {
-    name: 'RedisRequireTTL',
-    category: 'system',
-
-    desc: t('RedisRequireTTL'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidPersist',
-    category: 'system',
-
-    desc: t('RedisForbidPersist'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisScanRequireMatch',
-    category: 'statement',
-
-    desc: t('RedisScanRequireMatch'),
-    type: 'Redis',
-    tp: 0,
-  },
-  {
-    name: 'RedisForbidBlocking',
-    category: 'statement',
-
-    desc: t('RedisForbidBlocking'),
-    type: 'Redis',
-    tp: 0,
-  },
+  // Redis 规则：开关名与引擎 / 契约字段逐字一致，由 archguard 核对
+  redisRule('RedisCommandSyntax', 'statement'),
+  redisRule('RedisUnknownCommand', 'statement'),
+  redisRule('RedisKeyExtraction', 'statement'),
+  redisRule('RedisKeyPrefix', 'naming', 2),
+  redisRule('RedisMaxKeyLen', 'naming', 1),
+  redisRule('RedisForbiddenKeyPattern', 'naming', 2),
+  redisRule('RedisSensitiveKeyAccess', 'naming', 2),
+  redisRule('RedisDbScope', 'system', 2),
+  redisRule('RedisForbidConnectionControl', 'statement'),
+  redisRule('RedisForbidDangerous', 'statement'),
+  redisRule('RedisForbidAdmin', 'statement'),
+  redisRule('RedisForbidDebug', 'statement'),
+  redisRule('RedisForbidMonitor', 'statement'),
+  redisRule('RedisForbidAclChange', 'statement'),
+  redisRule('RedisForbidModuleChange', 'statement'),
+  redisRule('RedisForbidReplica', 'statement'),
+  redisRule('RedisForbidClusterChange', 'statement'),
+  redisRule('RedisForbidPersistence', 'statement'),
+  redisRule('RedisForbidMigration', 'statement'),
+  redisRule('RedisForbidMove', 'statement'),
+  redisRule('RedisForbidKeysCommand', 'statement'),
+  redisRule('RedisForbidRandomKey', 'statement'),
+  redisRule('RedisScanMatchRequired', 'statement'),
+  redisRule('RedisMaxScanCount', 'engine', 1),
+  redisRule('RedisFullCollectionRead', 'statement'),
+  redisRule('RedisMaxReadElements', 'engine', 1),
+  redisRule('RedisMaxReadKeys', 'engine', 1),
+  redisRule('RedisExpensiveRead', 'statement'),
+  redisRule('RedisMaxValueSize', 'engine', 1),
+  redisRule('RedisMaxCommandPayload', 'engine', 1),
+  redisRule('RedisMaxWriteKeys', 'engine', 1),
+  redisRule('RedisMaxWriteElements', 'engine', 1),
+  redisRule('RedisNonIdempotentWrite', 'engine'),
+  redisRule('RedisLargeOffsetWrite', 'engine', 1),
+  redisRule('RedisForbidRename', 'statement'),
+  redisRule('RedisCopyOverwrite', 'statement'),
+  redisRule('RedisStoreOperation', 'statement'),
+  redisRule('RedisRequireTtl', 'system'),
+  redisRule('RedisTtlLossOnOverwrite', 'system'),
+  redisRule('RedisForbidPersist', 'system'),
+  redisRule('RedisMinTtl', 'system', 1),
+  redisRule('RedisMaxTtl', 'system', 1),
+  redisRule('RedisImmediateExpire', 'system'),
+  redisRule('RedisDeleteKey', 'statement'),
+  redisRule('RedisMaxDeleteKeys', 'engine', 1),
+  redisRule('RedisProtectedKeyDelete', 'statement', 2),
+  redisRule('RedisLargeRangeDelete', 'statement'),
+  redisRule('RedisForbidScript', 'statement'),
+  redisRule('RedisForbidScriptManagement', 'statement'),
+  redisRule('RedisForbidWatch', 'statement'),
+  redisRule('RedisForbidBlockingCommand', 'statement'),
+  redisRule('RedisForbidSubscription', 'statement'),
+  redisRule('RedisStreamStateChange', 'statement'),
   {
     name: 'DorisRequireDistribution',
     category: 'table',

@@ -125,31 +125,67 @@ type AuditRole struct {
 	MongoQueryForbidNoLimit  bool `json:"mongo_query_forbid_no_limit"`
 
 	// ------- Redis 审核规则(internal/redischeck,自研;上游 bytebase 无此方言)-------
-	// --- 安全类:默认 error(Register 时强制校验)---
-	RedisForbidDangerous   bool `json:"redis_forbid_dangerous"`
-	RedisForbidAdmin       bool `json:"redis_forbid_admin"`
-	RedisForbidScript      bool `json:"redis_forbid_script"`
-	RedisForbidReplica     bool `json:"redis_forbid_replica"`
-	RedisForbidKeysCommand bool `json:"redis_forbid_keys_command"`
-	// --- 结构类 ---
-	RedisForbidRename bool `json:"redis_forbid_rename"`
-	// RedisKeyPrefix key 命名前缀规范,空 = 不检查(如填 "app:")。
-	RedisKeyPrefix string `json:"redis_key_prefix"`
-	// RedisMaxKeyLen key 名长度上限,0 = 不限制。
-	RedisMaxKeyLen  int32 `json:"redis_max_key_len"`
-	RedisForbidMove bool  `json:"redis_forbid_move"`
-	// --- 性能 / 风险类:默认只提示不拦 ---
-	// RedisMaxAffectKeys 单条命令允许影响的键数上限,0 = 不限制。
-	RedisMaxAffectKeys int32 `json:"redis_max_affect_keys"`
-	// RedisMaxValueLen 单次写入 value 的字节数上限,0 = 不限制。
-	RedisMaxValueLen int32 `json:"redis_max_value_len"`
-	// RedisRequireTtl SET 必须带过期时间(防内存无上限增长)。
-	RedisRequireTtl    bool `json:"redis_require_ttl"`
-	RedisForbidPersist bool `json:"redis_forbid_persist"`
-	// RedisScanRequireMatch SCAN 必须带 MATCH(否则等同于全量遍历)。
-	RedisScanRequireMatch bool `json:"redis_scan_require_match"`
-	// RedisForbidBlocking 禁止阻塞命令(BLPOP/BRPOP/BLMOVE/WAIT 等)。
-	RedisForbidBlocking bool `json:"redis_forbid_blocking"`
+	// 每个开关与一条规则一一对应(名称一致),由 archguard 核对。
+	// --- 基础校验与权限 ---
+	RedisCommandSyntax           bool   `json:"redis_command_syntax"`
+	RedisUnknownCommand          bool   `json:"redis_unknown_command"`
+	RedisKeyExtraction           bool   `json:"redis_key_extraction"`
+	RedisKeyPrefix               string `json:"redis_key_prefix"`
+	RedisMaxKeyLen               int32  `json:"redis_max_key_len"`
+	RedisForbiddenKeyPattern     string `json:"redis_forbidden_key_pattern"`
+	RedisSensitiveKeyAccess      string `json:"redis_sensitive_key_access"`
+	RedisDbScope                 string `json:"redis_db_scope"`
+	RedisForbidConnectionControl bool   `json:"redis_forbid_connection_control"`
+	// --- 危险命令与管理命令 ---
+	RedisForbidDangerous     bool `json:"redis_forbid_dangerous"`
+	RedisForbidAdmin         bool `json:"redis_forbid_admin"`
+	RedisForbidDebug         bool `json:"redis_forbid_debug"`
+	RedisForbidMonitor       bool `json:"redis_forbid_monitor"`
+	RedisForbidAclChange     bool `json:"redis_forbid_acl_change"`
+	RedisForbidModuleChange  bool `json:"redis_forbid_module_change"`
+	RedisForbidReplica       bool `json:"redis_forbid_replica"`
+	RedisForbidClusterChange bool `json:"redis_forbid_cluster_change"`
+	RedisForbidPersistence   bool `json:"redis_forbid_persistence"`
+	RedisForbidMigration     bool `json:"redis_forbid_migration"`
+	RedisForbidMove          bool `json:"redis_forbid_move"`
+	// --- 读取与扫描 ---
+	RedisForbidKeysCommand  bool  `json:"redis_forbid_keys_command"`
+	RedisForbidRandomKey    bool  `json:"redis_forbid_random_key"`
+	RedisScanMatchRequired  bool  `json:"redis_scan_match_required"`
+	RedisMaxScanCount       int32 `json:"redis_max_scan_count"`
+	RedisFullCollectionRead bool  `json:"redis_full_collection_read"`
+	RedisMaxReadElements    int32 `json:"redis_max_read_elements"`
+	RedisMaxReadKeys        int32 `json:"redis_max_read_keys"`
+	RedisExpensiveRead      bool  `json:"redis_expensive_read"`
+	// --- 写入与数据变更 ---
+	RedisMaxValueSize       int32 `json:"redis_max_value_size"`
+	RedisMaxCommandPayload  int32 `json:"redis_max_command_payload"`
+	RedisMaxWriteKeys       int32 `json:"redis_max_write_keys"`
+	RedisMaxWriteElements   int32 `json:"redis_max_write_elements"`
+	RedisNonIdempotentWrite bool  `json:"redis_non_idempotent_write"`
+	RedisLargeOffsetWrite   int32 `json:"redis_large_offset_write"`
+	RedisForbidRename       bool  `json:"redis_forbid_rename"`
+	RedisCopyOverwrite      bool  `json:"redis_copy_overwrite"`
+	RedisStoreOperation     bool  `json:"redis_store_operation"`
+	// --- TTL 与缓存规范 ---
+	RedisRequireTtl         bool  `json:"redis_require_ttl"`
+	RedisTtlLossOnOverwrite bool  `json:"redis_ttl_loss_on_overwrite"`
+	RedisForbidPersist      bool  `json:"redis_forbid_persist"`
+	RedisMinTtl             int32 `json:"redis_min_ttl"`
+	RedisMaxTtl             int32 `json:"redis_max_ttl"`
+	RedisImmediateExpire    bool  `json:"redis_immediate_expire"`
+	// --- 删除与大 Key ---
+	RedisDeleteKey          bool   `json:"redis_delete_key"`
+	RedisMaxDeleteKeys      int32  `json:"redis_max_delete_keys"`
+	RedisProtectedKeyDelete string `json:"redis_protected_key_delete"`
+	RedisLargeRangeDelete   bool   `json:"redis_large_range_delete"`
+	// --- 事务、脚本与特殊操作 ---
+	RedisForbidScript           bool `json:"redis_forbid_script"`
+	RedisForbidScriptManagement bool `json:"redis_forbid_script_management"`
+	RedisForbidWatch            bool `json:"redis_forbid_watch"`
+	RedisForbidBlockingCommand  bool `json:"redis_forbid_blocking_command"`
+	RedisForbidSubscription     bool `json:"redis_forbid_subscription"`
+	RedisStreamStateChange      bool `json:"redis_stream_state_change"`
 
 	// ------- Doris 建表审核规则(internal/dorischeck,自研)-------
 	// Doris 兼容 MySQL 协议与查询/DML 语法,但建表 DDL 是自有语法
