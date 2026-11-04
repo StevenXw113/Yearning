@@ -13,12 +13,12 @@ import (
 
 // 结果转换：Redis 的返回值形态比 SQL / Mongo 都杂，逐个形态钉住
 func TestRedisQueryShapes(t *testing.T) {
-	// 标量字符串（GET）
+	// 标量字符串（GET）：键名 + 值两列，只看 value 不知道查的是哪个键
 	q := redisQuery("GET", []string{"GET", "k"}, "alice", "")
-	if len(q.Field) != 1 || q.Field[0]["title"] != "value" {
-		t.Fatalf("标量应只有 value 列: %v", q.Field)
+	if len(q.Field) != 2 || q.Field[0]["title"] != "key" || q.Field[1]["title"] != "value" {
+		t.Fatalf("GET 应 key/value 两列: %v", q.Field)
 	}
-	if len(q.Data) != 1 || q.Data[0]["value"] != "alice" {
+	if len(q.Data) != 1 || q.Data[0]["key"] != "k" || q.Data[0]["value"] != "alice" {
 		t.Fatalf("标量值不对: %v", q.Data)
 	}
 	// MySQL 模板对首列做 fixed 处理，Redis 侧保持一致
@@ -27,6 +27,11 @@ func TestRedisQueryShapes(t *testing.T) {
 	}
 	if q.Field[0]["width"] != 200 {
 		t.Errorf("列宽应与 SQL 侧一致(200): %v", q.Field[0]["width"])
+	}
+	// 无键命令保持单列
+	q = redisQuery("DBSIZE", []string{"DBSIZE"}, int64(2), "")
+	if len(q.Field) != 1 || q.Field[0]["title"] != "value" {
+		t.Errorf("DBSIZE 应只有 value 列: %v", q.Field)
 	}
 
 	// 标量整型（DBSIZE）
@@ -78,13 +83,22 @@ func TestRedisQueryShapes(t *testing.T) {
 		t.Fatalf("HGETALL(map) 行不对（应按字段名排序）: %v", q.Data)
 	}
 
-	// SCAN：二维数组（游标 + 键列表），内层用 JSON 展示
-	q = redisQuery("SCAN", []string{"SCAN", "0"}, []interface{}{"0", []interface{}{"k1", "k2"}}, "")
-	if len(q.Data) != 2 {
-		t.Fatalf("SCAN 应两行: %v", q.Data)
+	// SCAN：游标 + 键列表，按键逐行展开（不再是 index/value 两行 + JSON）
+	q = redisQuery("SCAN", []string{"SCAN", "0"}, []interface{}{"17", []interface{}{"k1", "k2"}}, "")
+	if q.Field[0]["title"] != "cursor" || q.Field[1]["title"] != "key" {
+		t.Fatalf("SCAN 应 cursor/key 两列: %v", q.Field)
 	}
-	if !strings.Contains(q.Data[1]["value"].(string), "k1") {
-		t.Errorf("内层数组应 JSON 展示: %v", q.Data[1])
+	if len(q.Data) != 2 || q.Data[0]["key"] != "k1" || q.Data[1]["key"] != "k2" || q.Data[0]["cursor"] != "17" {
+		t.Fatalf("SCAN 应按键逐行展开: %v", q.Data)
+	}
+
+	// MGET：值与参数里的键一一对应
+	q = redisQuery("MGET", []string{"MGET", "a", "b"}, []interface{}{"1", nil}, "")
+	if q.Field[0]["title"] != "key" || q.Field[1]["title"] != "value" {
+		t.Fatalf("MGET 应 key/value 两列: %v", q.Field)
+	}
+	if len(q.Data) != 2 || q.Data[0]["key"] != "a" || q.Data[0]["value"] != "1" || q.Data[1]["key"] != "b" {
+		t.Fatalf("MGET 行不对: %v", q.Data)
 	}
 }
 

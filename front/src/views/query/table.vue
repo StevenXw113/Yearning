@@ -50,7 +50,6 @@
   import type * as XLSXType from 'xlsx';
   import { computed, ref, watch } from 'vue';
   import { useCommonStore } from '@/store';
-  import router from '@/router';
   import { App } from 'ant-design-vue';
   const { message } = App.useApp();
   import { useI18n } from 'vue-i18n';
@@ -132,7 +131,13 @@
       if (resp.heartbeat === 'pong') {
         return;
       }
-      resp.status ? (router.go(-1), message.error(t('query.expire'))) : null;
+      // 查询权限过期：留在当前页给出原因，别直接跳走——跳走会让人以为「命令没结果」
+      if (resp.status) {
+        message.error(t('query.expire'));
+        results.value = [];
+        commonStore.SET_DISABLED_SPINNING();
+        return;
+      }
       if (resp.error !== '') {
         message.error(resp.error);
         results.value = [];

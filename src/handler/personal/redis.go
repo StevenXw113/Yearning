@@ -17,6 +17,7 @@ import (
 	"Yearning-go/src/model"
 
 	"github.com/cookieY/yee"
+	"github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/net/websocket"
 )
@@ -146,6 +147,11 @@ func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, comma
 		iface = append(iface, a)
 	}
 	res, err := client.Do(ctx, iface...).Result()
+	// 键不存在不是错误：GET/TTL 之类的空结果是常态，按 (nil) 展示即可，
+	// 弹一条红色 "redis: nil" 反而像是命令执行失败
+	if errors.Is(err, redis.Nil) {
+		res, err = nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -208,12 +214,19 @@ func redisQuery(name string, args []string, res interface{}, insulateWordList st
 		key = args[1]
 	}
 
+	// 单键命令把键名单独成一列：只看到 value 不知道查的是哪个键
+	showKey := scalarKeyCommands[strings.ToUpper(name)] && key != ""
 	scalar := func(v interface{}) *Query {
 		val := redisDisplay(v)
 		if sensitive(key) {
 			val = i18n.DefaultLang.Load(i18n.INFO_SENSITIVE_FIELD)
 		}
 		q := new(Query)
+		if showKey {
+			q.Field = []map[string]interface{}{column("key", true), column("value", false)}
+			q.Data = []map[string]interface{}{{"key": key, "value": val}}
+			return q
+		}
 		q.Field = []map[string]interface{}{column("value", true)}
 		q.Data = []map[string]interface{}{{"value": val}}
 		return q
@@ -260,6 +273,45 @@ func redisQuery(name string, args []string, res interface{}, insulateWordList st
 		}
 		return mapQuery(pairs)
 	case []interface{}:
+		// MGET：返回值与参数里的键一一对应，按 key/value 两列展示
+		if strings.EqualFold(name, "MGET") {
+			keys := args[1:]
+			query.Field = []map[string]interface{}{column("key", true), column("value", false)}
+			for i, item := range v {
+				if uint64(len(query.Data)) >= limit {
+					break
+				}
+				k := ""
+				if i < len(keys) {
+					k = keys[i]
+				}
+				val := redisDisplay(item)
+				if sensitive(k) {
+					val = i18n.DefaultLang.Load(i18n.INFO_SENSITIVE_FIELD)
+				}
+				query.Data = append(query.Data, map[string]interface{}{"key": k, "value": val})
+			}
+			return query
+		}
+		// SCAN 家族返回 [游标, 元素列表]：展开成「游标 + 元素」逐行，
+		// 别把整段数组塞进一个格子里（原来显示成 index/value 两行，游标和键都看不懂）
+		if isScanCommand(name) && len(v) == 2 {
+			cursor := redisDisplay(v[0])
+			items, _ := v[1].([]interface{})
+			title := scanItemTitle(name)
+			query.Field = []map[string]interface{}{column("cursor", true), column(title, false)}
+			if len(items) == 0 {
+				query.Data = []map[string]interface{}{{"cursor": cursor, title: "(nil)"}}
+				return query
+			}
+			for _, item := range items {
+				if uint64(len(query.Data)) >= limit {
+					break
+				}
+				query.Data = append(query.Data, map[string]interface{}{"cursor": cursor, title: redisDisplay(item)})
+			}
+			return query
+		}
 		// HGETALL：返回值是 field, value 交替，转成两列更贴近使用习惯
 		if strings.EqualFold(name, "HGETALL") && len(v)%2 == 0 {
 			query.Field = []map[string]interface{}{column("field", true), column("value", false)}
@@ -287,6 +339,37 @@ func redisQuery(name string, args []string, res interface{}, insulateWordList st
 	default:
 		return scalar(fmt.Sprintf("%v", res))
 	}
+}
+
+// scalarKeyCommands 只作用于单个键、返回标量的命令：展示时把键名单独成一列
+var scalarKeyCommands = map[string]bool{
+	"GET": true, "GETDEL": true, "GETSET": true, "GETEX": true, "STRLEN": true,
+	"GETRANGE": true, "TYPE": true, "TTL": true, "PTTL": true,
+	"HGET": true, "HLEN": true, "HEXISTS": true,
+	"LLEN": true, "LINDEX": true, "LPOS": true,
+	"SCARD": true, "SISMEMBER": true,
+	"ZCARD": true, "ZSCORE": true, "ZRANK": true, "ZREVRANK": true,
+	"XLEN": true, "GETBIT": true, "BITCOUNT": true, "BITPOS": true,
+}
+
+// isScanCommand 游标遍历类命令：返回 [游标, 元素列表]
+func isScanCommand(name string) bool {
+	switch strings.ToUpper(name) {
+	case "SCAN", "HSCAN", "SSCAN", "ZSCAN":
+		return true
+	}
+	return false
+}
+
+// scanItemTitle SCAN 家族里「元素」的列名
+func scanItemTitle(name string) string {
+	switch strings.ToUpper(name) {
+	case "SCAN":
+		return "key"
+	case "HSCAN":
+		return "field"
+	}
+	return "member"
 }
 
 // redisDisplay 把 Redis 返回的单个元素转成可展示的字符串。

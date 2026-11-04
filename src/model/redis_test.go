@@ -22,6 +22,18 @@ func TestSlotsMatchHost(t *testing.T) {
 	}
 }
 
+// INFO keyspace 只返回有键的库：托管实例 databases 常配成 256，不能把空库也列进树里
+func TestKeyspaceDatabases(t *testing.T) {
+	info := "# Keyspace\r\ndb1:keys=2,expires=0,avg_ttl=0\r\ndb0:keys=3,expires=1,avg_ttl=0\r\n"
+	got := keyspaceDatabases(info)
+	if len(got) != 2 || got[0] != "db0" || got[1] != "db1" {
+		t.Fatalf("应按库号排序返回 db0/db1, got %v", got)
+	}
+	if dbs := keyspaceDatabases("# Keyspace\r\n"); len(dbs) != 0 {
+		t.Errorf("空 keyspace 不应返回库, got %v", dbs)
+	}
+}
+
 // 连接参数取文档推荐值，改动会影响所有 Redis 数据源，用断言钉住。
 func TestRedisOptionsFollowsCloudDefaults(t *testing.T) {
 	s := &CoreDataSource{IP: "127.0.0.1", Port: 6379, Username: "app"}

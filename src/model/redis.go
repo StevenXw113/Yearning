@@ -201,11 +201,20 @@ func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()
 
+	// 优先 INFO keyspace：只列出确实有键的库。托管实例的 databases 常配成 256，
+	// 全列出来会让查询页的树里出现几百个空库。
+	if info, ierr := client.Info(ctx, "keyspace").Result(); ierr == nil {
+		if dbs := keyspaceDatabases(info); len(dbs) > 0 {
+			return dbs, nil
+		}
+		return []string{"db0"}, nil
+	}
+
 	n := RedisDefaultDatabases
 	// CONFIG 可能被托管服务禁用，失败不当错误、退回默认值
 	if m, cerr := client.ConfigGet(ctx, "databases").Result(); cerr == nil {
 		if raw, ok := m["databases"]; ok {
-			if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 {
+			if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 && parsed <= 256 {
 				n = parsed
 			}
 		}
@@ -215,6 +224,28 @@ func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 		out = append(out, "db"+strconv.Itoa(i))
 	}
 	return out, nil
+}
+
+// keyspaceDatabases 解析 INFO keyspace 里的库名（db0:keys=3,expires=0,avg_ttl=0），按库号排序
+func keyspaceDatabases(info string) []string {
+	var out []string
+	for _, line := range strings.Split(info, "\n") {
+		line = strings.TrimSpace(line)
+		name, _, ok := strings.Cut(line, ":")
+		if !ok || !strings.HasPrefix(name, "db") {
+			continue
+		}
+		if _, err := strconv.Atoi(name[2:]); err != nil {
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, _ := strconv.Atoi(out[i][2:])
+		b, _ := strconv.Atoi(out[j][2:])
+		return a < b
+	})
+	return out
 }
 
 // RedisScanKeys 用 SCAN 抽样键名。
