@@ -47,11 +47,14 @@
 
 <script lang="ts" setup>
   import { onMounted, ref, watch } from 'vue';
-  import { querySchemaList, queryTable } from '@/apis/query';
+  import { queryRedisKey, querySchemaList, queryTable } from '@/apis/query';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
   import { HddOutlined } from '@ant-design/icons-vue';
   import { useCommonStore } from '@/store';
   import { TreeNodeProps } from 'ant-design-vue/lib/vc-tree';
+  import { App } from 'ant-design-vue';
+
+  const { message } = App.useApp();
 
   // 树高由父级传入（原来写死 700，比右侧 SQL 卡片高出一大截）
   const props = withDefaults(defineProps<{ height?: number }>(), {
@@ -129,21 +132,40 @@
   // Redis(3) 的右键语句是命令行文本，key 就是键名
   const dbType = ref(0);
 
-  const showTableData = (key: string) => {
+  const showTableData = async (key: string) => {
+    if (dbType.value === 3) {
+      // Redis 没有表，也没有「一条命令看所有类型」的读法（GET 对 hash 会 WRONGTYPE）：
+      // 先问后端这个键是什么类型，再执行对应的那条只读命令
+      const { data } = await queryRedisKey(
+        commonStore.queryInfo.source_id,
+        schema.value,
+        key,
+      );
+      if (data.code !== 1200) {
+        message.error(data.text);
+        return;
+      }
+      if (!data.payload?.sql) {
+        message.warning(`键 ${key} 不存在或已过期`);
+        return;
+      }
+      emit('showTableRef', {
+        source_id: commonStore.queryInfo.source_id,
+        schema: schema.value,
+        sql: data.payload.sql,
+      });
+      return;
+    }
     emit('showTableRef', {
       source_id: commonStore.queryInfo.source_id,
       schema: schema.value,
       sql:
         dbType.value === 2
           ? JSON.stringify({ find: key, limit: 20 })
-          : dbType.value === 3
-            ? // Redis 没有通用的「看这个键的数据」命令：GET 对 string 直接给值，
-              // 其它类型会回 WRONGTYPE 错误——提示用户这个键不是 string，再自行换命令
-              `GET ${key}`
-            : dbType.value === 1
-              ? // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
-                `SELECT * FROM "${key}"`
-              : `select * from ${key}`,
+          : dbType.value === 1
+            ? // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
+              `SELECT * FROM "${key}"`
+            : `select * from ${key}`,
     });
   };
 

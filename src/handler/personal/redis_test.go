@@ -102,6 +102,24 @@ func TestRedisQueryShapes(t *testing.T) {
 	}
 }
 
+// 「查看数据」按类型选命令：Redis 没有一条命令能读所有类型，选错就是 WRONGTYPE
+func TestRedisPreviewSQL(t *testing.T) {
+	cases := map[string]string{
+		"string": "GET k",
+		"hash":   "HGETALL k",
+		"list":   "LRANGE k 0 99",
+		"set":    "SSCAN k 0 COUNT 100",
+		"zset":   "ZRANGE k 0 99 WITHSCORES",
+		"stream": "XRANGE k - + COUNT 20",
+		"none":   "",
+	}
+	for typ, want := range cases {
+		if got := redisPreviewSQL(typ, "k"); got != want {
+			t.Errorf("类型 %s 的命令 = %q, want %q", typ, got, want)
+		}
+	}
+}
+
 // 脱敏按**键名**判定：Redis 的值没有「字段名」，只能以键为粒度
 func TestRedisQueryInsulate(t *testing.T) {
 	q := redisQuery("GET", []string{"GET", "user:email"}, "a@b.com", "email")

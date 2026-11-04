@@ -50,6 +50,68 @@ func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]int
 	return treeNodes(keys, "Table", true, model.DBTypeRedis), nil
 }
 
+// RedisKeyDetail 查询页「查看数据」的前置：键类型、TTL、大小与应执行的那条只读命令。
+//
+// Redis 没有表，也没有「一条命令看所有类型」的读法（GET 对 hash 直接 WRONGTYPE），
+// 所以把「看这个键」翻译成一条按类型选择的命令；执行仍走查询页 WS
+// （只读白名单 + 查询侧规则审核 + 审计落库），不另开结果通道。
+func RedisKeyDetail(u *model.CoreDataSource, db int, key string) (map[string]interface{}, error) {
+	client, err := u.ConnectRedisDB(db)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = client.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), redisCommandTimeout)
+	defer cancel()
+
+	typ, err := client.Type(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	detail := map[string]interface{}{
+		"key":  key,
+		"type": typ,
+		"sql":  redisPreviewSQL(typ, key),
+	}
+	// 下面三项是锦上添花：托管实例可能禁用 TTL 之外的对象命令，取不到就省略
+	if ttl, terr := client.TTL(ctx, key).Result(); terr == nil {
+		// go-redis 用负值表示「无过期(-1) / 键不存在(-2)」，直接除会变成 0
+		sec := int64(ttl / time.Second)
+		if ttl < 0 {
+			sec = int64(ttl)
+		}
+		detail["ttl"] = sec
+	}
+	if size, serr := client.Do(ctx, "MEMORY", "USAGE", key).Int64(); serr == nil {
+		detail["size"] = size
+	}
+	if enc, eerr := client.ObjectEncoding(ctx, key).Result(); eerr == nil {
+		detail["encoding"] = enc
+	}
+	return detail, nil
+}
+
+// redisPreviewSQL 按值类型选一条只读命令；none（键不存在）不生成命令。
+// 集合类都带上限：查询页是同步等结果的，全量读取会拖垮连接，翻页交给用户自己写。
+func redisPreviewSQL(typ, key string) string {
+	switch strings.ToLower(typ) {
+	case "string":
+		return "GET " + key
+	case "hash":
+		return "HGETALL " + key
+	case "list":
+		return fmt.Sprintf("LRANGE %s 0 99", key)
+	case "set":
+		return fmt.Sprintf("SSCAN %s 0 COUNT 100", key)
+	case "zset":
+		return fmt.Sprintf("ZRANGE %s 0 99 WITHSCORES", key)
+	case "stream":
+		return fmt.Sprintf("XRANGE %s - + COUNT 20", key)
+	}
+	return ""
+}
+
 // socketRedisResults 与 SocketQueryResults 同构的 Redis 版本：
 // 权限校验、申请校验、查询侧审核、审计落库、消息格式都与 SQL 版保持一致，
 // 只有「执行」这步换成 Redis 命令，且按目标逻辑库建连。

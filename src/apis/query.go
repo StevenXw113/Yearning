@@ -16,6 +16,8 @@ func YearningQueryForGet(y yee.Context) (err error) {
 		return personal.FetchQueryDatabaseInfo(y)
 	case "results":
 		return personal.SocketQueryResults(y)
+	case "redis_key":
+		return personal.FetchRedisKeyDetail(y)
 	}
 	return y.JSON(http.StatusOK, "Illegal")
 }
