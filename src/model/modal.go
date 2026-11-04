@@ -108,7 +108,8 @@ type CoreSqlOrder struct {
 	SourceId    string `gorm:"type:varchar(200);not null;index:source_idx"  json:"source_id"`
 	DataBase    string `gorm:"type:varchar(50);not null" json:"data_base"`
 	Table       string `gorm:"type:varchar(50);not null" json:"table"`
-	Date        string `gorm:"type:varchar(50);not null" json:"date"`
+	// date_idx 供首页 banner 的「近 N 天」统计走范围扫（format: 2006-01-02 15:04）
+	Date        string `gorm:"type:varchar(50);not null;index:date_idx" json:"date"`
 	SQL         string `gorm:"type:longtext;not null" json:"sql"`
 	Text        string `gorm:"type:longtext;not null" json:"text"`
 	Assigned    string `gorm:"type:varchar(550);not null" json:"assigned"`
@@ -184,7 +185,7 @@ type CoreQueryOrder struct {
 	WorkId string `gorm:"type:varchar(50);not null;index:workId_idx" json:"work_id"`
 	// 查询页 WS 审核模式下每条消息都按 username+status 查这张表(无限增长)
 	Username     string `gorm:"type:varchar(50);not null;index:idx_query_order_username" json:"username"`
-	Date         string `gorm:"type:varchar(50);not null" json:"date"`
+	Date         string `gorm:"type:varchar(50);not null;index:date_idx" json:"date"`
 	ApprovalTime string `gorm:"type:varchar(50);not null" json:"approval_time"`
 	Text         string `gorm:"type:longtext;not null" json:"text"`
 	Assigned     string `gorm:"type:varchar(50);not null" json:"assigned"`
@@ -251,6 +252,19 @@ type CoreRules struct {
 	ID        uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
 	Desc      string `gorm:"type:longtext;not null" json:"desc"`
 	AuditRole JSON   `gorm:"type:json;" json:"audit_role"`
+}
+
+// CoreCustomRule 用户自定义审核规则：对提交的 SQL 文本做正则匹配，命中即按级别拦截/提示。
+// 内置规则编译在引擎里无法在线新增，这里补的是"文本层"校验，不做语法级判断。
+type CoreCustomRule struct {
+	ID   uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
+	Name string `gorm:"type:varchar(100);not null" json:"name"`
+	Desc string `gorm:"type:varchar(255);not null;default ''" json:"desc"`
+	// Pattern 正则（Go RE2，无回溯风险），由保存接口校验可编译
+	Pattern string `gorm:"type:text;not null" json:"pattern"`
+	// Level: error = 拦截，warning = 仅提示
+	Level   string `gorm:"type:varchar(16);not null;default 'error'" json:"level"`
+	Enabled uint   `gorm:"type:tinyint(2);not null;default 1" json:"enabled"`
 }
 
 // CoreRuleSetHistory 记录审核规则集的每次变更，用于审计与一键回滚。

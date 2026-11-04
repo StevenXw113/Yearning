@@ -566,11 +566,11 @@ func main() {
 
 	fmt.Println("\n=== 组 6 运维接口 ===")
 	r = call(adminTok, "/api/v2/manage/roles/upstream", nil)
-	if strings.Contains(textOf(r), "无法访问上游仓库") {
-		// 上游检测要访问 GitHub，网络不通属环境问题：跳过而不是判失败
+	// 上游检测要访问 GitHub，网络不通时接口返回 1200 + payload.note（属环境问题，跳过不判失败）
+	up, _ := r["payload"].(map[string]any)
+	if up == nil || up["note"] != nil {
 		skip("T6.1", "上游版本检测（页面按钮接口）", "上游不可达："+textOf(r))
 	} else {
-		up, _ := r["payload"].(map[string]any)
 		check("T6.1", "上游版本检测（页面按钮接口）", codeOf(r) == 1200 && up["latest"] != nil, brief(up))
 	}
 

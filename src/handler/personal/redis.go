@@ -17,7 +17,6 @@ import (
 	"Yearning-go/src/model"
 
 	"github.com/cookieY/yee"
-	"github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/net/websocket"
 )
@@ -57,13 +56,13 @@ func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]int
 // 客户端按库缓存：go-redis 是在建连时发 SELECT 的，换库必须换客户端，
 // 但同一个库在一条 WS 会话里复用即可，不必每次命令都新建连接池。
 func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSource, user string) {
-	clients := map[int]*redis.Client{}
+	clients := map[int]model.RedisConn{}
 	defer func() {
 		for _, cl := range clients {
 			_ = cl.Close()
 		}
 	}()
-	getClient := func(db int) (*redis.Client, error) {
+	getClient := func(db int) (model.RedisConn, error) {
 		if cl, ok := clients[db]; ok {
 			return cl, nil
 		}
@@ -125,7 +124,7 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 //
 // 命令是**一行文本**（`GET user:1`、`SCAN 0 MATCH user:* COUNT 100`），
 // 与 Mongo 的 JSON 命令不同，所以先用 rediscmd 切词再交给驱动。
-func runRedisCommand(getClient func(int) (*redis.Client, error), schema, command, insulateWordList string) (*Query, error) {
+func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, command, insulateWordList string) (*Query, error) {
 	// 查询页硬保底：只读命令白名单。不走规则集——能在这里执行写命令，
 	// 等于绕过整个工单审批链路。
 	kind, args, err := rediscmd.Validate(command)

@@ -4,6 +4,9 @@
 
 # build stage
 FROM golang:1.26 AS build
+ARG GOPROXY_URL=https://goproxy.cn,direct
+ENV GOPROXY=$GOPROXY_URL \
+    CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

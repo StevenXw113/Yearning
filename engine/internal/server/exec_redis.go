@@ -33,19 +33,57 @@ func redisOptions(ds *api.DataSource) *redis.Options {
 	return opt
 }
 
+// redisClusterOptions 集群选项：数据源 ip:port 只作种子节点，其余节点经 CLUSTER SLOTS 自动发现。
+func redisClusterOptions(ds *api.DataSource) *redis.ClusterOptions {
+	opt := &redis.ClusterOptions{
+		Addrs:        []string{net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port)))},
+		Password:     ds.Password,
+		DialTimeout:  redisTimeout,
+		ReadTimeout:  redisTimeout,
+		WriteTimeout: redisTimeout,
+	}
+	if ds.Username != "" {
+		opt.Username = ds.Username
+	}
+	return opt
+}
+
 // connectRedisDB 建连并选中指定逻辑库（go-redis 在建连时按 Options.DB 发 SELECT）。
-// 口令是明文：主程序在发起 RPC 前已经把口令列解密好了。
-func connectRedisDB(ds *api.DataSource, db int) (*redis.Client, error) {
+// 自动识别部署形态：单机 / Proxy 集群用普通 Client，Redis Cluster 用 ClusterClient
+// （否则 MOVED 重定向会让命令失败）。口令是明文：主程序发起 RPC 前已解密。
+func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 	if ds == nil || ds.Ip == "" {
 		return nil, fmt.Errorf("数据源 IP 为空")
 	}
-	opt := redisOptions(ds)
-	if db > 0 {
-		opt.DB = db
-	}
-	client := redis.NewClient(opt)
 	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
 	defer cancel()
+
+	probe := redis.NewClient(redisOptions(ds))
+	if err := probe.Ping(ctx).Err(); err != nil {
+		_ = probe.Close()
+		return nil, err
+	}
+	// 集群判定：普通实例对 CLUSTER INFO 报 "cluster support disabled"，按单机处理
+	if info, err := probe.ClusterInfo(ctx).Result(); err == nil && strings.Contains(info, "cluster_enabled:1") {
+		_ = probe.Close()
+		if db > 0 {
+			return nil, fmt.Errorf("Redis Cluster 只有 db0，不支持 db%d", db)
+		}
+		cluster := redis.NewClusterClient(redisClusterOptions(ds))
+		if err := cluster.Ping(ctx).Err(); err != nil {
+			_ = cluster.Close()
+			return nil, err
+		}
+		return cluster, nil
+	}
+	if db <= 0 {
+		return probe, nil
+	}
+	_ = probe.Close()
+
+	opt := redisOptions(ds)
+	opt.DB = db
+	client := redis.NewClient(opt)
 	if err := client.Ping(ctx).Err(); err != nil {
 		_ = client.Close()
 		return nil, err

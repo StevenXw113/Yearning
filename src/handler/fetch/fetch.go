@@ -19,6 +19,7 @@ import (
 	"Yearning-go/src/handler/manage/flow"
 	"Yearning-go/src/i18n"
 	"Yearning-go/src/lib/calls"
+	"Yearning-go/src/lib/customrule"
 	"Yearning-go/src/lib/dbengine"
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
@@ -311,7 +312,22 @@ func FetchSQLTest(c yee.Context) (err error) {
 		// 申请页检测：显式声明按变更命令审核，Mongo 数据源填 find 会报「不是变更命令」
 		Mode: engine.CheckModeWrite,
 	})
-	if rep == nil || !rep.Ok {
+	if rep == nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(calls.CombineReplyErr(rep, err)))
+	}
+	// 自定义审核规则（用户配置的正则）：与引擎结果合并，error 级直接拦截
+	if hits := customrule.Hits(u.SQL, customrule.Enabled()); len(hits) > 0 {
+		rep.Records = append(rep.Records, hits...)
+		for _, h := range hits {
+			if h.Level <= 1 {
+				rep.Ok = false
+				if rep.Error == "" {
+					rep.Error = h.Error
+				}
+			}
+		}
+	}
+	if !rep.Ok {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(calls.CombineReplyErr(rep, err)))
 	}
 	rs := make([]engine.Record, 0, len(rep.Records))

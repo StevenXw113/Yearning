@@ -36,6 +36,12 @@ func SuperCustomRoles(c yee.Context) (err error) {
 		return SuperRoleRollback(c)
 	case "upstream":
 		return SuperUpstreamCheck(c)
+	case "custom_list":
+		return SuperCustomRuleList(c)
+	case "custom_save":
+		return SuperCustomRuleSave(c)
+	case "custom_delete":
+		return SuperCustomRuleDelete(c)
 	}
 	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 

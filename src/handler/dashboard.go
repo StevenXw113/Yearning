@@ -19,6 +19,7 @@ import (
 	"Yearning-go/src/model"
 	"github.com/cookieY/yee"
 	"net/http"
+	"time"
 )
 
 type groupBy struct {
@@ -38,7 +39,12 @@ type bannerCount struct {
 	SelfDML    int64                    `json:"self_dml"`
 	SelfAudit  int64                    `json:"self_audit"`
 	SelfQuery  int64                    `json:"self_query"`
+	WindowDays int                      `json:"window_days"`
 }
+
+// bannerWindowDays：「我的」三项只看近期数据。不加窗口时条件聚合要扫整表，
+// 表上带 SQL/Text/OSCInfo 三个 longtext，工单量大后首页每次刷新都是聚类全扫。
+const bannerWindowDays = 90
 
 func DashBanner(c yee.Context) (err error) {
 	var b bannerCount
@@ -46,31 +52,36 @@ func DashBanner(c yee.Context) (err error) {
 	model.DB().Model(model.CoreAccount{}).Count(&b.User)
 	model.DB().Model(model.CoreDataSource{}).Count(&b.Source)
 	model.DB().Model(model.CoreTotalTickets{}).Order("date desc ").Limit(7).Find(&b.TotalOrder)
-	// 同表计数合并为条件聚合:原来工单表 4 次全扫、查询表 2 次全扫
+	// 总数保持全量：COUNT 走二级索引，不读 longtext，成本可接受
+	model.DB().Model(model.CoreSqlOrder{}).Count(&b.Order)
+	model.DB().Model(model.CoreQueryOrder{}).Count(&b.Query)
+
+	// 「我的」限时间窗口，date 是 varchar(50) 的 "2006-01-02 15:04"，前缀比较可走 date_idx
+	b.WindowDays = bannerWindowDays
+	since := time.Now().AddDate(0, 0, -bannerWindowDays).Format("2006-01-02")
+
 	var sqlRow struct {
-		Total     int64
 		SelfDDL   int64
 		SelfDML   int64
 		SelfAudit int64
 	}
-	model.DB().Model(model.CoreSqlOrder{}).Select(
-		"COUNT(*) AS total",
-		"IFNULL(SUM(`type` = 0 AND username = ?), 0) AS self_ddl",
-		"IFNULL(SUM(`type` = 1 AND username = ?), 0) AS self_dml",
-		"IFNULL(SUM(`status` = 2 AND assigned LIKE ?), 0) AS self_audit",
-		user.Username, user.Username, "%"+user.Username+"%",
-	).Scan(&sqlRow)
-	b.Order, b.SelfDDL, b.SelfDML, b.SelfAudit = sqlRow.Total, sqlRow.SelfDDL, sqlRow.SelfDML, sqlRow.SelfAudit
+	model.DB().Model(model.CoreSqlOrder{}).
+		Where("date >= ?", since).
+		Select("IFNULL(SUM(`type` = 0 AND username = ?), 0) AS self_ddl,"+
+			"IFNULL(SUM(`type` = 1 AND username = ?), 0) AS self_dml,"+
+			"IFNULL(SUM(`status` = 2 AND assigned LIKE ?), 0) AS self_audit",
+			user.Username, user.Username, "%"+user.Username+"%").
+		Scan(&sqlRow)
+	b.SelfDDL, b.SelfDML, b.SelfAudit = sqlRow.SelfDDL, sqlRow.SelfDML, sqlRow.SelfAudit
+
 	var queryRow struct {
-		Total     int64
 		SelfQuery int64
 	}
-	model.DB().Model(model.CoreQueryOrder{}).Select(
-		"COUNT(*) AS total",
-		"IFNULL(SUM(username = ?), 0) AS self_query",
-		user.Username,
-	).Scan(&queryRow)
-	b.Query, b.SelfQuery = queryRow.Total, queryRow.SelfQuery
+	model.DB().Model(model.CoreQueryOrder{}).
+		Where("date >= ?", since).
+		Select("IFNULL(SUM(username = ?), 0) AS self_query", user.Username).
+		Scan(&queryRow)
+	b.SelfQuery = queryRow.SelfQuery
 	return c.JSON(http.StatusOK, common.SuccessPayload(b))
 }
 

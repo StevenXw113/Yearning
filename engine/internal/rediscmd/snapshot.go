@@ -37,7 +37,7 @@ type Snapshot struct {
 // Capture 抓取前镜像：逐个键记录类型、值与剩余 TTL。
 //
 // 用 PTTL 而非 TTL：秒级精度会把 1.5s 的过期记成 1s，回滚后键会提早消失。
-func Capture(ctx context.Context, client *redis.Client, keys []string) ([]Snapshot, error) {
+func Capture(ctx context.Context, client redis.UniversalClient, keys []string) ([]Snapshot, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
@@ -67,7 +67,7 @@ func Capture(ctx context.Context, client *redis.Client, keys []string) ([]Snapsh
 }
 
 // fillSnapshot 按类型读取键的值
-func fillSnapshot(ctx context.Context, client *redis.Client, s *Snapshot) error {
+func fillSnapshot(ctx context.Context, client redis.UniversalClient, s *Snapshot) error {
 	checkSize := func(n int64) error {
 		if n > MaxSnapshotItems {
 			return fmt.Errorf("键 %s 有 %d 个元素，超过快照上限 %d，请分批变更", s.Key, n, MaxSnapshotItems)

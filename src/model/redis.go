@@ -2,9 +2,11 @@ package model
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"Yearning-go/src/lib/enc"
@@ -12,7 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// DBTypeRedis 数据源类型：0 mysql（默认）、1 PostgreSQL（未实现）、2 mongodb、3 redis
+// DBTypeRedis 数据源类型：0 mysql（默认）、1 PostgreSQL、2 mongodb、3 redis、4 doris
 const DBTypeRedis = 3
 
 // RedisTimeout 建立连接与探活的超时
@@ -22,11 +24,14 @@ const RedisTimeout = 15 * time.Second
 const RedisDefaultDatabases = 16
 
 // RedisScanLimit 列键名时单次抽样的上限。
-// 查询页只需要展示一批键名，取够就停，避免在大实例上长时间游标遍历。
+// 查询页只需展示一批键名，取够就停，避免在大实例上长时间游标遍历。
 const RedisScanLimit = 200
 
+// RedisConn 统一单机与集群客户端：*redis.Client、*redis.ClusterClient 都实现该接口
+type RedisConn = redis.UniversalClient
+
 // RedisOptions 按数据源配置构造客户端选项。
-// 口令为空表示实例未开认证——Redis 允许无密码，这里不做非空校验（Mongo 不同）。
+// 口令为空表示实例未开认证——redis 允许无密码，这里不做非空校验（Mongo 不同）。
 // 认证支持 Redis 6+ 的 ACL 用户名：留空即旧版的「只有密码」。
 func RedisOptions(s *CoreDataSource, password string) *redis.Options {
 	opt := &redis.Options{
@@ -43,15 +48,45 @@ func RedisOptions(s *CoreDataSource, password string) *redis.Options {
 	return opt
 }
 
+// RedisClusterOptions 集群选项：数据源的 ip:port 只作种子节点，
+// go-redis 会经 CLUSTER SLOTS 自动发现其余节点。
+func RedisClusterOptions(s *CoreDataSource, password string) *redis.ClusterOptions {
+	opt := &redis.ClusterOptions{
+		Addrs:        []string{net.JoinHostPort(s.IP, strconv.Itoa(s.Port))},
+		Password:     password,
+		DialTimeout:  RedisTimeout,
+		ReadTimeout:  RedisTimeout,
+		WriteTimeout: RedisTimeout,
+	}
+	if s.Username != "" {
+		opt.Username = s.Username
+	}
+	return opt
+}
+
+// RedisClusterEnabled 解析 CLUSTER INFO：集群模式返回 cluster_enabled:1。
+func RedisClusterEnabled(info string) bool {
+	return strings.Contains(info, "cluster_enabled:1")
+}
+
+// IsRedisCluster 判断客户端是否为集群客户端。
+func IsRedisCluster(c RedisConn) bool {
+	_, ok := c.(*redis.ClusterClient)
+	return ok
+}
+
 // ConnectRedis 按数据源配置建立客户端（口令列先解密再建连）。
 // Redis 不经 gorm，调用方负责 Close。
-func (s *CoreDataSource) ConnectRedis() (*redis.Client, error) {
+func (s *CoreDataSource) ConnectRedis() (RedisConn, error) {
 	return s.ConnectRedisWith(enc.Decrypt(C.General.SecretKey, s.Password))
 }
 
-// ConnectRedisWith 用明文口令建连并 Ping 探活。数据源管理页的「检测」已经把口令解好，
-// 这里再解一次会变成空口令——与 ConnectMongoWith 同理。
-func (s *CoreDataSource) ConnectRedisWith(password string) (*redis.Client, error) {
+// ConnectRedisWith 用明文口令建连并 Ping 探活，同时自动识别部署形态：
+//   - 单机 / Proxy 集群（Twemproxy、Codis、云厂商代理）：对客户端就一个普通入口，用 Client；
+//   - Redis Cluster：CLUSTER INFO 返回 cluster_enabled:1，改用 ClusterClient（自带 MOVED/ASK 重定向）。
+//
+// 数据源管理页的「检测」已经把口令解好，这里再解一次会变成空口令——与 ConnectMongoWith 同理。
+func (s *CoreDataSource) ConnectRedisWith(password string) (RedisConn, error) {
 	client := redis.NewClient(RedisOptions(s, password))
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()
@@ -60,16 +95,37 @@ func (s *CoreDataSource) ConnectRedisWith(password string) (*redis.Client, error
 		_ = client.Close()
 		return nil, err
 	}
+	// 探测是否集群：普通实例会报 "This instance has cluster support disabled"，按单机处理
+	if info, err := client.ClusterInfo(ctx).Result(); err == nil && RedisClusterEnabled(info) {
+		_ = client.Close()
+		cluster := redis.NewClusterClient(RedisClusterOptions(s, password))
+		if err := cluster.Ping(ctx).Err(); err != nil {
+			_ = cluster.Close()
+			return nil, err
+		}
+		return cluster, nil
+	}
 	return client, nil
 }
 
 // ConnectRedisDB 建连并选中指定逻辑库（工单/查询页按 dbN 指定目标库时用）。
 // go-redis 是在连接建立时按 Options.DB 发 SELECT 的，所以换库要另建客户端，
 // 不能在一个客户端上手动 SELECT（连接池里各连接的库会不一致）。
-func (s *CoreDataSource) ConnectRedisDB(db int) (*redis.Client, error) {
+// 集群模式只有 db0，选其它库直接报错。
+func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 	if db <= 0 {
 		return s.ConnectRedis()
 	}
+	probe, err := s.ConnectRedis()
+	if err != nil {
+		return nil, err
+	}
+	if IsRedisCluster(probe) {
+		_ = probe.Close()
+		return nil, fmt.Errorf("Redis Cluster 只有 db0，不支持 db%d", db)
+	}
+	_ = probe.Close()
+
 	opt := RedisOptions(s, enc.Decrypt(C.General.SecretKey, s.Password))
 	opt.DB = db
 	client := redis.NewClient(opt)
@@ -83,14 +139,17 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (*redis.Client, error) {
 }
 
 // RedisDatabases 返回可选的逻辑库名（db0..dbN），供查询页的树使用。
-// 库数量以 CONFIG GET databases 为准；托管 Redis 常禁用 CONFIG，读不到就按默认 16 个。
-// 每个库都会实际建连探活，连不上直接报错（与 Mongo 列库的行为一致）。
+// 集群只有 db0；单机/代理以 CONFIG GET databases 为准，托管 Redis 常禁用 CONFIG，读不到就按默认 16 个。
 func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 	client, err := s.ConnectRedis()
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = client.Close() }()
+
+	if IsRedisCluster(client) {
+		return []string{"db0"}, nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()

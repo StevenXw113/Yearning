@@ -26,7 +26,7 @@ type Outcome struct {
 //
 // 与 Mongo 侧的差别：Redis 没有「命中行数上限」这类执行期限制需要从规则集读，
 // 键数在执行前就是确定的（RedisMaxAffectKeys 已在引擎侧静态审核）。
-func Execute(ctx context.Context, client *redis.Client, line string) (Outcome, error) {
+func Execute(ctx context.Context, client redis.UniversalClient, line string) (Outcome, error) {
 	var out Outcome
 
 	kind, args, err := Validate(line)
@@ -74,7 +74,7 @@ func affected(name string, keys []string, res interface{}) int64 {
 
 // ExecuteQuery 执行一条只读命令，返回原始结果（供查询页使用）。
 // 走同一套硬保底校验：查询页出现写命令在这里就被挡住。
-func ExecuteQuery(ctx context.Context, client *redis.Client, line string) (interface{}, error) {
+func ExecuteQuery(ctx context.Context, client redis.UniversalClient, line string) (interface{}, error) {
 	kind, args, err := Validate(line)
 	if err != nil {
 		return nil, err

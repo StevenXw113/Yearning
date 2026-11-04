@@ -24,6 +24,8 @@ type upstreamStatus struct {
 	Current   string `json:"current"`
 	Latest    string `json:"latest"`
 	HasUpdate bool   `json:"hasUpdate"`
+	// Note 非空表示本次检测没做成（多为访问 GitHub 超时），前端按提示处理而不是报错
+	Note string `json:"note,omitempty"`
 }
 
 // SuperUpstreamCheck 检测 Bytebase 是否有更新的 release。
@@ -35,13 +37,21 @@ func SuperUpstreamCheck(c yee.Context) (err error) {
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Get(bytebaseLatestURL)
 	if err != nil {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("无法访问上游仓库: "+err.Error()))
+		// 上游不可达属环境问题(内网/限流/GitHub 不通)，不是操作失败：
+		// 返回 1200 + Note，前端提示"稍后再试"即可，不必弹错误码
+		return c.JSON(http.StatusOK, common.SuccessPayload(upstreamStatus{
+			Current: bytebaseRef,
+			Note:    "无法访问上游仓库(GitHub)，请检查网络或稍后再试：" + err.Error(),
+		}))
 	}
 	defer resp.Body.Close()
 
 	m := reReleaseTag.FindStringSubmatch(resp.Request.URL.Path)
 	if m == nil {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("无法解析上游最新版本"))
+		return c.JSON(http.StatusOK, common.SuccessPayload(upstreamStatus{
+			Current: bytebaseRef,
+			Note:    "无法解析上游最新版本(可能被代理/网关拦截)",
+		}))
 	}
 
 	latest := m[1]

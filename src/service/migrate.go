@@ -337,6 +337,7 @@ var coreModels = []any{
 	&model.CoreGrained{}, &model.CoreSqlOrder{}, &model.CoreSqlRecord{},
 	&model.CoreRollback{}, &model.CoreQueryRecord{}, &model.CoreQueryOrder{},
 	&model.CoreAutoTask{}, &model.CoreRoleGroup{}, &model.CoreWorkflowTpl{},
+	&model.CoreCustomRule{},
 	&model.CoreWorkflowDetail{}, &model.CoreOrderComment{}, &model.CoreRules{},
 	&model.CoreTotalTickets{}, &model.CoreRuleSetHistory{},
 	&model.CoreOrderRelevant{},
