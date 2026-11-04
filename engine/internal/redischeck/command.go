@@ -3,6 +3,7 @@ package redischeck
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,16 +26,16 @@ var (
 	readCommands = map[string]struct{}{
 		"GET": {}, "MGET": {}, "STRLEN": {}, "GETRANGE": {}, "SUBSTR": {},
 		"EXISTS": {}, "TYPE": {}, "TTL": {}, "PTTL": {}, "SCAN": {}, "RANDOMKEY": {},
-		"DUMP": {}, "OBJECT": {}, "MEMORY": {},
+		"DUMP": {}, "TOUCH": {}, "OBJECT": {}, "MEMORY": {},
 		"HGET": {}, "HMGET": {}, "HGETALL": {}, "HKEYS": {}, "HVALS": {}, "HLEN": {}, "HEXISTS": {}, "HSCAN": {}, "HRANDFIELD": {},
 		"LRANGE": {}, "LLEN": {}, "LINDEX": {}, "LPOS": {},
 		"SMEMBERS": {}, "SCARD": {}, "SISMEMBER": {}, "SMISMEMBER": {}, "SRANDMEMBER": {}, "SSCAN": {}, "SDIFF": {}, "SINTER": {}, "SUNION": {}, "SINTERCARD": {},
 		"ZRANGE": {}, "ZRANGEBYSCORE": {}, "ZREVRANGE": {}, "ZREVRANGEBYSCORE": {}, "ZCARD": {}, "ZSCORE": {}, "ZMSCORE": {},
 		"ZRANK": {}, "ZREVRANK": {}, "ZCOUNT": {}, "ZSCAN": {}, "ZRANGEBYLEX": {}, "ZREVRANGEBYLEX": {}, "ZRANDMEMBER": {},
 		"GETBIT": {}, "BITCOUNT": {}, "BITPOS": {}, "PFCOUNT": {},
-		"XLEN": {}, "XRANGE": {}, "XREVRANGE": {}, "XINFO": {},
+		"XLEN": {}, "XRANGE": {}, "XREVRANGE": {}, "XREAD": {}, "XINFO": {},
 		"GEOPOS": {}, "GEODIST": {}, "GEOHASH": {}, "GEOSEARCH": {},
-		"INFO": {}, "DBSIZE": {}, "PING": {}, "ECHO": {}, "TIME": {}, "COMMAND": {}, "SLOWLOG": {}, "LATENCY": {},
+		"INFO": {}, "DBSIZE": {}, "PING": {}, "ECHO": {}, "TIME": {}, "LOLWUT": {}, "COMMAND": {}, "SLOWLOG": {}, "LATENCY": {},
 	}
 
 	// writeCommands 改数据的命令（分类用；安全校验不依赖它）
@@ -161,6 +162,18 @@ var (
 		"FUNCTION": "FUNCTION 的管理子命令由脚本规则单独审核",
 	}
 )
+
+// ReadCommandNames 只读命令名单（已排序）。
+// 导出给 archguard 与主程序 src/lib/rediscmd 的白名单比对：两边漂移会让同一命令
+// 在查询页与检测页得出相反的结论。
+func ReadCommandNames() []string {
+	out := make([]string, 0, len(readCommands))
+	for name := range readCommands {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // inTable 命令是否在表里
 func inTable(table map[string]string, name string) bool {
