@@ -3,7 +3,24 @@ package model
 import (
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
+
+// 代理实例（腾讯云 nj-crs-*.sql.tencentcdb.com）同样报 cluster_enabled:1，
+// 但槽位给的是内网 IP：不能据此切集群客户端，否则所有命令都连不上。
+func TestSlotsMatchHost(t *testing.T) {
+	slots := []redis.ClusterSlot{{
+		Start: 0, End: 5460,
+		Nodes: []redis.ClusterNode{{ID: "x", Addr: "10.80.10.16:6379"}},
+	}}
+	if slotsMatchHost(slots, "nj-crs-5nhsp5wa.sql.tencentcdb.com") {
+		t.Error("内网地址不应判定为直连")
+	}
+	if !slotsMatchHost(slots, "10.80.10.16") {
+		t.Error("槽位地址与配置一致时应判定为直连")
+	}
+}
 
 // 连接参数取文档推荐值，改动会影响所有 Redis 数据源，用断言钉住。
 func TestRedisOptionsFollowsCloudDefaults(t *testing.T) {

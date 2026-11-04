@@ -86,8 +86,9 @@ func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 		_ = probe.Close()
 		return nil, err
 	}
-	// 集群判定：普通实例对 CLUSTER INFO 报 "cluster support disabled"，按单机处理
-	if info, err := probe.ClusterInfo(ctx).Result(); err == nil && strings.Contains(info, "cluster_enabled:1") {
+	// 集群判定：代理模式（腾讯云/华为云 Proxy）也报 cluster_enabled:1，但 CLUSTER SLOTS
+	// 给的是内网节点地址，切集群客户端会连不上；只有槽位地址与配置地址一致才算直连。
+	if info, err := probe.ClusterInfo(ctx).Result(); err == nil && strings.Contains(info, "cluster_enabled:1") && slotHostMatch(probe, ds.Ip) {
 		_ = probe.Close()
 		if db > 0 {
 			return nil, fmt.Errorf("Redis Cluster 只有 db0，不支持 db%d", db)
@@ -112,6 +113,25 @@ func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 		return nil, err
 	}
 	return client, nil
+}
+
+// slotHostMatch CLUSTER SLOTS 的节点地址是否与配置地址同主机：
+// 直连模式返回分片地址（可连），代理模式返回实例内网地址（客户端不可达）。
+func slotHostMatch(client *redis.Client, host string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
+	defer cancel()
+	slots, err := client.ClusterSlots(ctx).Result()
+	if err != nil {
+		return false
+	}
+	for _, s := range slots {
+		for _, n := range s.Nodes {
+			if h, _, err := net.SplitHostPort(n.Addr); err == nil && strings.EqualFold(h, host) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // redisParseDB 把工单/查询库名（dbN）解析成库号。空名表示默认 db0；
