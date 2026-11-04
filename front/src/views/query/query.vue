@@ -179,7 +179,7 @@
     if (!vl?.sql) {
       return;
     }
-    tbl.value.runResults(vl.schema, vl.sql);
+    tbl.value.runResults(vl.schema, vl.sql, vl.extras);
     tableShown.value = true;
     feat.value = 'table';
   };

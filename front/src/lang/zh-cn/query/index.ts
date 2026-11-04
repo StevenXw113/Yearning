@@ -1,5 +1,7 @@
 export default {
   'query.keytab': '键数据查看',
+  'query.key.meta': '键信息',
+  'query.show.key': '查看键数据',
   'query.redis.tips':
     '在左侧展开库后右键键名 → 查看数据；命令与结果会显示在这里',
   'query.banner.title': '欢迎使用Yearning查询系统',

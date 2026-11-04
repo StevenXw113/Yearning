@@ -1,5 +1,7 @@
 export default {
   'query.keytab': 'Key data',
+  'query.key.meta': 'Key info',
+  'query.show.key': 'View key data',
   'query.redis.tips':
     'Expand a database on the left, right-click a key and choose View data; the command and result show up here',
   'query.banner.title': 'Welcome to use Yearning query platform',

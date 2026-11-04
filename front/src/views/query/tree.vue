@@ -32,9 +32,16 @@
           <template #overlay>
             <a-menu v-if="meta === 'Table'">
               <a-menu-item key="1" @click="showTableData(treeKey)">
-                {{ $t('query.show.table') }}</a-menu-item
+                {{
+                  dbType === 3 ? $t('query.show.key') : $t('query.show.table')
+                }}</a-menu-item
               >
-              <a-menu-item key="2" @click="showTableArch(treeKey)">
+              <!-- Redis 的「结构」就是类型/TTL/大小，已在查看数据时一并给出 -->
+              <a-menu-item
+                v-if="dbType !== 3"
+                key="2"
+                @click="showTableArch(treeKey)"
+              >
                 {{ $t('query.show.arch') }}</a-menu-item
               >
             </a-menu>
@@ -53,8 +60,10 @@
   import { useCommonStore } from '@/store';
   import { TreeNodeProps } from 'ant-design-vue/lib/vc-tree';
   import { App } from 'ant-design-vue';
+  import i18n from '@/lang';
 
   const { message } = App.useApp();
+  const { t } = i18n.global;
 
   // 树高由父级传入（原来写死 700，比右侧 SQL 卡片高出一大截）
   const props = withDefaults(defineProps<{ height?: number }>(), {
@@ -153,6 +162,7 @@
         source_id: commonStore.queryInfo.source_id,
         schema: schema.value,
         sql: data.payload.sql,
+        extras: redisKeyMeta(data.payload),
       });
       return;
     }
@@ -167,6 +177,43 @@
               `SELECT * FROM "${key}"`
             : `select * from ${key}`,
     });
+  };
+
+  // redisKeyMeta 把键的元信息（类型/TTL/大小/编码）做成一个本地结果集，
+  // 与数据结果一起展示：Redis 的「结构」就是这些，不必再执行第二条命令。
+  const redisKeyMeta = (d: any) => {
+    const field = [
+      {
+        title: 'field',
+        dataIndex: 'field',
+        width: 140,
+        fixed: 'left',
+        ellipsis: true,
+        resizable: true,
+      },
+      {
+        title: 'value',
+        dataIndex: 'value',
+        width: 240,
+        ellipsis: true,
+        resizable: true,
+      },
+    ];
+    const rows: any[] = [{ field: 'type', value: d.type }];
+    if (typeof d.ttl === 'number') {
+      rows.push({
+        field: 'ttl',
+        value:
+          d.ttl === -1 ? 'no expire' : d.ttl === -2 ? 'missing' : `${d.ttl}s`,
+      });
+    }
+    if (typeof d.size === 'number') {
+      rows.push({ field: 'size', value: `${d.size} B` });
+    }
+    if (d.encoding) {
+      rows.push({ field: 'encoding', value: d.encoding });
+    }
+    return [{ label: t('query.key.meta'), field, data: rows }];
   };
 
   const showTableArch = (key: string) => {

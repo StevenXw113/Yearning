@@ -6,7 +6,7 @@
     <a-tab-pane
       v-for="(i, idx) in results"
       :key="idx"
-      :tab="`${$t('common.result')} ${idx + 1}`"
+      :tab="i.label || `${$t('common.result')} ${idx + 1}`"
     >
       <template v-if="isExport">
         <a-button
@@ -108,8 +108,12 @@
   // 消息单通道:onmessage 直接挂 recv(幂等覆写)。vueuse 的 data ref 曾有
   // 第二条 watch 通道,但它把裸 Blob 当事件传(取 .data 恒 undefined),从未生效;
   // 覆写后 vueuse 仅保留发包/重连/心跳职责(服务端不回 ping,pongTimeout 已禁)。
-  const runResults = (schema: string, sql: string) => {
+  // 随本次命令一起展示的额外结果集（如 Redis 的键信息）：本地构造，不需要再发命令
+  let pendingExtras: any[] = [];
+
+  const runResults = (schema: string, sql: string, extras: any[] = []) => {
     commonStore.SET_SPINNING();
+    pendingExtras = extras;
     const encoded: Uint8Array = encode({ type: 4, sql: sql, schema: schema });
     sock.value.send(encoded);
     const ws = sock.value.ws as any;
@@ -135,17 +139,19 @@
       if (resp.status) {
         message.error(t('query.expire'));
         results.value = [];
+        pendingExtras = [];
         commonStore.SET_DISABLED_SPINNING();
         return;
       }
       if (resp.error !== '') {
         message.error(resp.error);
         results.value = [];
+        pendingExtras = [];
       } else {
+        const extra = pendingExtras;
+        pendingExtras = [];
         isExport.value = resp.export;
-        resp.results !== null
-          ? (results.value = resp.results)
-          : (results.value = []);
+        results.value = [...extra, ...(resp.results ?? [])];
         executeTime.value = resp.query_time;
         activeKey.value = 0;
         // 查询侧规则命中（如未锚定的 $regex）：只提示，结果照常展示
