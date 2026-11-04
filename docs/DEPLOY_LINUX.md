@@ -30,11 +30,11 @@ sudo firewall-cmd --permanent --add-service=http --add-service=https && sudo fir
 
 ## 2. MySQL 元数据库
 
-MySQL 5.7 / 8.0，字符集 **utf8mb4**：
+MySQL 8.0（5.7 亦可），字符集 **utf8mb4**。8.0 下若不想改 DSN，请用 `CREATE USER ... IDENTIFIED WITH mysql_native_password BY '...'` 建账号（应用未开 `allowPublicKeyRetrieval`，caching_sha2_password 在非 TLS 下会认证失败）：
 
 ```sql
 CREATE DATABASE `Yearning_go` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-CREATE USER 'yearning'@'%' IDENTIFIED BY '强口令';
+CREATE USER 'yearning'@'%' IDENTIFIED WITH mysql_native_password BY '强口令';
 GRANT ALL PRIVILEGES ON `Yearning_go`.* TO 'yearning'@'%';
 FLUSH PRIVILEGES;
 ```

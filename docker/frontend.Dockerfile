@@ -2,12 +2,12 @@
 # docker build -f docker/frontend.Dockerfile -t yearning-frontend:dev .   （上下文为仓库根目录）
 
 # ---------- 阶段一：构建前端 ----------
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 WORKDIR /src
 
-# 先装依赖，命中层缓存
-COPY front/package.json front/pnpm-lock.yaml front/.npmrc ./
+# 先装依赖，命中层缓存；pnpm-workspace.yaml 带 allowBuilds 配置，缺了会报 ERR_PNPM_IGNORED_BUILDS
+COPY front/package.json front/pnpm-lock.yaml front/pnpm-workspace.yaml front/.npmrc ./
 RUN corepack enable \
  && pnpm install --frozen-lockfile --registry="$NPM_REGISTRY"
 

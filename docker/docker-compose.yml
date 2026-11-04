@@ -11,7 +11,7 @@
 
 services:
     mysql:
-        image: mysql:5.7
+        image: mysql:8.0
         container_name: yearning-mysql
         restart: always
         # 元数据库必须 utf8mb4
@@ -19,6 +19,9 @@ services:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_general_ci
             - --default-time-zone=+08:00
+            # 8.0 默认 caching_sha2_password，而应用 DSN 未开 allowPublicKeyRetrieval，
+            # 非 TLS 首连会认证失败；让新建账号用 native 插件（8.0 支持，8.4 起移除）
+            - --default-authentication-plugin=mysql_native_password
         environment:
             MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?.env 中缺少 MYSQL_ROOT_PASSWORD}
             MYSQL_DATABASE: ${MYSQL_DB:-Yearning_go}
@@ -46,6 +49,8 @@ services:
         build:
             context: ../engine
             dockerfile: Dockerfile
+            args:
+                GOPROXY_URL: ${GOPROXY_URL:-https://goproxy.cn,direct}
         image: ${ENGINE_IMAGE:-yearning-engine:local}
         container_name: yearning-engine
         restart: always

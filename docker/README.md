@@ -54,6 +54,6 @@ docker compose up -d frontend
 | 前端入口 | `http://<IP>:8000`（Nginx 80） |
 | 后端 API | `yearning:8000`（容器内） |
 | 引擎 | `yearning-engine:13307`（容器内） |
-| 元数据库 | `Yearning_go`，utf8mb4 |
+| 元数据库 | MySQL 8.0，`Yearning_go`，utf8mb4 |
 | 初始账号 | `admin` / `Yearning_admin` |
 | 后端配置 | `/opt/conf.toml`（可挂载覆盖） |

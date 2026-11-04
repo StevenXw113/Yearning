@@ -88,7 +88,7 @@ docker build -f docker/Dockerfile          -t yearning:1.0.0 .
 docker build -f engine/Dockerfile          -t yearning-engine:1.0.0 ./engine   # 上下文是 engine/
 ```
 
-- 前端：`node:20-alpine` 用 pnpm 构建（`pnpm-lock.yaml`）→ `nginx:1.27-alpine` 托管，`EXPOSE 80`。
+- 前端：`node:24-alpine` 用 pnpm 构建（`pnpm-lock.yaml`，Vite 8 要求 Node ≥20.19/22.12）→ `nginx:1.27-alpine` 托管，`EXPOSE 80`。
 - 后端：`golang:1.26` 编译 → `alpine:3.20`；`go:embed` 目录只放占位页，页面由前端镜像提供；镜像内附带 `gh-ost`（OSC 用）。
 - 引擎：`golang:1.26` 编译 → distroless，`EXPOSE 13307`，**无 shell，只能看日志**。
 - 构建加速：`--build-arg NPM_REGISTRY=https://registry.npmmirror.com`、`--build-arg GOPROXY_URL=https://goproxy.cn,direct`（默认已开启）。
@@ -113,6 +113,19 @@ docker compose ps && docker compose logs -f yearning frontend
 - 不要把 `install` 写进常驻 `command`，否则每次重启重复初始化。
 - 部署目录若不在仓库内，`build.context` 要改成源码绝对路径（或删掉 `build:` 只用已构建镜像）。
 - 不用 Compose 时：建 `yearning` 网络，依次起 mysql、engine（`-addr :13307`）、执行 `install`、起后端（不映射端口）、起前端（`-p 8000:80`）。
+
+元数据库用 **MySQL 8.0**（compose 已固定 `mysql:8.0` 并带 `--default-authentication-plugin=mysql_native_password`：应用 DSN 未开 `allowPublicKeyRetrieval`，8.0 默认的 caching_sha2_password 在非 TLS 下会认证失败）。
+
+从 5.7 换成 8.0 时**不能复用旧数据目录**（8.0 无法启动 5.7 的 datadir）：
+
+```bash
+docker compose exec -T mysql sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --default-character-set=utf8mb4 "$MYSQL_DB"' > y_57.sql
+docker compose down
+sudo rm -rf ./data/mysql            # 旧 5.7 数据目录，确认已备份
+docker compose up -d mysql          # 8.0 初始化
+docker compose exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DB"' < y_57.sql
+docker compose up -d                # 已有表，不要再执行 install
+```
 
 ---
 

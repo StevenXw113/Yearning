@@ -40,7 +40,7 @@ docker run -d --name yearning-mysql ^
   -e MYSQL_ROOT_PASSWORD=root ^
   -e MYSQL_DATABASE=Yearning_go ^
   -p 3306:3306 ^
-  mysql:5.7 --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+  mysql:8.0 --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci --default-authentication-plugin=mysql_native_password
 ```
 
 若用系统 MySQL，请自行确认库与字符集。
