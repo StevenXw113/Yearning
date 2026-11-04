@@ -9,8 +9,8 @@
       </a-select>
     </a-form-item>
     <a-form-item :label="$t('common.table.db_type')">
-      <a-select v-model:value="dbForm.db_type">
-        <a-select-option v-for="i in db_type" :key="i.value" :value="i.value">{{
+      <a-select v-model:value="dbForm.db_type" @change="onTypeChange">
+        <a-select-option v-for="i in DB_TYPES" :key="i.value" :value="i.value">{{
           i.label
         }}</a-select-option>
       </a-select>
@@ -155,7 +155,7 @@
 
 <script lang="ts" setup>
   import { ref, computed, reactive, onMounted } from 'vue';
-  import { Source, createSource as cs } from '@/apis/db';
+  import { DB_TYPES, dbTypePort, Source, createSource as cs } from '@/apis/db';
   import { getCustomRulesList, type CustomRule } from '@/apis/rules';
   import { useCommonStore } from '@/store';
   import { RuleObject } from 'ant-design-vue/es/form';
@@ -246,29 +246,6 @@
     return commonStore.flow;
   });
 
-  const db_type = [
-    {
-      value: 0,
-      label: 'mysql',
-    },
-    {
-      value: 1,
-      label: 'PostgreSQL',
-    },
-    {
-      value: 2,
-      label: 'mongodb',
-    },
-    {
-      value: 3,
-      label: 'redis',
-    },
-    {
-      value: 4,
-      label: 'doris',
-    },
-  ];
-
   const dbForm = ref({
     idc: '',
     source: '',
@@ -286,6 +263,11 @@
     auth_database: '',
     rule_id: 0,
   } as Source);
+
+  // 切换类型时带出该类型的默认端口（MySQL 3306 / PG 5432 / Mongo 27017 / Redis 6379 / Doris 9030）
+  const onTypeChange = (v: number) => {
+    dbForm.value.port = dbTypePort(v, dbForm.value.port);
+  };
 
   const formRef = ref();
 

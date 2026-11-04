@@ -43,14 +43,112 @@
             :title="$t('ruleDeleteConfirm')"
             @confirm="onDelete(record.id)"
           >
-            <a-button size="small" danger ghost style="margin-left: 8px">{{
-              $t('common.delete')
-            }}</a-button>
+            <a-button
+              type="primary"
+              size="small"
+              danger
+              ghost
+              style="margin-left: 8px"
+              >{{ $t('common.delete') }}</a-button
+            >
           </a-popconfirm>
         </template>
       </template>
     </a-table>
   </a-card>
+
+  <!-- 自定义审核规则：内置规则编译在引擎里，这里补文本层正则检查 -->
+  <a-card style="margin-top: 16px">
+    <a-row>
+      <a-col :span="17">
+        <b>{{ $t('customRule') }}</b>
+        <div style="color: #8c8c8c; font-size: 12px">
+          {{ $t('customRuleHelp') }}
+        </div>
+      </a-col>
+      <a-col :span="6" offset="1" style="text-align: right">
+        <a-button type="primary" @click="openRule()">{{
+          $t('customRuleAdd')
+        }}</a-button>
+      </a-col>
+    </a-row>
+    <br />
+    <a-table
+      bordered
+      size="small"
+      :columns="ruleCol"
+      :data-source="ruleList"
+      :pagination="{ pageSize: 10 }"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'pattern'">
+          <code>{{ record.pattern }}</code>
+        </template>
+        <template v-if="column.dataIndex === 'level'">
+          {{
+            record.level === 'warning'
+              ? $t('customRuleLevelWarn')
+              : $t('customRuleLevelError')
+          }}
+        </template>
+        <template v-if="column.dataIndex === 'enabled'">
+          <a-switch
+            :checked="record.enabled === 1"
+            @change="(v: boolean) => toggleRule(record, v)"
+          />
+        </template>
+        <template v-if="column.dataIndex === 'action'">
+          <a-button size="small" @click="openRule(record)">
+            {{ $t('common.edit') }}
+          </a-button>
+          <a-popconfirm
+            :title="$t('customRuleDeleteConfirm')"
+            @confirm="removeRule(record.id)"
+          >
+            <a-button
+              type="primary"
+              size="small"
+              danger
+              ghost
+              style="margin-left: 8px"
+            >
+              {{ $t('common.delete') }}
+            </a-button>
+          </a-popconfirm>
+        </template>
+      </template>
+    </a-table>
+  </a-card>
+
+  <a-modal
+    v-model:open="ruleOpen"
+    :title="ruleForm.id ? $t('customRuleEdit') : $t('customRuleAdd')"
+    @ok="saveRule"
+  >
+    <a-form layout="vertical">
+      <a-form-item :label="$t('customRuleName')" required>
+        <a-input v-model:value="ruleForm.name" />
+      </a-form-item>
+      <a-form-item :label="$t('customRulePattern')" required>
+        <a-input
+          v-model:value="ruleForm.pattern"
+          :placeholder="'\\bdrop\\s+table\\b'"
+        />
+      </a-form-item>
+      <a-form-item :label="$t('customRuleLevel')">
+        <a-radio-group v-model:value="ruleForm.level">
+          <a-radio value="error">{{ $t('customRuleLevelError') }}</a-radio>
+          <a-radio value="warning">{{ $t('customRuleLevelWarn') }}</a-radio>
+        </a-radio-group>
+      </a-form-item>
+      <a-form-item :label="$t('customRuleDesc')">
+        <a-input v-model:value="ruleForm.desc" />
+      </a-form-item>
+      <a-form-item :label="$t('customRuleEnabled')">
+        <a-switch v-model:checked="ruleEnabled" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
 
   <a-drawer
     v-model:open="is_open"
@@ -78,8 +176,15 @@
 </template>
 
 <script setup lang="ts">
-  import { deleteRules, getCustomRulesList } from '@/apis/rules';
-  import { onMounted, ref } from 'vue';
+  import {
+    CustomRuleItem,
+    deleteCustomRule,
+    deleteRules,
+    getCustomRuleList,
+    getCustomRulesList,
+    saveCustomRule,
+  } from '@/apis/rules';
+  import { computed, onMounted, reactive, ref } from 'vue';
   import CommonMixins from '@/mixins/common';
   import rules from './rules.vue';
   import { useElementSize } from '@vueuse/core';
@@ -137,8 +242,68 @@
     get();
   };
 
+  // ---- 自定义审核规则（正则文本规则） ----
+  const ruleList = ref<CustomRuleItem[]>([]);
+
+  const ruleOpen = ref(false);
+
+  const emptyRule = (): CustomRuleItem => ({
+    name: '',
+    desc: '',
+    pattern: '',
+    level: 'error',
+    enabled: 1,
+  });
+
+  const ruleForm = reactive<CustomRuleItem>(emptyRule());
+
+  const ruleEnabled = computed({
+    get: () => ruleForm.enabled === 1,
+    set: (v: boolean) => (ruleForm.enabled = v ? 1 : 0),
+  });
+
+  const ruleCol = [
+    { title: t('customRuleName'), dataIndex: 'name', width: 180 },
+    { title: t('customRulePattern'), dataIndex: 'pattern' },
+    { title: t('customRuleLevel'), dataIndex: 'level', width: 100 },
+    { title: t('customRuleEnabled'), dataIndex: 'enabled', width: 90 },
+    { title: t('common.action'), dataIndex: 'action', width: 190 },
+  ];
+
+  const getRuleList = async () => {
+    const { data } = await getCustomRuleList();
+    ruleList.value = data.payload;
+  };
+
+  const openRule = (record?: CustomRuleItem) => {
+    Object.assign(ruleForm, record ? { ...record } : { ...emptyRule(), id: undefined });
+    ruleOpen.value = true;
+  };
+
+  const saveRule = async () => {
+    const { data } = await saveCustomRule({ ...ruleForm });
+    if (data.code !== 1200) return;
+    message.success(t('customRuleSaved'));
+    ruleOpen.value = false;
+    getRuleList();
+  };
+
+  const toggleRule = async (record: CustomRuleItem, v: boolean) => {
+    const { data } = await saveCustomRule({ ...record, enabled: v ? 1 : 0 });
+    if (data.code !== 1200) return;
+    record.enabled = v ? 1 : 0;
+  };
+
+  const removeRule = async (id?: number) => {
+    const { data } = await deleteCustomRule({ id });
+    if (data.code !== 1200) return;
+    message.success(t('customRuleDeleted'));
+    getRuleList();
+  };
+
   onMounted(async () => {
     get();
+    getRuleList();
   });
 </script>
 

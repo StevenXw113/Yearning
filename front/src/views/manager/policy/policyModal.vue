@@ -9,7 +9,7 @@
       <a-form-item :label="$t('common.policy.group') + $t('common.table.name')">
         <a-input v-model:value="selfRuse.name" :disabled="isEdit"></a-input>
       </a-form-item>
-      <template v-for="i in range" :key="i">
+      <template v-for="i in ranges" :key="i">
         <a-transfer
           v-model:target-keys="selfRuse[`${i}_source`]"
           :titles="[
@@ -22,10 +22,9 @@
               `${i.toLocaleUpperCase()} ` +
               $t('common.policy'),
           ]"
-          :row-key="(record: any) => record.source_id"
-          :data-source="i === 'query' ? ruse.query : ruse.source"
+          :data-source="optionsOf(i)"
           show-search
-          :render="(item: any) => item.source"
+          :render="(item: any) => item.title"
           :list-style="{
             width: '400px',
             height: '300px',
@@ -46,7 +45,7 @@
     updatePolicy,
   } from '@/apis/policy';
   import CommonMixins from '@/mixins/common';
-  import { onMounted, reactive, unref, ref } from 'vue';
+  import { computed, onMounted, reactive, unref, ref } from 'vue';
 
   const emit = defineEmits(['success']);
 
@@ -73,11 +72,24 @@
 
   let initRune = Object.assign({}, selfRuse);
 
-  enum range {
-    DDL = 'ddl',
-    DML = 'dml',
-    QUERY = 'query',
-  }
+  // 三个权限维度：ddl/dml 走数据源列表，query 走查询数据源列表
+  const ranges = ['ddl', 'dml', 'query'] as const;
+
+  // antd-vue 4 的 Transfer 按 key/title 渲染列表项，必须显式映射，否则是空白行。
+  // 用 computed 缓存：若每次渲染都新建数组，Transfer 会认为 dataSource 变了并重算，
+  // 表现为列表闪烁、已选项回弹到左侧。
+  const toOptions = (list: { source?: string; source_id?: string }[]) =>
+    list.map((item) => ({
+      key: item.source_id as string,
+      title: item.source ?? '',
+    }));
+
+  const sourceOptions = computed(() => toOptions(ruse.source));
+
+  const queryOptions = computed(() => toOptions(ruse.query));
+
+  const optionsOf = (type: (typeof ranges)[number]) =>
+    type === 'query' ? queryOptions.value : sourceOptions.value;
 
   const postPolicy = async () => {
     await updatePolicy(selfRuse);
@@ -89,15 +101,10 @@
     isEdit.value = true;
     selfRuse.id = vl.id;
     selfRuse.name = vl.name;
-    vl.permissions.query_source === null
-      ? (selfRuse.query_source = [])
-      : (selfRuse.query_source = vl.permissions.query_source);
-    vl.permissions.dml_source === null
-      ? (selfRuse.dml_source = [])
-      : (selfRuse.dml_source = vl.permissions.dml_source);
-    vl.permissions.ddl_source === null
-      ? (selfRuse.ddl_source = [])
-      : (selfRuse.ddl_source = vl.permissions.ddl_source);
+    const p = vl.permissions ?? ({} as PolicyPost);
+    selfRuse.query_source = p.query_source ?? [];
+    selfRuse.dml_source = p.dml_source ?? [];
+    selfRuse.ddl_source = p.ddl_source ?? [];
     turnState();
   };
 

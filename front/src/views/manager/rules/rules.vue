@@ -123,13 +123,16 @@
     rule,
     RULE_CATEGORIES,
     filterRules,
+    filterByEngine,
     categoryCounts,
     type RuleCategory,
+    type RuleEngine,
   } from './rules';
-  import { computed, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import {
     Rules,
     RuleHistory,
+    getRulesList,
     updateRules,
     updateGlobalRules,
     addRules,
@@ -145,6 +148,8 @@
     global?: boolean;
     desc: string;
     isAdd?: boolean;
+    // 只显示该数据库类型适用的规则；不传 = 全部（开关仍是同一份全局配置）
+    engine?: RuleEngine;
   }>();
 
   const { t } = useI18n();
@@ -215,16 +220,18 @@
   // 列表 = 分类页签 × 搜索关键字 的交集;rule 是静态名单,过滤全部走计算属性
   const activeCat = ref<RuleCategory | 'all'>('all');
   const keyword = ref('');
-  const counts = categoryCounts(rule);
-  const catOptions = [
-    { label: `${t('ruleCatAll')} (${counts.all})`, value: 'all' as const },
+  // 按数据库类型过滤后的规则池：分类页签的计数也要基于它，否则数字与实际行数对不上
+  const pool = computed(() => filterByEngine(rule, props.engine));
+  const counts = computed(() => categoryCounts(pool.value));
+  const catOptions = computed(() => [
+    { label: `${t('ruleCatAll')} (${counts.value.all})`, value: 'all' as const },
     ...RULE_CATEGORIES.map((c) => ({
-      label: `${t(c.i18n)} (${counts[c.key]})`,
+      label: `${t(c.i18n)} (${counts.value[c.key]})`,
       value: c.key,
     })),
-  ];
+  ]);
   const rules = computed(() =>
-    filterRules(rule, activeCat.value).filter(
+    filterRules(pool.value, activeCat.value).filter(
       (item) => keyword.value === '' || item.desc.indexOf(keyword.value) !== -1,
     ),
   );
@@ -241,6 +248,13 @@
     levels.value = ((r as unknown as { RuleLevel?: Record<string, string> })
       .RuleLevel || {}) as Record<string, string>;
   };
+
+  // 全局规则自己拉数据（类型页签切换会重建组件，父级注入会丢）；规则集仍由父级 onRules 注入
+  onMounted(async () => {
+    if (!props.global) return;
+    const { data } = await getRulesList();
+    applyRules(data.payload as unknown as Rules);
+  });
 
   // 级别下拉：未配置就是「默认」——引擎按规则自带的默认级别处理
   // （安全类 error、结构与性能类 warn）。这里必须把键删掉而不是写空串，
@@ -281,7 +295,11 @@
   const onCheckUpstream = async () => {
     const { data } = await checkUpstreamRules();
     if (data.code !== 1200) return; // 非 1200 已由请求拦截器统一提示
-    const { current, latest, hasUpdate } = data.payload;
+    const { current, latest, hasUpdate, note } = data.payload;
+    if (note) {
+      message.warning(note);
+      return;
+    }
     if (hasUpdate) {
       modal.warning({
         title: t('upstreamNew'),

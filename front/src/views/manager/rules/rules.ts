@@ -785,6 +785,37 @@ export function filterRules(list: Rule[], cat: RuleCategory | 'all'): Rule[] {
   return cat === 'all' ? list : list.filter((r) => r.category === cat);
 }
 
+// 规则适用的数据库类型：Mongo/Redis/Doris 是各自专属规则；
+// Online-DDL 只在 MySQL 走 gh-ost；其余 SQL 规则在 MySQL/PostgreSQL/Doris 之间共用同一批开关。
+export type RuleEngine = 'mysql' | 'postgres' | 'mongo' | 'redis' | 'doris';
+
+export const RULE_ENGINES: { key: RuleEngine; label: string }[] = [
+  { key: 'mysql', label: 'MySQL' },
+  { key: 'postgres', label: 'PostgreSQL' },
+  { key: 'mongo', label: 'MongoDB' },
+  { key: 'redis', label: 'Redis' },
+  { key: 'doris', label: 'Doris' },
+];
+
+export function ruleEngines(r: Rule): RuleEngine[] {
+  switch (r.type) {
+    case 'Mongo':
+      return ['mongo'];
+    case 'Redis':
+      return ['redis'];
+    case 'Doris':
+      return ['doris'];
+    case 'Online-DDL':
+      return ['mysql'];
+    default:
+      return ['mysql', 'postgres', 'doris'];
+  }
+}
+
+export function filterByEngine(list: Rule[], engine?: RuleEngine): Rule[] {
+  return engine ? list.filter((r) => ruleEngines(r).includes(engine)) : list;
+}
+
 export function categoryCounts(
   list: Rule[],
 ): Record<RuleCategory | 'all', number> {

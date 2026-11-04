@@ -26,14 +26,14 @@
     <template #bodyCell="{ column, text, record }">
       <template v-if="column.dataIndex === 'action'">
         <a-space>
-          <a-button ghost size="small" @click="p.editTask(record)">{{
-            $t('common.edit')
-          }}</a-button>
+          <a-button type="primary" ghost size="small" @click="p.editTask(record)"
+            >{{ $t('common.edit') }}</a-button
+          >
           <a-popconfirm
             :title="$t('auto.delete.tips')"
             @confirm="deleteAutoTask(record.task_id).then(() => tbl.manual())"
           >
-            <a-button ghost size="small" danger>{{
+            <a-button type="primary" ghost size="small" danger>{{
               $t('common.delete')
             }}</a-button>
           </a-popconfirm>

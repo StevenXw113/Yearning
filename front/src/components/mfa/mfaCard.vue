@@ -19,7 +19,9 @@
           :maxlength="6"
         />
         <a-popconfirm :title="$t('user.mfa.disable.tips')" @confirm="doDisable">
-          <a-button danger ghost>{{ $t('user.mfa.disable') }}</a-button>
+          <a-button type="primary" danger ghost>{{
+            $t('user.mfa.disable')
+          }}</a-button>
         </a-popconfirm>
       </a-space>
     </template>

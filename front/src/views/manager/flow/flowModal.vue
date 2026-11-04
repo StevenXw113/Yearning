@@ -71,6 +71,7 @@
                 <a-space>
                   <a-button
                     v-if="!element.edit"
+                    type="primary"
                     ghost
                     size="small"
                     @click="element.edit = true"
@@ -78,6 +79,7 @@
                   </a-button>
                   <a-button
                     v-else
+                    type="primary"
                     ghost
                     size="small"
                     @click="element.edit = false"
@@ -86,6 +88,7 @@
                   >
                   <a-button
                     v-if="!element.edit"
+                    type="primary"
                     ghost
                     size="small"
                     @click="del(idx)"
@@ -93,6 +96,7 @@
                   >
                   <a-button
                     v-if="!element.edit"
+                    type="primary"
                     ghost
                     size="small"
                     @click="upward(idx)"
@@ -100,6 +104,7 @@
                   >
                   <a-button
                     v-if="!element.edit"
+                    type="primary"
                     ghost
                     size="small"
                     @click="down(idx)"

@@ -1,22 +1,30 @@
 <template>
   <a-card>
     <UserTableSearch @search="search"></UserTableSearch>
-    <c-table ref="tbl" :tbl-ref="tblRef">
+    <!-- x 取各列宽度之和：容器不够宽时出现横向滚动，而不是把操作按钮挤出可视区 -->
+    <c-table ref="tbl" :tbl-ref="tblRef" :scroll="{ x: 1170 }">
       <template #bodyCell="{ column, text, record }">
         <template v-if="column.dataIndex === 'action'">
-          <a-space size="small">
+          <!-- 所有操作按钮统一用 primary 描边：无 type 的 ghost 按钮在深色主题下几乎不可见 -->
+          <a-space size="small" wrap>
             <a-button
               v-if="!record.editable"
+              type="primary"
               size="small"
               ghost
               @click="() => (record.editable = true)"
               >{{ $t('common.edit') }}</a-button
             >
             <template v-else>
-              <a-button size="small" ghost @click="editUserInfo(record)"
+              <a-button
+                type="primary"
+                size="small"
+                ghost
+                @click="editUserInfo(record)"
                 >{{ $t('common.save') }}
               </a-button>
               <a-button
+                type="primary"
                 size="small"
                 ghost
                 @click="() => (record.editable = false)"
@@ -24,6 +32,7 @@
               >
             </template>
             <a-button
+              type="primary"
               size="small"
               ghost
               @click="openPasswordModal(record.username)"
@@ -41,7 +50,7 @@
               :title="$t('user.mfa.reset.tips')"
               @confirm="resetMfa(record.username)"
             >
-              <a-button size="small" ghost>
+              <a-button type="primary" size="small" ghost>
                 {{ $t('user.mfa.reset') }}
               </a-button>
             </a-popconfirm>
@@ -157,6 +166,9 @@
       {
         title: t('common.action'),
         dataIndex: 'action',
+        // 5 个操作按钮（编辑/密码/权限/重置MFA/删除）需要足够宽度，
+        // 否则 auto 布局下被其它列挤压、按钮跑到可视区外
+        width: 420,
       },
     ],
     data: [] as UserTableData[],

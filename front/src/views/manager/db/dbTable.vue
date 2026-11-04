@@ -24,17 +24,7 @@
           </a-space>
         </template>
         <template v-if="column.dataIndex === 'db_type'">
-          <span>{{
-            text == 0
-              ? 'mysql'
-              : text == 1
-                ? 'PostgreSQL'
-                : text == 2
-                  ? 'mongodb'
-                  : text == 3
-                    ? 'redis'
-                    : 'doris'
-          }}</span>
+          <span>{{ dbTypeLabel(text) }}</span>
         </template>
         <template v-if="column.dataIndex === 'is_query'">
           <a-tag v-if="text === 2" color="#43A687">{{ $t('db.rw') }}</a-tag>
@@ -55,6 +45,7 @@
     DBParams,
     getSourceList,
     deleteSource,
+    dbTypeLabel,
   } from '@/apis/db';
   import DBModal from './dbModal.vue';
   import DBTableSearch from './dbTableSearch.vue';

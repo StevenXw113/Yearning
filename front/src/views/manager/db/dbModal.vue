@@ -20,17 +20,7 @@
             <a-input v-model:value="dbForm.source"></a-input>
           </a-form-item>
           <a-form-item :label="$t('common.table.db_type')">
-            {{
-              dbForm.db_type == 0
-                ? 'mysql'
-                : dbForm.db_type == 1
-                  ? 'PostgreSQL'
-                  : dbForm.db_type == 2
-                    ? 'mongodb'
-                    : dbForm.db_type == 3
-                      ? 'redis'
-                      : 'doris'
-            }}
+            {{ dbTypeLabel(dbForm.db_type) }}
           </a-form-item>
           <a-form-item :label="$t('db.addr')" name="ip">
             <a-input v-model:value="dbForm.ip"></a-input>
@@ -128,7 +118,7 @@
             </a-select>
           </a-form-item>
           <a-form-item :label="$t('common.action')">
-            <a-button ghost :loading="loading" @click="checkConn"
+            <a-button type="primary" ghost :loading="loading" @click="checkConn"
               >{{ $t('db.test') }}
             </a-button>
           </a-form-item>
@@ -154,7 +144,7 @@
   import CommonMixins from '@/mixins/common';
   import { ref, computed } from 'vue';
   import { useCommonStore } from '@/store';
-  import { createSource, Source } from '@/apis/db';
+  import { createSource, dbTypeLabel, Source } from '@/apis/db';
   import { querySchemaList } from '@/apis/source';
   import { CustomRule } from '@/apis/rules';
 

@@ -42,7 +42,7 @@
             <a-button type="primary" @click="testMessageHook('ding', config)">{{
               $t('setting.message.action.hook')
             }}</a-button>
-            <a-button ghost @click="testMessageHook('mail', config)">{{
+            <a-button type="primary" ghost @click="testMessageHook('mail', config)">{{
               $t('setting.message.action.mail')
             }}</a-button>
           </a-space>

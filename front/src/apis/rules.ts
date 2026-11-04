@@ -39,6 +39,33 @@ export function deleteRules(params: { id?: number }): AxiosPromise {
   return request.post(`${COMMON_URI}/manage/roles/delete`, params);
 }
 
+// ---- 自定义审核规则（用户配置的文本规则，与内置规则并存） ----
+export interface CustomRuleItem {
+  id?: number;
+  name: string;
+  desc: string;
+  // 正则（Go RE2），对提交的 SQL 文本做匹配
+  pattern: string;
+  level: 'error' | 'warning';
+  enabled: number;
+}
+
+export function getCustomRuleList(): AxiosPromise<Res<CustomRuleItem[]>> {
+  return request.post(`${COMMON_URI}/manage/roles/custom_list`);
+}
+
+export function saveCustomRule(
+  params: CustomRuleItem,
+): AxiosPromise<Res<unknown>> {
+  return request.post(`${COMMON_URI}/manage/roles/custom_save`, params);
+}
+
+export function deleteCustomRule(params: {
+  id?: number;
+}): AxiosPromise<Res<unknown>> {
+  return request.post(`${COMMON_URI}/manage/roles/custom_delete`, params);
+}
+
 export interface RuleHistory {
   id: number;
   rule_id: number;
@@ -63,6 +90,8 @@ export interface UpstreamStatus {
   current: string;
   latest: string;
   hasUpdate: boolean;
+  // 非空 = 本次检测没做成（多为访问 GitHub 超时），不是接口失败
+  note?: string;
 }
 
 // 只检测上游 Bytebase 是否有新版本；更新需重新同步源码并编译发布。

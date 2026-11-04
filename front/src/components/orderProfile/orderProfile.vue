@@ -10,7 +10,7 @@
             route.params.tp === 'audit' && isCurrent > -1 && order.status === 2
           "
         >
-          <a-button key="2" danger ghost @click="r.turnState()">{{
+          <a-button key="2" type="primary" danger ghost @click="r.turnState()">{{
             $t('order.reject')
           }}</a-button>
           <a-popconfirm
@@ -31,7 +31,9 @@
             placement="bottomLeft"
             @confirm="undoNext"
           >
-            <a-button key="1" danger ghost>{{ $t('order.undo') }}</a-button>
+            <a-button key="1" type="primary" danger ghost>{{
+              $t('order.undo')
+            }}</a-button>
           </a-popconfirm>
         </template>
         <!-- 人工执行：审批已通过但停在「等待执行」的工单，由相关人点这里落地执行 -->

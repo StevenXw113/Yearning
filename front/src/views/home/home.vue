@@ -91,25 +91,25 @@
       <a-row :gutter="24">
         <a-col :xs="24" :md="12" :xl="6">
           <a-statistic
-            :title="$t('common.bash.self.dml')"
+            :title="$t('common.bash.self.dml') + windowLabel"
             :value="banner.self_dml"
           />
         </a-col>
         <a-col :xs="24" :md="12" :xl="6">
           <a-statistic
-            :title="$t('common.bash.self.ddl')"
+            :title="$t('common.bash.self.ddl') + windowLabel"
             :value="banner.self_ddl"
           />
         </a-col>
         <a-col :xs="24" :md="12" :xl="6">
           <a-statistic
-            :title="$t('common.bash.self.query')"
+            :title="$t('common.bash.self.query') + windowLabel"
             :value="banner.self_query"
           />
         </a-col>
         <a-col :xs="24" :md="12" :xl="6">
           <a-statistic
-            :title="$t('common.bash.self.audit')"
+            :title="$t('common.bash.self.audit') + windowLabel"
             :value="banner.self_audit"
           />
         </a-col>
@@ -138,7 +138,7 @@
   import { getBannerContext } from '@/apis/dash';
   import { getBoardContext } from '@/apis/board';
   import { sanitizeHTML } from '@/lib/sanitize';
-  import { nextTick, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref } from 'vue';
 
   // 原来是 const loading = false（普通常量），ChartCard 的骨架屏永远不显示
   const loading = ref(true);
@@ -146,6 +146,11 @@
   const banner = ref<any>({
     total_order: [],
   });
+
+  // 「我的」三项是后端按时间窗口统计的，标题带上窗口天数，避免和全量列表条数对不上时产生疑惑
+  const windowLabel = computed(() =>
+    banner.value.window_days ? ` / ${banner.value.window_days}d` : ''
+  );
 
   const boardContent = ref<string>('');
 
