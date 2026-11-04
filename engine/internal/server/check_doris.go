@@ -37,7 +37,7 @@ func checkDoris(ctx context.Context, req *api.CheckRequest) *api.CheckReply {
 	for _, text := range stmts {
 		if dorischeck.Parse(text) != nil {
 			// 建表 DDL：dorischeck 一条语句一条记录
-			findings := dorischeck.Check(text, dorisRulesFrom(req.Rule))
+			findings := dorischeck.Check(text, dorischeck.ConfigFromAPI(req.Rule))
 			recs = append(recs, findingsRecord(text, req.Schema,
 				dorischeck.Messages(findings), dorischeck.Severity(findings), dorischeck.Blocked(findings) != nil))
 			continue

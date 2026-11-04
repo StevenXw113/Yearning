@@ -38,7 +38,8 @@
               </a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item :label="$t('common.table.table')">
+          <!-- Redis 没有表概念，目标库下面直接就是键 -->
+          <a-form-item v-if="dbType !== 3" :label="$t('common.table.table')">
             <a-select
               v-model:value="orderItems.table"
               :dropdown-match-select-width="false"
@@ -102,6 +103,7 @@
         <a-space direction="vertical" :size="8" style="width: 100%">
           <a-space wrap :size="8">
             <a-button
+              v-if="dbType !== 3"
               size="small"
               :loading="loadingTblBtn"
               @click="fetchTableArch"
@@ -172,11 +174,21 @@
               <c-table :tbl-ref="sqlRef" row-key="sql"></c-table>
             </a-spin>
           </a-tab-pane>
-          <a-tab-pane :key="2" :tab="$t('order.apply.tab.table')" force-render>
+          <!-- Redis 没有字段/索引：这两个页签只在 SQL / MongoDB / Doris 下出现 -->
+          <a-tab-pane
+            v-if="dbType !== 3"
+            :key="2"
+            :tab="$t('order.apply.tab.table')"
+            force-render
+          >
             <!-- 列宽有上限：内容超长截断显示（悬停看全文），列多则整体左右滚动 -->
             <c-table :tbl-ref="archRef" row-key="field"></c-table>
           </a-tab-pane>
-          <a-tab-pane :key="3" :tab="$t('order.apply.tab.index')">
+          <a-tab-pane
+            v-if="dbType !== 3"
+            :key="3"
+            :tab="$t('order.apply.tab.index')"
+          >
             <c-table :tbl-ref="idxRef" row-key="IndexName">
               <template #bodyCell="{ column, text }">
                 <template v-if="column.dataIndex === 'NonUnique'">{{
@@ -382,6 +394,10 @@
   };
 
   const fetchTable = async (schema: string) => {
+    // Redis 没有表：目标库下面直接是键，拉表列表/字段补全都没有意义
+    if (dbType.value === 3) {
+      return;
+    }
     const { data } = await queryTableList(orderItems.source_id, schema);
     orderProfileArch.table = data.payload;
     fetchFields();

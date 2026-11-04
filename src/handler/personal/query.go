@@ -167,6 +167,31 @@ func FetchQueryDatabaseInfo(c yee.Context) (err error) {
 	return c.JSON(http.StatusOK, common.SuccessPayload(result.QueryList))
 }
 
+// FetchRedisKeyDetail 查询页右键「查看数据」用：返回该键的类型与应执行的那条只读命令。
+// 与 WS 执行同一套查询工单鉴权——这里能拿到命令建议，但真正执行仍要过 WS 的只读白名单。
+func FetchRedisKeyDetail(c yee.Context) (err error) {
+	user := new(factory.Token).JwtParse(c).Username
+	if _, ok := permitQueryOrder(user); !ok {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("查询权限已失效或未申请，请重新申请查询"))
+	}
+	sourceId := c.QueryParam("source_id")
+	key := c.QueryParam("key")
+	if sourceId == "" || key == "" {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
+	}
+	var u model.CoreDataSource
+	model.DB().Where("source_id =?", sourceId).First(&u)
+	if u.SourceId == "" || u.DBType != model.DBTypeRedis {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
+	}
+	detail, derr := RedisKeyDetail(&u, model.RedisParseDB(c.QueryParam("schema")), key)
+	if derr != nil {
+		c.Logger().Error(derr.Error())
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(derr))
+	}
+	return c.JSON(http.StatusOK, common.SuccessPayload(detail))
+}
+
 func FetchQueryTableInfo(c yee.Context) (err error) {
 
 	t := c.QueryParam("schema")

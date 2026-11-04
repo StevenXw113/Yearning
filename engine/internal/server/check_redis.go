@@ -20,11 +20,16 @@ func isRedisSource(src *api.DataSource) bool {
 // req.Mode 决定审哪一种：空/write = 变更命令，query = 只读命令（写命令直接拒绝）。
 // 记录字段与 SQL 侧对齐：Level 1 拦截 / 2 警告 / 3 观察，前端只拦 1。
 func checkRedis(req *api.CheckRequest) *api.CheckReply {
-	_, findings, err := redischeck.Check(req.Sql, redisRulesFrom(req.Rule, req.GetMode()))
+	_, findings, err := redischeck.Check(req.Sql, redischeck.ConfigFromAPI(req.Rule, redischeck.Mode(req.GetMode())))
 	if err != nil {
 		return &api.CheckReply{Ok: false, Error: err.Error()}
 	}
 	rec := findingsRecord(strings.TrimSpace(req.Sql), req.Schema,
 		redischeck.Messages(findings), redischeck.Severity(findings), redischeck.Blocked(findings) != nil)
+	// 影响行数按「受影响的键数」给，与 DEL/MSET 的实际影响面一致；
+	// 检测阶段没有执行，只能给命令字面量里的键数（FLUSHALL 这类无键命令记 0）。
+	if cmd, perr := redischeck.Parse(req.Sql); perr == nil {
+		rec.AffectRows = uint32(len(cmd.Keys))
+	}
 	return &api.CheckReply{Ok: true, Records: []*api.Record{rec}}
 }

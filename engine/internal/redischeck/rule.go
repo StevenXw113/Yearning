@@ -1,6 +1,9 @@
 package redischeck
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Category 规则类别：决定文档归类与默认级别（安全类必须 error，由 archguard 护栏强制）
 type Category string
@@ -75,6 +78,54 @@ var (
 	registry []Rule
 	names    = map[string]struct{}{}
 )
+
+// 规则适用模式
+var (
+	writeOnly = []Mode{ModeWrite}
+	queryOnly = []Mode{ModeQuery}
+	allModes  = []Mode{ModeWrite, ModeQuery}
+)
+
+// itoa 小工具，省得每处都 import strconv
+func itoa(n int) string { return strconv.Itoa(n) }
+
+// finding 用规则自带的 Name 与生效级别造一条命中。
+// 级别取 cfg.Level(r)：规则集里配了就用配置值，否则用规则自带的 DefaultLevel。
+func finding(r Rule, cfg Config, msg string) []Finding {
+	return []Finding{{Rule: r.Name(), Level: cfg.Level(r), Message: msg}}
+}
+
+// commandRule 表驱动规则：一条规则只需声明「开关 + 命中判定 + 说明」。
+//
+// Redis 规则绝大多数是「某个开关打开时，某类命令或某种参数形态就该被拦」。
+// 用同一个结构声明，避免为每条规则写一个类型，也让新增规则的改动量可预期。
+type commandRule struct {
+	name    string
+	desc    string
+	cat     Category
+	modes   []Mode
+	level   Level
+	enabled func(Config) bool
+	// hit 返回命中说明；空串表示未命中
+	hit func(Config, *Command) string
+}
+
+func (r commandRule) Name() string        { return r.name }
+func (r commandRule) Desc() string        { return r.desc }
+func (r commandRule) Category() Category  { return r.cat }
+func (r commandRule) Modes() []Mode       { return r.modes }
+func (r commandRule) DefaultLevel() Level { return r.level }
+
+func (r commandRule) Check(cfg Config, cmd *Command) []Finding {
+	if r.enabled == nil || !r.enabled(cfg) {
+		return nil
+	}
+	msg := r.hit(cfg, cmd)
+	if msg == "" {
+		return nil
+	}
+	return finding(r, cfg, msg)
+}
 
 // Register 注册一条规则，在规则文件的 init() 中调用。
 //

@@ -5,9 +5,6 @@ import (
 	"strings"
 
 	"engine/api"
-	"engine/internal/dorischeck"
-	"engine/internal/mongocheck"
-	"engine/internal/redischeck"
 
 	storepb "engine/internal/bytebase/generated-go/store"
 )
@@ -253,28 +250,6 @@ func reviewRules(r *api.AuditRole, engine storepb.Engine) reviewPlan {
 	return plan
 }
 
-// mongoRulesFrom 构造 MongoDB 审核规则配置。
-//
-// Mongo 规则是自研的（上游 bytebase 无 Mongo advisor），但字段与 SQL 规则同构：
-// 都存在同一份 AuditRole 里，级别也共用 rule_levels（key = 字段名）。
+// 自研方言的配置构造统一由各 check 包的 ConfigFromAPI 完成（按名字反射取值）：
+// 逐字段映射的写法每条规则都要补一行，漏了不报错、只是规则永远不生效。
 // mode 来自 CheckRequest.mode：空/write = 变更命令审核，query = 查询页的只读命令审核。
-//
-// 取值由 mongocheck 按名字对应关系反射完成——这里不再逐字段映射：
-// 那种写法每条规则都要补一行，漏了不报错、只是规则永远不生效。
-func mongoRulesFrom(r *api.AuditRole, mode string) mongocheck.Config {
-	return mongocheck.ConfigFromAPI(r, mongocheck.Mode(mode))
-}
-
-// redisRulesFrom 构造 Redis 审核规则配置。
-// Redis 规则与 Mongo 一样是自研的（上游 bytebase 无 Redis advisor），
-// 但字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
-func redisRulesFrom(r *api.AuditRole, mode string) redischeck.Config {
-	return redischeck.ConfigFromAPI(r, redischeck.Mode(mode))
-}
-
-// dorisRulesFrom 构造 Doris 建表审核规则配置。
-// Doris 的建表 DDL 是自有语法、MySQL 解析器审不了，走自研 internal/dorischeck；
-// 字段与 SQL 规则同构：都存在同一份 AuditRole 里，级别共用 rule_levels。
-func dorisRulesFrom(r *api.AuditRole) dorischeck.Config {
-	return dorischeck.ConfigFromAPI(r)
-}

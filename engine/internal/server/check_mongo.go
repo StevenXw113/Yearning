@@ -19,7 +19,7 @@ func isMongoSource(src *api.DataSource) bool {
 // query = 只读命令（查询页，写命令直接拒绝）。
 // 记录字段与 SQL 侧对齐：Level 1 拦截 / 2 警告 / 3 观察，前端只拦 1。
 func checkMongo(req *api.CheckRequest) *api.CheckReply {
-	_, findings, err := mongocheck.Check(req.Sql, mongoRulesFrom(req.Rule, req.GetMode()))
+	_, findings, err := mongocheck.Check(req.Sql, mongocheck.ConfigFromAPI(req.Rule, mongocheck.Mode(req.GetMode())))
 	if err != nil {
 		return &api.CheckReply{Ok: false, Error: err.Error()}
 	}

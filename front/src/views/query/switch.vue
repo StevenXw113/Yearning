@@ -20,6 +20,8 @@
                     idc: item.idc,
                     source: item.source,
                     source_id: item.source_id,
+                    // 查询页按它区分「表数据」/「键数据」，漏传会退回 SQL 口径
+                    db_type: item.db_type,
                   },
                 }"
                 replace

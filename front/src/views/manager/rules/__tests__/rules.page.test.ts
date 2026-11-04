@@ -3,6 +3,10 @@ import { mount } from '@vue/test-utils';
 import Antd from 'ant-design-vue';
 import i18n from '@/lang';
 import rules from '../rules.vue';
+import { rule as ruleList } from '../rules';
+
+// 规则总数随规则集增减，测试用实际条数而不是写死数字
+const total = ruleList.length;
 
 // 规则配置页行为检查:分类页签真渲染、点页签真过滤、搜索与页签叠加。
 // 纯函数契约在 rules.test.ts 锁,这里锁组件装配(antd Segmented/i18n/表格联动)。
@@ -18,16 +22,16 @@ describe('rules.vue 分类页签', () => {
     const opts = seg.props('options') as { label: string; value: string }[];
     expect(opts).toHaveLength(8);
     expect(opts[0].label).toContain('全部');
-    expect(opts[0].label).toContain('90');
+    expect(opts[0].label).toContain(String(total));
     // i18n 注册失败时 t() 会原样返回 key,这里确保拿到的是翻译文案
     expect(opts[1].label).not.toContain('ruleCat');
     expect(opts[1].label).toContain('语句');
   });
 
-  it('默认全部:表格渲染第一页且分页总数正确(90 条/页大小 20,Mongo 规则不在首页)', () => {
+  it(`默认全部:表格渲染第一页且分页总数正确(${total} 条/页大小 20,Mongo 规则不在首页)`, () => {
     const text = wrapper.text();
     expect(text).toContain('DDLCheckTableComment');
-    expect(text).toContain('90');
+    expect(text).toContain(String(total));
     expect(text).not.toContain('MongoForbidDangerous');
   });
 

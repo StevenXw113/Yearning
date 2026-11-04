@@ -54,7 +54,7 @@ describe('规则分类契约', () => {
       MongoForbidDangerous: 'statement',
       MongoCollectionPrefix: 'naming',
       DorisKeyModel: 'table',
-      RedisRequireTTL: 'system',
+      RedisRequireTtl: 'system',
       OscSize: 'engine',
     };
     for (const [name, cat] of Object.entries(want)) {

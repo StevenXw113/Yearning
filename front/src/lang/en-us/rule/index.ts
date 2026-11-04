@@ -150,35 +150,88 @@ export default {
   MongoQueryForbidNoLimit: 'MongoDB query: find with sort must set limit',
   MongoMaxAffectRows:
     'MongoDB: max documents affected per change (0 = unlimited)',
-  RedisForbidDangerous:
-    'Forbid FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB / MIGRATE (instance-wide commands)',
-  RedisForbidAdmin:
-    'Forbid CONFIG / DEBUG / MODULE / MONITOR / CLIENT (operations commands)',
-  RedisForbidScript:
-    'Forbid EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL (server-side scripts)',
-  RedisForbidReplica:
-    'Forbid REPLICAOF / SLAVEOF (changes replication topology)',
-  RedisForbidKeysCommand:
-    'Forbid KEYS: it scans the whole keyspace and blocks the instance, use SCAN',
-  RedisForbidRename:
-    'Forbid RENAME / RENAMENX: silently overwrites the destination key',
+  RedisCommandSyntax:
+    'Check command, subcommand, arity and option combinations; block invalid syntax',
+  RedisUnknownCommand:
+    'Forbid commands without registered semantics, module and vendor commands',
+  RedisKeyExtraction:
+    'Both source and target keys must be resolved; block when they cannot be',
   RedisKeyPrefix:
-    'Key names must start with this prefix (e.g. app:), empty = off',
+    'Keys must stay within the allowed prefix; source and target keys are both checked; empty = off',
   RedisMaxKeyLen: 'Max key name length in bytes, 0 = unlimited',
-  RedisForbidMove:
-    'Forbid MOVE / SELECT: cross-database operations are hard to trace',
-  RedisMaxAffectKeys:
-    'Max number of keys a single command may touch, 0 = unlimited',
-  RedisMaxValueLen:
-    'Max value size written per command in bytes, 0 = unlimited',
-  RedisRequireTTL:
-    'SET must carry a TTL (EX / PX / EXAT) to avoid unbounded growth',
-  RedisForbidPersist:
-    'Forbid PERSIST: it removes the TTL and the key stays forever',
-  RedisScanRequireMatch:
-    'SCAN should carry MATCH, otherwise it walks the whole keyspace',
-  RedisForbidBlocking:
-    'Forbid blocking commands (BLPOP / BRPOP / BLMOVE / WAIT / SUBSCRIBE)',
+  RedisForbiddenKeyPattern:
+    'Forbid protected keys (system keys, core locks, internal state); multiple patterns separated by commas',
+  RedisSensitiveKeyAccess:
+    'Warn when accessing sensitive keys (credentials, tokens, personal data); patterns configured by business',
+  RedisDbScope:
+    'Commands may only touch the allowed DB range (e.g. 0-15); block outside it',
+  RedisForbidConnectionControl:
+    'Forbid AUTH / HELLO and other connection-state commands; the entry point manages connections',
+  RedisForbidDangerous:
+    'Forbid FLUSHALL / FLUSHDB / SHUTDOWN / SWAPDB (instance-wide operations)',
+  RedisForbidAdmin:
+    'Forbid CONFIG SET/REWRITE/RESETSTAT and CLIENT KILL/PAUSE; read-only subcommands are allowed',
+  RedisForbidDebug: 'Forbid DEBUG',
+  RedisForbidMonitor: 'Forbid MONITOR (performance impact and data exposure)',
+  RedisForbidAclChange: 'Forbid ACL change subcommands such as SETUSER / DELUSER / LOAD',
+  RedisForbidModuleChange: 'Forbid MODULE LOAD / LOADEX / UNLOAD',
+  RedisForbidReplica: 'Forbid REPLICAOF / SLAVEOF (changes replication topology)',
+  RedisForbidClusterChange:
+    'Forbid CLUSTER subcommands that change topology or slots; read-only ones are allowed',
+  RedisForbidPersistence: 'Forbid SAVE / BGSAVE / BGREWRITEAOF from the business entry point',
+  RedisForbidMigration: 'Forbid MIGRATE / RESTORE; require a dedicated review',
+  RedisForbidMove: 'Forbid MOVE; SELECT is checked by the DB scope rule',
+  RedisForbidKeysCommand: 'Forbid KEYS, use a bounded SCAN instead',
+  RedisForbidRandomKey: 'Forbid RANDOMKEY (result is outside the authorized key range)',
+  RedisScanMatchRequired:
+    'SCAN must carry an allowed MATCH range; block when it cannot be confirmed',
+  RedisMaxScanCount: 'Max COUNT for SCAN / HSCAN / SSCAN / ZSCAN, 0 = no check',
+  RedisFullCollectionRead:
+    'Warn on HGETALL / SMEMBERS / full LRANGE / ZRANGE when collection size is unknown or large',
+  RedisMaxReadElements: 'Max elements per range or random read, 0 = unlimited',
+  RedisMaxReadKeys: 'Max keys per batch read command such as MGET, 0 = unlimited',
+  RedisExpensiveRead:
+    'Warn on SORT and set intersections/unions when input size is unknown or over budget',
+  RedisMaxValueSize:
+    'Max bytes of a single written value, 0 = unlimited; block when exceeded',
+  RedisMaxCommandPayload:
+    'Max total payload bytes per command, 0 = unlimited; prevents bypassing the value limit',
+  RedisMaxWriteKeys:
+    'Max keys per write command, 0 = unlimited; over the limit requires batch review',
+  RedisMaxWriteElements: 'Max fields / members / elements written per command, 0 = unlimited',
+  RedisNonIdempotentWrite: 'Warn on non-idempotent writes such as INCR / DECR / list pop',
+  RedisLargeOffsetWrite:
+    'Max projected object size for offset writes (SETRANGE / SETBIT), 0 = unlimited',
+  RedisForbidRename:
+    'Forbid RENAME / RENAMENX; both change key ownership, RENAME may overwrite',
+  RedisCopyOverwrite:
+    'Warn on COPY ... REPLACE and check source, target and target DB permissions',
+  RedisStoreOperation:
+    'Check input size, target overwrite and key permissions for store operations',
+  RedisRequireTtl: 'Cache keys must carry a TTL; registered permanent keys may be exempted',
+  RedisTtlLossOnOverwrite:
+    'Warn when an overwrite may drop the existing TTL without KEEPTTL or a new expiry',
+  RedisForbidPersist: 'Forbid PERSIST; permanent business keys may be exempted',
+  RedisMinTtl: 'Warn when the TTL is below the business minimum; 0 = no check',
+  RedisMaxTtl: 'Warn when the TTL exceeds the business maximum; 0 = no check',
+  RedisImmediateExpire: 'Warn when the expiry is immediate or already past (the key is deleted)',
+  RedisDeleteKey: 'Warn on DEL / UNLINK data deletion',
+  RedisMaxDeleteKeys:
+    'Max keys per delete command, 0 = unlimited; over the limit requires batch review',
+  RedisProtectedKeyDelete:
+    'Forbid deleting protected keys (locks, idempotency keys, core state); comma separated patterns',
+  RedisLargeRangeDelete:
+    'Warn on range deletes, list trims and stream trims when the affected count is unknown',
+  RedisForbidScript:
+    'Forbid unregistered EVAL / EVALSHA / EVAL_RO / EVALSHA_RO / FCALL / FCALL_RO',
+  RedisForbidScriptManagement:
+    'Forbid SCRIPT / FUNCTION subcommands that change script or function state; read-only ones allowed',
+  RedisForbidWatch: 'Forbid WATCH / UNWATCH unless full session semantics are supported',
+  RedisForbidBlockingCommand:
+    'Forbid blocking commands (list / stream waits); configure dedicated scenarios separately',
+  RedisForbidSubscription:
+    'Forbid SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE and other long-lived subscriptions',
+  RedisStreamStateChange: 'Warn on consumer-group changes, acknowledgements and claims',
   DorisRequireDistribution:
     'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',

@@ -20,6 +20,20 @@ const DBTypeRedis = 3
 // RedisTimeout 建立连接与探活的超时
 const RedisTimeout = 15 * time.Second
 
+// 连接参数取云厂商文档推荐值（腾讯云 Redis 连接示例 / 华为云 DCS 客户端建议）。
+// 不设 MinIdleConns：客户端按会话/工单建、用完即关，预建空闲连接只会堆在服务端。
+// ponytail: 读写 2s 是文档值，大 key 假性超时就把 redisIOTimeout 调大。
+const (
+	redisDialTimeout  = 2 * time.Second
+	redisIOTimeout    = 2 * time.Second
+	redisPoolTimeout  = 3 * time.Second
+	redisPoolSize     = 200
+	redisMaxIdleConns = 200
+	redisMaxRetries   = 3
+	redisMaxRedirects = 3
+	redisConnMaxIdle  = 30 * time.Minute
+)
+
 // RedisDefaultDatabases Redis 默认的逻辑库数量（redis.conf 的 databases，默认 16）
 const RedisDefaultDatabases = 16
 
@@ -30,38 +44,38 @@ const RedisScanLimit = 200
 // RedisConn 统一单机与集群客户端：*redis.Client、*redis.ClusterClient 都实现该接口
 type RedisConn = redis.UniversalClient
 
-// RedisOptions 按数据源配置构造客户端选项。
-// 口令为空表示实例未开认证——redis 允许无密码，这里不做非空校验（Mongo 不同）。
-// 认证支持 Redis 6+ 的 ACL 用户名：留空即旧版的「只有密码」。
+// redisUniversalOptions 单机/代理与集群共用的连接选项：
+// go-redis 的 UniversalOptions 能同时构造 *redis.Client 与 *redis.ClusterClient，
+// 省掉 Options / ClusterOptions 两份逐字段抄写。
+// 口令为空表示实例未开认证——redis 允许无密码，这里不做非空校验（Mongo 不同）；
+// Username 留空即旧版「只有密码」的 ACL 形态。
+func redisUniversalOptions(s *CoreDataSource, password string, db int) *redis.UniversalOptions {
+	return &redis.UniversalOptions{
+		Addrs:           []string{net.JoinHostPort(s.IP, strconv.Itoa(s.Port))},
+		Username:        s.Username,
+		Password:        password,
+		DB:              db,
+		DialTimeout:     redisDialTimeout,
+		ReadTimeout:     redisIOTimeout,
+		WriteTimeout:    redisIOTimeout,
+		PoolTimeout:     redisPoolTimeout,
+		PoolSize:        redisPoolSize,
+		MaxIdleConns:    redisMaxIdleConns,
+		MaxRetries:      redisMaxRetries,
+		ConnMaxIdleTime: redisConnMaxIdle,
+		MaxRedirects:    redisMaxRedirects,
+	}
+}
+
+// RedisOptions 单机 / 云厂商 Proxy 的客户端选项
 func RedisOptions(s *CoreDataSource, password string) *redis.Options {
-	opt := &redis.Options{
-		Addr:         net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
-		Password:     password,
-		DB:           0,
-		DialTimeout:  RedisTimeout,
-		ReadTimeout:  RedisTimeout,
-		WriteTimeout: RedisTimeout,
-	}
-	if s.Username != "" {
-		opt.Username = s.Username
-	}
-	return opt
+	return redisUniversalOptions(s, password, 0).Simple()
 }
 
 // RedisClusterOptions 集群选项：数据源的 ip:port 只作种子节点，
 // go-redis 会经 CLUSTER SLOTS 自动发现其余节点。
 func RedisClusterOptions(s *CoreDataSource, password string) *redis.ClusterOptions {
-	opt := &redis.ClusterOptions{
-		Addrs:        []string{net.JoinHostPort(s.IP, strconv.Itoa(s.Port))},
-		Password:     password,
-		DialTimeout:  RedisTimeout,
-		ReadTimeout:  RedisTimeout,
-		WriteTimeout: RedisTimeout,
-	}
-	if s.Username != "" {
-		opt.Username = s.Username
-	}
-	return opt
+	return redisUniversalOptions(s, password, 0).Cluster()
 }
 
 // RedisClusterEnabled 解析 CLUSTER INFO：集群模式返回 cluster_enabled:1。
@@ -95,17 +109,33 @@ func (s *CoreDataSource) ConnectRedisWith(password string) (RedisConn, error) {
 		_ = client.Close()
 		return nil, err
 	}
-	// 探测是否集群：普通实例会报 "This instance has cluster support disabled"，按单机处理
+	// 探测是否直连集群：代理模式（腾讯云/华为云 Proxy）同样报 cluster_enabled:1，
+	// 但 CLUSTER SLOTS 给的是内网节点地址，客户端连不上；只有槽位地址与配置地址一致才切集群客户端。
 	if info, err := client.ClusterInfo(ctx).Result(); err == nil && RedisClusterEnabled(info) {
-		_ = client.Close()
-		cluster := redis.NewClusterClient(RedisClusterOptions(s, password))
-		if err := cluster.Ping(ctx).Err(); err != nil {
-			_ = cluster.Close()
-			return nil, err
+		slots, serr := client.ClusterSlots(ctx).Result()
+		if serr == nil && slotsMatchHost(slots, s.IP) {
+			_ = client.Close()
+			cluster := redis.NewClusterClient(RedisClusterOptions(s, password))
+			if err := cluster.Ping(ctx).Err(); err != nil {
+				_ = cluster.Close()
+				return nil, err
+			}
+			return cluster, nil
 		}
-		return cluster, nil
 	}
 	return client, nil
+}
+
+// slotsMatchHost 槽位节点里是否有与 host 同主机的地址（直连返回分片地址，代理返回内网地址）
+func slotsMatchHost(slots []redis.ClusterSlot, host string) bool {
+	for _, s := range slots {
+		for _, n := range s.Nodes {
+			if h, _, err := net.SplitHostPort(n.Addr); err == nil && strings.EqualFold(h, host) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ConnectRedisDB 建连并选中指定逻辑库（工单/查询页按 dbN 指定目标库时用）。
@@ -126,9 +156,7 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 	}
 	_ = probe.Close()
 
-	opt := RedisOptions(s, enc.Decrypt(C.General.SecretKey, s.Password))
-	opt.DB = db
-	client := redis.NewClient(opt)
+	client := redis.NewClient(redisUniversalOptions(s, enc.Decrypt(C.General.SecretKey, s.Password), db).Simple())
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -139,7 +167,8 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 }
 
 // RedisDatabases 返回可选的逻辑库名（db0..dbN），供查询页的树使用。
-// 集群只有 db0；单机/代理以 CONFIG GET databases 为准，托管 Redis 常禁用 CONFIG，读不到就按默认 16 个。
+// 集群只有 db0；单机/代理以 CONFIG GET databases 为准（实例配了多少就列多少，空库也要能选），
+// 托管 Redis 常禁用 CONFIG，读不到时退回 INFO keyspace / 默认 16 个。
 func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 	client, err := s.ConnectRedis()
 	if err != nil {
@@ -155,12 +184,16 @@ func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 	defer cancel()
 
 	n := RedisDefaultDatabases
-	// CONFIG 可能被托管服务禁用，失败不当错误、退回默认值
 	if m, cerr := client.ConfigGet(ctx, "databases").Result(); cerr == nil {
 		if raw, ok := m["databases"]; ok {
 			if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 {
 				n = parsed
 			}
+		}
+	} else if info, ierr := client.Info(ctx, "keyspace").Result(); ierr == nil {
+		// CONFIG 被禁用时只能看 keyspace：此时列出有键的库，好过给 16 个空库
+		if dbs := keyspaceDatabases(info); len(dbs) > 0 {
+			return dbs, nil
 		}
 	}
 	out := make([]string, 0, n)
@@ -168,6 +201,28 @@ func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 		out = append(out, "db"+strconv.Itoa(i))
 	}
 	return out, nil
+}
+
+// keyspaceDatabases 解析 INFO keyspace 里的库名（db0:keys=3,expires=0,avg_ttl=0），按库号排序
+func keyspaceDatabases(info string) []string {
+	var out []string
+	for _, line := range strings.Split(info, "\n") {
+		line = strings.TrimSpace(line)
+		name, _, ok := strings.Cut(line, ":")
+		if !ok || !strings.HasPrefix(name, "db") {
+			continue
+		}
+		if _, err := strconv.Atoi(name[2:]); err != nil {
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, _ := strconv.Atoi(out[i][2:])
+		b, _ := strconv.Atoi(out[j][2:])
+		return a < b
+	})
+	return out
 }
 
 // RedisScanKeys 用 SCAN 抽样键名。

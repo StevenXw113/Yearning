@@ -99,6 +99,30 @@ export function queryProfile(work_id: string, page: number) {
   });
 }
 
+export interface IRedisKeyDetail {
+  key: string;
+  type: string;
+  ttl?: number;
+  size?: number;
+  encoding?: string;
+  // 查看该键应该执行的那条只读命令（键不存在时为空）
+  sql: string;
+}
+
+export function queryRedisKey(
+  source_id: string,
+  schema: string,
+  key: string,
+) {
+  return request.get<Res<IRedisKeyDetail>>(`${COMMON_URI}/query/redis_key`, {
+    params: {
+      source_id: source_id,
+      schema: schema,
+      key: key,
+    },
+  });
+}
+
 export function queryTable(source_id: string, schema: string) {
   return request.get(`${COMMON_URI}/query/tables`, {
     params: {

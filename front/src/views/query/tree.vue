@@ -32,9 +32,16 @@
           <template #overlay>
             <a-menu v-if="meta === 'Table'">
               <a-menu-item key="1" @click="showTableData(treeKey)">
-                {{ $t('query.show.table') }}</a-menu-item
+                {{
+                  dbType === 3 ? $t('query.show.key') : $t('query.show.table')
+                }}</a-menu-item
               >
-              <a-menu-item key="2" @click="showTableArch(treeKey)">
+              <!-- Redis 的「结构」就是类型/TTL/大小，已在查看数据时一并给出 -->
+              <a-menu-item
+                v-if="dbType !== 3"
+                key="2"
+                @click="showTableArch(treeKey)"
+              >
                 {{ $t('query.show.arch') }}</a-menu-item
               >
             </a-menu>
@@ -47,11 +54,16 @@
 
 <script lang="ts" setup>
   import { onMounted, ref, watch } from 'vue';
-  import { querySchemaList, queryTable } from '@/apis/query';
+  import { queryRedisKey, querySchemaList, queryTable } from '@/apis/query';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
   import { HddOutlined } from '@ant-design/icons-vue';
   import { useCommonStore } from '@/store';
   import { TreeNodeProps } from 'ant-design-vue/lib/vc-tree';
+  import { App } from 'ant-design-vue';
+  import i18n from '@/lang';
+
+  const { message } = App.useApp();
+  const { t } = i18n.global;
 
   // 树高由父级传入（原来写死 700，比右侧 SQL 卡片高出一大截）
   const props = withDefaults(defineProps<{ height?: number }>(), {
@@ -129,22 +141,79 @@
   // Redis(3) 的右键语句是命令行文本，key 就是键名
   const dbType = ref(0);
 
-  const showTableData = (key: string) => {
+  const showTableData = async (key: string) => {
+    if (dbType.value === 3) {
+      // Redis 没有表，也没有「一条命令看所有类型」的读法（GET 对 hash 会 WRONGTYPE）：
+      // 先问后端这个键是什么类型，再执行对应的那条只读命令
+      const { data } = await queryRedisKey(
+        commonStore.queryInfo.source_id,
+        schema.value,
+        key,
+      );
+      if (data.code !== 1200) {
+        message.error(data.text);
+        return;
+      }
+      if (!data.payload?.sql) {
+        message.warning(`键 ${key} 不存在或已过期`);
+        return;
+      }
+      emit('showTableRef', {
+        source_id: commonStore.queryInfo.source_id,
+        schema: schema.value,
+        sql: data.payload.sql,
+        extras: redisKeyMeta(data.payload),
+      });
+      return;
+    }
     emit('showTableRef', {
       source_id: commonStore.queryInfo.source_id,
       schema: schema.value,
       sql:
         dbType.value === 2
           ? JSON.stringify({ find: key, limit: 20 })
-          : dbType.value === 3
-            ? // Redis 没有通用的「看这个键的数据」命令：GET 对 string 直接给值，
-              // 其它类型会回 WRONGTYPE 错误——提示用户这个键不是 string，再自行换命令
-              `GET ${key}`
-            : dbType.value === 1
-              ? // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
-                `SELECT * FROM "${key}"`
-              : `select * from ${key}`,
+          : dbType.value === 1
+            ? // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
+              `SELECT * FROM "${key}"`
+            : `select * from ${key}`,
     });
+  };
+
+  // redisKeyMeta 把键的元信息（类型/TTL/大小/编码）做成一个本地结果集，
+  // 与数据结果一起展示：Redis 的「结构」就是这些，不必再执行第二条命令。
+  const redisKeyMeta = (d: any) => {
+    const field = [
+      {
+        title: 'field',
+        dataIndex: 'field',
+        width: 140,
+        fixed: 'left',
+        ellipsis: true,
+        resizable: true,
+      },
+      {
+        title: 'value',
+        dataIndex: 'value',
+        width: 240,
+        ellipsis: true,
+        resizable: true,
+      },
+    ];
+    const rows: any[] = [{ field: 'type', value: d.type }];
+    if (typeof d.ttl === 'number') {
+      rows.push({
+        field: 'ttl',
+        value:
+          d.ttl === -1 ? 'no expire' : d.ttl === -2 ? 'missing' : `${d.ttl}s`,
+      });
+    }
+    if (typeof d.size === 'number') {
+      rows.push({ field: 'size', value: `${d.size} B` });
+    }
+    if (d.encoding) {
+      rows.push({ field: 'encoding', value: d.encoding });
+    }
+    return [{ label: t('query.key.meta'), field, data: rows }];
   };
 
   const showTableArch = (key: string) => {
@@ -154,13 +223,10 @@
       sql:
         dbType.value === 2
           ? JSON.stringify({ listIndexes: key })
-          : dbType.value === 3
-            ? // Redis 的键没有字段结构，类型是最接近「结构」的信息
-              `TYPE ${key}`
-            : dbType.value === 1
-              ? // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
-                `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
-              : `SHOW COLUMNS FROM ${key}`,
+          : dbType.value === 1
+            ? // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
+              `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
+            : `SHOW COLUMNS FROM ${key}`,
     });
   };
 

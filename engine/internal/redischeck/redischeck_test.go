@@ -8,24 +8,69 @@ import (
 	"engine/api"
 )
 
-// allOn 打开全部开关，用于验证规则本身；参数取一个宽松值
+// allOn 打开全部开关，用于验证规则本身；阈值取一个宽松值。
+// Key 规范类配置（前缀 / 保护键 / 敏感键 / DB 范围）留空，避免干扰其他用例。
 func allOn() Config {
 	return Config{
-		ForbidDangerous:   true,
-		ForbidAdmin:       true,
-		ForbidScript:      true,
-		ForbidReplica:     true,
-		ForbidKeysCommand: true,
-		ForbidRename:      true,
-		KeyPrefix:         "",
-		MaxKeyLen:         0,
-		ForbidMove:        true,
-		MaxAffectKeys:     0,
-		MaxValueLen:       0,
-		RequireTTL:        false,
-		ForbidPersist:     true,
-		ScanRequireMatch:  false,
-		ForbidBlocking:    true,
+		CommandSyntax:           true,
+		UnknownCommand:          true,
+		KeyExtraction:           true,
+		KeyPrefix:               "",
+		MaxKeyLen:               256,
+		ForbiddenKeyPattern:     "",
+		SensitiveKeyAccess:      "",
+		DbScope:                 "",
+		ForbidConnectionControl: true,
+
+		ForbidDangerous:     true,
+		ForbidAdmin:         true,
+		ForbidDebug:         true,
+		ForbidMonitor:       true,
+		ForbidAclChange:     true,
+		ForbidModuleChange:  true,
+		ForbidReplica:       true,
+		ForbidClusterChange: true,
+		ForbidPersistence:   true,
+		ForbidMigration:     true,
+		ForbidMove:          true,
+
+		ForbidKeysCommand:  true,
+		ForbidRandomKey:    true,
+		ScanMatchRequired:  true,
+		MaxScanCount:       1000,
+		FullCollectionRead: true,
+		MaxReadElements:    1000,
+		MaxReadKeys:        100,
+		ExpensiveRead:      true,
+
+		MaxValueSize:       1 << 20,
+		MaxCommandPayload:  8 << 20,
+		MaxWriteKeys:       100,
+		MaxWriteElements:   1000,
+		NonIdempotentWrite: true,
+		LargeOffsetWrite:   1 << 20,
+		ForbidRename:       true,
+		CopyOverwrite:      true,
+		StoreOperation:     true,
+
+		RequireTTL:         true,
+		TtlLossOnOverwrite: false,
+		ForbidPersist:      true,
+		MinTTL:             1,
+		MaxTTL:             0,
+		ImmediateExpire:    true,
+
+		DeleteKey:          true,
+		MaxDeleteKeys:      100,
+		ProtectedKeyDelete: "",
+		LargeRangeDelete:   true,
+
+		ForbidScript:           true,
+		ForbidScriptManagement: true,
+		ForbidWatch:            true,
+		ForbidBlockingCommand:  true,
+		ForbidSubscription:     true,
+		StreamStateChange:      true,
 	}
 }
 
@@ -57,8 +102,12 @@ func TestRegisteredRules(t *testing.T) {
 		if !strings.HasPrefix(r.Name(), "Redis") {
 			t.Errorf("规则 %s 的名称应以 Redis 开头（proto 字段前缀约定）", r.Name())
 		}
+		// 每条规则都要有对应的 Config 字段，否则开关永远读不到
+		if !(Config{}).Has(r.Name()) {
+			t.Errorf("规则 %s 在 Config 里没有同名字段：开关会变成「勾了不生效」", r.Name())
+		}
 	}
-	if len(all) < 12 {
+	if len(all) < 50 {
 		t.Errorf("规则数量 %d 偏少，是否漏了 init 注册？", len(all))
 	}
 }
@@ -72,6 +121,7 @@ func TestCheckWriteMode(t *testing.T) {
 		"HSET app:h f v",
 		"LPUSH app:l a b",
 		"EXPIRE app:k 60",
+		"SADD app:s a b",
 	}
 	for _, line := range allow {
 		if _, findings, err := Check(line, cfg); err != nil {
@@ -82,19 +132,32 @@ func TestCheckWriteMode(t *testing.T) {
 	}
 
 	block := map[string]string{
-		"FLUSHALL":               "FLUSHALL",
-		"FLUSHDB":                "FLUSHDB",
-		"SHUTDOWN NOSAVE":        "SHUTDOWN",
-		"CONFIG SET maxmemory 0": "CONFIG",
-		"DEBUG SLEEP 1":          "DEBUG",
-		`EVAL "return 1" 0`:      "EVAL",
-		"REPLICAOF NO ONE":       "REPLICAOF",
-		"KEYS *":                 "KEYS",
+		"FLUSHALL":                  "FLUSHALL",
+		"FLUSHDB":                   "FLUSHDB",
+		"SHUTDOWN NOSAVE":           "SHUTDOWN",
+		"CONFIG SET maxmemory 0":    "CONFIG",
+		"DEBUG SLEEP 1":             "DEBUG",
+		`EVAL "return 1" 0`:         "EVAL",
+		"REPLICAOF NO ONE":          "REPLICAOF",
+		"KEYS *":                    "KEYS",
+		"ACL SETUSER u on":          "ACL",
+		"MODULE LOAD /x.so":         "MODULE",
+		"CLUSTER SETSLOT 1 NODE x":  "CLUSTER",
+		"SAVE":                      "SAVE",
+		"MIGRATE h 6379 key 0 1000": "MIGRATE",
+		"RESTORE k 0 payload":       "RESTORE",
+		"AUTH secret":               "AUTH",
+		"MONITOR":                   "MONITOR",
+		"SUBSCRIBE ch":              "SUBSCRIBE",
+		"BLPOP q 30":                "BLPOP",
+		"WATCH k":                   "WATCH",
+		"MOVE k 1":                  "MOVE",
+		"RENAME a b":                "RENAME",
 	}
 	for line, want := range block {
 		_, findings, err := Check(line, cfg)
 		if err != nil {
-			// 危险命令被判为 KindDDL，不应落到「不是变更命令」
+			// 危险/管理命令被判为 KindDDL，不应落到「不是变更命令」
 			t.Errorf("Check(%q) 不该报用法错误: %v", line, err)
 			continue
 		}
@@ -109,42 +172,257 @@ func TestCheckWriteMode(t *testing.T) {
 	}
 }
 
-// 性能/风险类规则默认只提示（warn / observe）：应该命中，但不该拦下提交
-func TestWarnLevelRulesDoNotBlock(t *testing.T) {
+// 只读子命令不该被管理类规则一刀切拦下
+func TestReadOnlySubcommandsAllowed(t *testing.T) {
 	cfg := allOn()
-	cases := map[string]string{
-		"BLPOP q 30":    "BLPOP",
-		"PERSIST app:k": "PERSIST",
-	}
-	for line, want := range cases {
+	for _, line := range []string{"CONFIG GET maxmemory", "CLIENT LIST", "ACL LIST", "MODULE LIST", "CLUSTER INFO", "SCRIPT EXISTS abc"} {
 		_, findings, err := Check(line, cfg)
 		if err != nil {
 			t.Errorf("Check(%q) 不该报用法错误: %v", line, err)
 			continue
 		}
-		if len(findings) == 0 {
-			t.Errorf("Check(%q) 应命中（提示级）", line)
-			continue
-		}
 		if hit := Blocked(findings); hit != nil {
-			t.Errorf("Check(%q) 默认不该拦截（规则 %s 的默认级别是提示级）, got %+v", line, hit.Rule, hit)
-		}
-		if !strings.Contains(Messages(findings), want) {
-			t.Errorf("Check(%q) 的说明应提到 %q, got %s", line, want, Messages(findings))
+			t.Errorf("Check(%q) 不该被拦截: %+v", line, hit)
 		}
 	}
 }
 
-// 把提示级规则在规则集里调成 error，就应该拦下来
-func TestWarnRuleCanBeRaised(t *testing.T) {
+func TestCommandSyntax(t *testing.T) {
+	cfg := Config{CommandSyntax: true}
+	bad := []string{
+		"SET app:k",
+		"SET app:k v NX XX",
+		"SET app:k v EX 60 KEEPTTL",
+		"HSET app:h f",
+		"MSET app:k1 v1 app:k2",
+		"EXPIRE app:k",
+	}
+	for _, line := range bad {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Errorf("Check(%q) 不该报用法错误: %v", line, err)
+			continue
+		}
+		if Blocked(findings) == nil {
+			t.Errorf("Check(%q) 应被语法规则拦截", line)
+		}
+	}
+	for _, line := range []string{"SET app:k v", "HSET app:h f v", "MSET app:k1 v1 app:k2 v2"} {
+		if _, findings, _ := Check(line, cfg); Blocked(findings) != nil {
+			t.Errorf("Check(%q) 语法合法，不该拦截", line)
+		}
+	}
+}
+
+func TestUnknownCommand(t *testing.T) {
+	cfg := Config{UnknownCommand: true}
+	for _, line := range []string{"JSON.SET app:k $ {}", "BF.ADD app:k v", "FT.SEARCH idx *"} {
+		_, findings, _ := Check(line, cfg)
+		if Blocked(findings) == nil {
+			t.Errorf("Check(%q) 应被 RedisUnknownCommand 拦截", line)
+		}
+	}
+	if _, findings, _ := Check("SET app:k v", cfg); Blocked(findings) != nil {
+		t.Error("已登记的命令不该被拦截")
+	}
+}
+
+func TestKeyExtraction(t *testing.T) {
+	// 源键与目标键都要识别出来
+	cases := map[string][]string{
+		"RENAME a b":            {"a", "b"},
+		"COPY a b":              {"a", "b"},
+		"MSET k1 v1 k2 v2":      {"k1", "k2"},
+		"GET app:k":             {"app:k"},
+		"ZUNIONSTORE out 2 a b": {"out", "a", "b"},
+		"BITOP AND dest a b":    {"dest", "a", "b"},
+	}
+	for line, want := range cases {
+		cmd, err := Parse(line)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", line, err)
+		}
+		got := map[string]bool{}
+		for _, k := range cmd.Keys {
+			got[k] = true
+		}
+		for _, w := range want {
+			if !got[w] {
+				t.Errorf("Parse(%q) 未识别出键 %q, got %v", line, w, cmd.Keys)
+			}
+		}
+		if !cmd.KeysKnown {
+			t.Errorf("Parse(%q) 应能识别键", line)
+		}
+	}
+
+	// 未登记语义的命令无法识别键
+	cmd, err := Parse("JSON.SET app:k $ {}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.KeysKnown {
+		t.Error("未登记命令的 KeysKnown 应为 false")
+	}
+}
+
+func TestKeyPrefixChecksTargetKeys(t *testing.T) {
+	cfg := Config{KeyPrefix: "app:", Mode: ModeWrite}
+	_, findings, _ := Check("RENAME app:x other:y", cfg)
+	hit := Blocked(findings)
+	if hit == nil {
+		t.Fatal("目标键不在前缀范围内应被拦截")
+	}
+	if !strings.Contains(hit.Message, "other:y") {
+		t.Errorf("提示应指出目标键, got %s", hit.Message)
+	}
+
+	if _, findings, _ := Check("RENAME app:x app:y", cfg); Blocked(findings) != nil {
+		t.Error("源键与目标键都在前缀内，不该拦截")
+	}
+}
+
+func TestKeyPatternRules(t *testing.T) {
+	cfg := Config{
+		ForbiddenKeyPattern: "sys:*, lock:*",
+		SensitiveKeyAccess:  "*token*, *secret*",
+		Mode:                ModeWrite,
+	}
+	_, findings, _ := Check("DEL lock:order:1", cfg)
+	if f := Blocked(findings); f == nil || f.Rule != "RedisForbiddenKeyPattern" {
+		t.Errorf("受保护键应被拦截, got %+v", findings)
+	}
+	_, findings, _ = Check("SET app:token:1 v", cfg)
+	if !hasFinding(findings, "RedisSensitiveKeyAccess", LevelWarn) {
+		t.Errorf("敏感键应给出提示, got %+v", findings)
+	}
+}
+
+func TestDbScope(t *testing.T) {
+	cfg := Config{DbScope: "0-3", Mode: ModeWrite}
+	_, findings, _ := Check("SELECT 5", cfg)
+	if Blocked(findings) == nil {
+		t.Error("超出 DB 范围应被拦截")
+	}
+	if _, findings, _ := Check("SELECT 2", cfg); Blocked(findings) != nil {
+		t.Error("范围内不该拦截")
+	}
+}
+
+func TestTtlRules(t *testing.T) {
+	cfg := Config{MinTTL: 60, MaxTTL: 3600, ImmediateExpire: true, Mode: ModeWrite}
+
+	_, findings, _ := Check("SET app:k v EX 30", cfg)
+	if !hasFinding(findings, "RedisMinTtl", LevelWarn) {
+		t.Errorf("TTL 过小应提示, got %+v", findings)
+	}
+	_, findings, _ = Check("SET app:k v EX 86400", cfg)
+	if !hasFinding(findings, "RedisMaxTtl", LevelWarn) {
+		t.Errorf("TTL 过大应提示, got %+v", findings)
+	}
+	_, findings, _ = Check("EXPIRE app:k 0", cfg)
+	if !hasFinding(findings, "RedisImmediateExpire", LevelWarn) {
+		t.Errorf("立即过期应提示, got %+v", findings)
+	}
+	// value 恰好叫 EX 时不能把 value 当选项
+	if _, findings, _ = Check("SET app:k EX", cfg); hasFinding(findings, "RedisMaxTtl", LevelWarn) {
+		t.Error("value 是 EX 时不该被当作过期选项")
+	}
+}
+
+func TestWriteLimitRules(t *testing.T) {
+	cfg := Config{MaxWriteKeys: 2, MaxDeleteKeys: 2, MaxWriteElements: 2, Mode: ModeWrite}
+
+	_, findings, _ := Check("DEL a b c", cfg)
+	if !hasFinding(findings, "RedisMaxDeleteKeys", LevelError) {
+		t.Errorf("删除键数超限应拦截, got %+v", findings)
+	}
+	_, findings, _ = Check("MSET a 1 b 2 c 3", cfg)
+	if !hasFinding(findings, "RedisMaxWriteKeys", LevelError) {
+		t.Errorf("写入键数超限应拦截, got %+v", findings)
+	}
+	_, findings, _ = Check("HSET h f1 v1 f2 v2 f3 v3", cfg)
+	if !hasFinding(findings, "RedisMaxWriteElements", LevelError) {
+		t.Errorf("写入元素数超限应拦截, got %+v", findings)
+	}
+}
+
+func TestConfigFromAPIFillsSwitches(t *testing.T) {
+	role := &api.AuditRole{
+		RedisForbidDangerous:     true,
+		RedisMaxWriteKeys:        100,
+		RedisKeyPrefix:           "app:",
+		RedisRequireTtl:          true,
+		RedisDbScope:             "0-7",
+		RedisForbiddenKeyPattern: "sys:*",
+		RuleLevels:               map[string]string{"RedisForbidDangerous": "warn"},
+	}
+	cfg := ConfigFromAPI(role, ModeQuery)
+
+	if !cfg.ForbidDangerous {
+		t.Error("redis_forbid_dangerous 未映射到 ForbidDangerous")
+	}
+	if cfg.MaxWriteKeys != 100 {
+		t.Errorf("redis_max_write_keys 未映射, got %d", cfg.MaxWriteKeys)
+	}
+	if cfg.KeyPrefix != "app:" {
+		t.Errorf("redis_key_prefix 未映射, got %q", cfg.KeyPrefix)
+	}
+	if !cfg.RequireTTL {
+		t.Error("redis_require_ttl 未映射到 RequireTTL")
+	}
+	if cfg.DbScope != "0-7" || cfg.ForbiddenKeyPattern != "sys:*" {
+		t.Errorf("字符串类开关未映射, got %+v", cfg)
+	}
+	if cfg.Mode != ModeQuery {
+		t.Errorf("Mode 未设置, got %q", cfg.Mode)
+	}
+	if cfg.ForbidAdmin {
+		t.Error("未配置的开关不该为 true")
+	}
+	if l := cfg.Level(commandRule{name: "RedisForbidDangerous", level: LevelError}); l != LevelWarn {
+		t.Errorf("RuleLevels 未生效, got %s", l)
+	}
+}
+
+func TestLevelFromRuleLevels(t *testing.T) {
 	cfg := allOn()
-	cfg.Levels = map[string]string{"RedisForbidBlocking": "error"}
-	_, findings, err := Check("BLPOP q 30", cfg)
+	line := "FLUSHALL"
+
+	_, findings, err := Check(line, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if Blocked(findings) == nil {
-		t.Error("把级别调成 error 后应拦截")
+		t.Error("默认应拦截")
+	}
+
+	cfg.Levels = map[string]string{"RedisForbidDangerous": "warn"}
+	_, findings, err = Check(line, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if Blocked(findings) != nil {
+		t.Error("warn 级不该拦截")
+	}
+	if Severity(findings) != 2 {
+		t.Errorf("Severity = %d, want 2", Severity(findings))
+	}
+
+	cfg.Levels = map[string]string{"RedisForbidDangerous": "bogus"}
+	if _, findings, _ := Check(line, cfg); Blocked(findings) == nil {
+		t.Error("非法级别应回落为规则默认级别（error）")
+	}
+}
+
+func TestSwitchesOffMeansNoFinding(t *testing.T) {
+	cfg := Config{}
+	for _, line := range []string{"FLUSHALL", "CONFIG SET a b", "KEYS *", `EVAL "return 1" 0`, "BLPOP q 0", "JSON.SET k $ v"} {
+		if _, findings, err := Check(line, cfg); err != nil {
+			t.Errorf("Check(%q) 不该报用法错误: %v", line, err)
+		} else if len(findings) != 0 {
+			t.Errorf("开关全关时 Check(%q) 不该命中, got %+v", line, findings)
+		}
 	}
 }
 
@@ -152,13 +430,11 @@ func TestCheckQueryMode(t *testing.T) {
 	cfg := allOn()
 	cfg.Mode = ModeQuery
 
-	// 只读命令放行
 	for _, line := range []string{"GET app:k", "SCAN 0 MATCH app:* COUNT 10", "HGETALL app:h"} {
 		if _, _, err := Check(line, cfg); err != nil {
 			t.Errorf("查询模式 Check(%q) 不该报错: %v", line, err)
 		}
 	}
-	// 写命令在查询页直接拒绝（不可配置）
 	for _, line := range []string{"SET app:k v", "DEL app:k", "HSET app:h f v"} {
 		_, _, err := Check(line, cfg)
 		if err == nil {
@@ -179,97 +455,13 @@ func TestCheckUsageErrors(t *testing.T) {
 	if _, _, err := Check(`SET "unclosed`, cfg); err == nil {
 		t.Error("引号未闭合应报错")
 	}
-	// 变更模式下只读命令应提示「不是变更命令」
 	_, _, err := Check("GET app:k", cfg)
 	if err == nil || !strings.Contains(err.Error(), "不是变更命令") {
 		t.Errorf("变更模式下只读命令应报「不是变更命令」, got %v", err)
 	}
 }
 
-func TestLevelFromRuleLevels(t *testing.T) {
-	cfg := allOn()
-	line := "FLUSHALL"
-
-	// 未配置级别：用规则默认（安全类 error，拦截）
-	_, findings, err := Check(line, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if Blocked(findings) == nil {
-		t.Error("默认应拦截")
-	}
-
-	// 规则集里调成 warn：仍然命中，但不再阻断
-	cfg.Levels = map[string]string{"RedisForbidDangerous": "warn"}
-	_, findings, err = Check(line, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if Blocked(findings) != nil {
-		t.Error("warn 级不该拦截")
-	}
-	if len(findings) != 1 || findings[0].Level != LevelWarn {
-		t.Errorf("应有一条 warn 命中, got %+v", findings)
-	}
-	if Severity(findings) != 2 {
-		t.Errorf("Severity = %d, want 2", Severity(findings))
-	}
-
-	// 非法级别值回落到默认
-	cfg.Levels = map[string]string{"RedisForbidDangerous": "bogus"}
-	if _, findings, _ := Check(line, cfg); Blocked(findings) == nil {
-		t.Error("非法级别应回落为规则默认级别（error）")
-	}
-}
-
-func TestSwitchesOffMeansNoFinding(t *testing.T) {
-	// 开关全关：什么都不拦（规则集没配就是关，与 Mongo/SQL 规则一致）
-	cfg := Config{}
-	for _, line := range []string{"FLUSHALL", "CONFIG SET a b", "KEYS *", `EVAL "return 1" 0`, "BLPOP q 0"} {
-		if _, findings, err := Check(line, cfg); err != nil {
-			t.Errorf("Check(%q) 不该报用法错误: %v", line, err)
-		} else if len(findings) != 0 {
-			t.Errorf("开关全关时 Check(%q) 不该命中, got %+v", line, findings)
-		}
-	}
-}
-
-func TestConfigFromAPIFillsSwitches(t *testing.T) {
-	role := &api.AuditRole{
-		RedisForbidDangerous: true,
-		RedisMaxAffectKeys:   100,
-		RedisKeyPrefix:       "app:",
-		RedisRequireTtl:      true,
-		RuleLevels:           map[string]string{"RedisForbidDangerous": "warn"},
-	}
-	cfg := ConfigFromAPI(role, ModeQuery)
-
-	if !cfg.ForbidDangerous {
-		t.Error("redis_forbid_dangerous 未映射到 ForbidDangerous")
-	}
-	if cfg.MaxAffectKeys != 100 {
-		t.Errorf("redis_max_affect_keys 未映射, got %d", cfg.MaxAffectKeys)
-	}
-	if cfg.KeyPrefix != "app:" {
-		t.Errorf("redis_key_prefix 未映射, got %q", cfg.KeyPrefix)
-	}
-	if !cfg.RequireTTL {
-		t.Error("redis_require_ttl 未映射到 RequireTTL")
-	}
-	if cfg.Mode != ModeQuery {
-		t.Errorf("Mode 未设置, got %q", cfg.Mode)
-	}
-	// 没开的开关不应被误置为 true
-	if cfg.ForbidAdmin {
-		t.Error("未配置的开关不该为 true")
-	}
-	if l := cfg.Level(forbidDangerous{}); l != LevelWarn {
-		t.Errorf("RuleLevels 未生效, got %s", l)
-	}
-}
-
 // 每个 AuditRole 里的 Redis 开关都必须能在 Config 里找到对应字段
-// （archguard 里有全局版本，这里保证本包自身可用）
 func TestConfigCoversContractSwitches(t *testing.T) {
 	st := reflect.TypeOf(api.AuditRole{})
 	found := 0
@@ -286,4 +478,14 @@ func TestConfigCoversContractSwitches(t *testing.T) {
 	if found == 0 {
 		t.Fatal("AuditRole 里没有任何 Redis 字段，契约包是否已同步？")
 	}
+}
+
+// hasFinding 是否命中指定规则且级别一致
+func hasFinding(findings []Finding, rule string, level Level) bool {
+	for _, f := range findings {
+		if f.Rule == rule && f.Level == level {
+			return true
+		}
+	}
+	return false
 }

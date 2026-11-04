@@ -60,7 +60,8 @@ func TestSelfRulesManifest(t *testing.T) {
 	path := filepath.Join(moduleRoot(t), selfRulesManifestName)
 
 	got, err := os.ReadFile(path)
-	if err != nil || string(got) != want {
+	// 换行按检出策略可能不同（Windows 上 CRLF），只比内容
+	if err != nil || normalizeEOL(string(got)) != want {
 		if os.Getenv("UPDATE_SELF_RULES_MANIFEST") == "1" {
 			if werr := os.WriteFile(path, []byte(want), 0o644); werr != nil {
 				t.Fatalf("写入 %s 失败: %v", selfRulesManifestName, werr)

@@ -13,12 +13,12 @@ import (
 
 // 结果转换：Redis 的返回值形态比 SQL / Mongo 都杂，逐个形态钉住
 func TestRedisQueryShapes(t *testing.T) {
-	// 标量字符串（GET）
+	// 标量字符串（GET）：键名 + 值两列，只看 value 不知道查的是哪个键
 	q := redisQuery("GET", []string{"GET", "k"}, "alice", "")
-	if len(q.Field) != 1 || q.Field[0]["title"] != "value" {
-		t.Fatalf("标量应只有 value 列: %v", q.Field)
+	if len(q.Field) != 2 || q.Field[0]["title"] != "key" || q.Field[1]["title"] != "value" {
+		t.Fatalf("GET 应 key/value 两列: %v", q.Field)
 	}
-	if len(q.Data) != 1 || q.Data[0]["value"] != "alice" {
+	if len(q.Data) != 1 || q.Data[0]["key"] != "k" || q.Data[0]["value"] != "alice" {
 		t.Fatalf("标量值不对: %v", q.Data)
 	}
 	// MySQL 模板对首列做 fixed 处理，Redis 侧保持一致
@@ -27,6 +27,11 @@ func TestRedisQueryShapes(t *testing.T) {
 	}
 	if q.Field[0]["width"] != 200 {
 		t.Errorf("列宽应与 SQL 侧一致(200): %v", q.Field[0]["width"])
+	}
+	// 无键命令保持单列
+	q = redisQuery("DBSIZE", []string{"DBSIZE"}, int64(2), "")
+	if len(q.Field) != 1 || q.Field[0]["title"] != "value" {
+		t.Errorf("DBSIZE 应只有 value 列: %v", q.Field)
 	}
 
 	// 标量整型（DBSIZE）
@@ -78,13 +83,40 @@ func TestRedisQueryShapes(t *testing.T) {
 		t.Fatalf("HGETALL(map) 行不对（应按字段名排序）: %v", q.Data)
 	}
 
-	// SCAN：二维数组（游标 + 键列表），内层用 JSON 展示
-	q = redisQuery("SCAN", []string{"SCAN", "0"}, []interface{}{"0", []interface{}{"k1", "k2"}}, "")
-	if len(q.Data) != 2 {
-		t.Fatalf("SCAN 应两行: %v", q.Data)
+	// SCAN：游标 + 键列表，按键逐行展开（不再是 index/value 两行 + JSON）
+	q = redisQuery("SCAN", []string{"SCAN", "0"}, []interface{}{"17", []interface{}{"k1", "k2"}}, "")
+	if q.Field[0]["title"] != "cursor" || q.Field[1]["title"] != "key" {
+		t.Fatalf("SCAN 应 cursor/key 两列: %v", q.Field)
 	}
-	if !strings.Contains(q.Data[1]["value"].(string), "k1") {
-		t.Errorf("内层数组应 JSON 展示: %v", q.Data[1])
+	if len(q.Data) != 2 || q.Data[0]["key"] != "k1" || q.Data[1]["key"] != "k2" || q.Data[0]["cursor"] != "17" {
+		t.Fatalf("SCAN 应按键逐行展开: %v", q.Data)
+	}
+
+	// MGET：值与参数里的键一一对应
+	q = redisQuery("MGET", []string{"MGET", "a", "b"}, []interface{}{"1", nil}, "")
+	if q.Field[0]["title"] != "key" || q.Field[1]["title"] != "value" {
+		t.Fatalf("MGET 应 key/value 两列: %v", q.Field)
+	}
+	if len(q.Data) != 2 || q.Data[0]["key"] != "a" || q.Data[0]["value"] != "1" || q.Data[1]["key"] != "b" {
+		t.Fatalf("MGET 行不对: %v", q.Data)
+	}
+}
+
+// 「查看数据」按类型选命令：Redis 没有一条命令能读所有类型，选错就是 WRONGTYPE
+func TestRedisPreviewSQL(t *testing.T) {
+	cases := map[string]string{
+		"string": "GET k",
+		"hash":   "HGETALL k",
+		"list":   "LRANGE k 0 99",
+		"set":    "SSCAN k 0 COUNT 100",
+		"zset":   "ZRANGE k 0 99 WITHSCORES",
+		"stream": "XRANGE k - + COUNT 20",
+		"none":   "",
+	}
+	for typ, want := range cases {
+		if got := redisPreviewSQL(typ, "k"); got != want {
+			t.Errorf("类型 %s 的命令 = %q, want %q", typ, got, want)
+		}
 	}
 }
 
@@ -123,7 +155,7 @@ func TestRedisDisplayBlobGuard(t *testing.T) {
 // 查询页只能执行只读命令：写命令必须在建连之前就被拒绝
 // （getClient 传 nil —— 如果校验没拦住，这里会 panic 而不是断言失败）
 func TestRunRedisCommandRejectsWrites(t *testing.T) {
-	nilClient := func(int) (*redis.Client, error) { return nil, nil }
+	nilClient := func(int) (model.RedisConn, error) { return nil, nil }
 	for _, cmd := range []string{"SET k v", "DEL k", "FLUSHALL", "KEYS *", "HSET h f v"} {
 		if _, err := runRedisCommand(nilClient, "db0", cmd, ""); err == nil {
 			t.Errorf("runRedisCommand(%q) 应被拒绝", cmd)
@@ -160,7 +192,7 @@ func TestRedisQueryIntegration(t *testing.T) {
 	}
 	// 只读命令走通，且结果能被转成表格
 	for _, cmd := range []string{"PING", "DBSIZE", "SCAN 0 MATCH yrn:test:* COUNT 10"} {
-		q, err := runRedisCommand(func(int) (*redis.Client, error) { return client, nil }, "db0", cmd, "")
+		q, err := runRedisCommand(func(int) (model.RedisConn, error) { return client, nil }, "db0", cmd, "")
 		if err != nil {
 			t.Errorf("runRedisCommand(%q) 失败: %v", cmd, err)
 			continue
@@ -170,7 +202,7 @@ func TestRedisQueryIntegration(t *testing.T) {
 		}
 	}
 	// 写命令即使能连上也必须被拦
-	if _, err := runRedisCommand(func(int) (*redis.Client, error) { return client, nil }, "db0", "SET yrn:test:x 1", ""); err == nil {
+	if _, err := runRedisCommand(func(int) (model.RedisConn, error) { return client, nil }, "db0", "SET yrn:test:x 1", ""); err == nil {
 		t.Error("写命令应被拒绝")
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestAuditRoleRoundTrip 契约锁定:AuditRole 94 字段 JSON 往返不漂移。
+// TestAuditRoleRoundTrip 契约锁定:AuditRole 全字段 JSON 往返不漂移。
 // 字段名即跨主服务/引擎的线缆契约,改名=两端不同批升级即坏。
 func TestAuditRoleRoundTrip(t *testing.T) {
 	in := &AuditRole{
@@ -19,7 +19,7 @@ func TestAuditRoleRoundTrip(t *testing.T) {
 		RuleLevels:             map[string]string{"dml_where": "warn", "ddl_enable_drop_table": "error"},
 		DdlForbidTruncate:      true,
 		MongoForbidEmptyFilter: true, MongoMaxAffectRows: 1000, MongoIndexNameSpec: "idx_.*",
-		RedisKeyPrefix: "app:", RedisMaxAffectKeys: 500, RedisScanRequireMatch: true,
+		RedisKeyPrefix: "app:", RedisMaxWriteKeys: 500, RedisScanMatchRequired: true,
 		DorisRequireDistribution: true, DorisBucketLimit: 32, DorisReplicationNum: 3,
 	}
 	b, err := json.Marshal(in)
@@ -32,7 +32,7 @@ func TestAuditRoleRoundTrip(t *testing.T) {
 		`"dml_transaction"`, `"dml_max_insert_rows"`, `"ddl_max_key_parts"`,
 		`"max_affect_rows"`, `"rule_levels"`, `"ddl_forbid_truncate"`,
 		`"mongo_forbid_empty_filter"`, `"mongo_index_name_spec"`,
-		`"redis_key_prefix"`, `"redis_scan_require_match"`,
+		`"redis_key_prefix"`, `"redis_scan_match_required"`,
 		`"doris_require_distribution"`, `"doris_replication_num"`,
 	} {
 		if !strings.Contains(s, key) {

@@ -13,41 +13,103 @@ import (
 // 需要靠反射消灭的不是这些字段，而是「AuditRole 字段 → Config 字段」那一层手工映射
 // （一行一个、规则一多必漏，漏了不报错，只是页面勾了不生效）。
 // ConfigFromAPI 按名字对应关系自动填，由 archguard 护栏核对。
+//
+// 多参数规则统一压在一个字段里（例如 DbScope 写成 "0-15"），
+// 因为 AuditRole 的 Redis* 开关与规则必须一一对应，一条规则只给一个开关。
 type Config struct {
-	// ---- 安全类（默认 error）----
-	// ForbidDangerous 清库/关机/搬键等影响整个实例的命令
-	ForbidDangerous bool
-	// ForbidAdmin 运维管理类（CONFIG / DEBUG / MODULE / MONITOR / CLIENT / 落盘）
-	ForbidAdmin bool
-	// ForbidScript 服务端脚本（EVAL / EVALSHA / SCRIPT / FUNCTION / FCALL）
-	ForbidScript bool
-	// ForbidReplica 主从关系（REPLICAOF / SLAVEOF）
-	ForbidReplica bool
-	// ForbidKeysCommand KEYS：O(N) 且阻塞单线程实例
-	ForbidKeysCommand bool
-
-	// ---- 结构类 ----
-	ForbidRename bool
-	// KeyPrefix key 命名前缀规范，空 = 不检查
+	// ---- 基础校验与权限 ----
+	// CommandSyntax 校验命令、子命令、参数数量与选项组合
+	CommandSyntax bool
+	// UnknownCommand 禁止未登记语义的命令（含模块命令与厂商扩展）
+	UnknownCommand bool
+	// KeyExtraction 必须能完整识别源键与目标键
+	KeyExtraction bool
+	// KeyPrefix 键名前缀规范，空 = 不检查
 	KeyPrefix string
-	// MaxKeyLen key 名长度上限，0 = 不限制
+	// MaxKeyLen 键名长度上限（字节），0 = 不限制
 	MaxKeyLen int
-	// ForbidMove MOVE / SELECT：跨库副作用
-	ForbidMove bool
+	// ForbiddenKeyPattern 受保护键的匹配规则，多个用逗号分隔，空 = 不检查
+	ForbiddenKeyPattern string
+	// SensitiveKeyAccess 敏感键的匹配规则，多个用逗号分隔，空 = 不检查
+	SensitiveKeyAccess string
+	// DbScope 允许访问的逻辑库范围，如 "0-15"，空 = 不检查
+	DbScope string
+	// ForbidConnectionControl 禁止 AUTH / HELLO / QUIT / RESET
+	ForbidConnectionControl bool
 
-	// ---- 性能 / 风险类（默认只提示）----
-	// MaxAffectKeys 单条命令允许影响的键数上限，0 = 不限制
-	MaxAffectKeys int
-	// MaxValueLen 单次写入 value 的字节数上限，0 = 不限制
-	MaxValueLen int
-	// RequireTTL SET 必须带过期时间
+	// ---- 危险命令与管理命令 ----
+	ForbidDangerous     bool
+	ForbidAdmin         bool
+	ForbidDebug         bool
+	ForbidMonitor       bool
+	ForbidAclChange     bool
+	ForbidModuleChange  bool
+	ForbidReplica       bool
+	ForbidClusterChange bool
+	ForbidPersistence   bool
+	ForbidMigration     bool
+	ForbidMove          bool
+
+	// ---- 读取与扫描 ----
+	ForbidKeysCommand bool
+	ForbidRandomKey   bool
+	ScanMatchRequired bool
+	// MaxScanCount SCAN 系命令的 COUNT 上限，0 = 不限制
+	MaxScanCount int
+	// FullCollectionRead 禁止一次性读取整个集合
+	FullCollectionRead bool
+	// MaxReadElements 单次范围/随机读取的元素数上限，0 = 不限制
+	MaxReadElements int
+	// MaxReadKeys 单条批量读取命令的键数上限，0 = 不限制
+	MaxReadKeys int
+	// ExpensiveRead 复杂读取（SORT / 集合交并差）提示
+	ExpensiveRead bool
+
+	// ---- 写入与数据变更 ----
+	// MaxValueSize 单个写入值的字节数上限，0 = 不限制
+	MaxValueSize int
+	// MaxCommandPayload 单条命令参数总字节数上限，0 = 不限制
+	MaxCommandPayload int
+	// MaxWriteKeys 单条写入命令涉及的键数上限，0 = 不限制
+	MaxWriteKeys int
+	// MaxWriteElements 单条命令新增/修改的元素数上限，0 = 不限制
+	MaxWriteElements int
+	// NonIdempotentWrite 非幂等写入提示
+	NonIdempotentWrite bool
+	// LargeOffsetWrite 按偏移写入的预计对象大小上限（字节），0 = 不限制
+	LargeOffsetWrite int
+	ForbidRename     bool
+	CopyOverwrite    bool
+	StoreOperation   bool
+
+	// ---- TTL 与缓存规范 ----
 	RequireTTL bool
-	// ForbidPersist 禁止 PERSIST（去掉 TTL）
-	ForbidPersist bool
-	// ScanRequireMatch SCAN 必须带 MATCH
-	ScanRequireMatch bool
-	// ForbidBlocking 禁止阻塞命令（BLPOP / BRPOP / BLMOVE / WAIT 等）
-	ForbidBlocking bool
+	// TtlLossOnOverwrite 覆盖写入可能清除原 TTL 时提示
+	TtlLossOnOverwrite bool
+	ForbidPersist      bool
+	// MinTTL 过期时间下限（秒），0 = 不检查
+	MinTTL int
+	// MaxTTL 过期时间上限（秒），0 = 不检查
+	MaxTTL int
+	// ImmediateExpire 立即过期（等同于删除）提示
+	ImmediateExpire bool
+
+	// ---- 删除与大 Key ----
+	DeleteKey bool
+	// MaxDeleteKeys 单条删除命令的键数上限，0 = 不限制
+	MaxDeleteKeys int
+	// ProtectedKeyDelete 禁止删除的键匹配规则，多个用逗号分隔，空 = 不检查
+	ProtectedKeyDelete string
+	// LargeRangeDelete 范围删除/裁剪提示
+	LargeRangeDelete bool
+
+	// ---- 事务、脚本与特殊操作 ----
+	ForbidScript           bool
+	ForbidScriptManagement bool
+	ForbidWatch            bool
+	ForbidBlockingCommand  bool
+	ForbidSubscription     bool
+	StreamStateChange      bool
 
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。
@@ -112,7 +174,6 @@ func protoFieldKey(protoName string) string {
 }
 
 // Level 取规则的生效级别：RuleLevels 里配了且合法就用配置值，否则用规则自带的默认级别。
-// 默认级别让「安全类拦截、性能类只提示」这件事不必依赖前端预先写级别。
 func (c Config) Level(r Rule) Level {
 	if l, ok := c.Levels[r.Name()]; ok {
 		if lv := Level(strings.ToLower(strings.TrimSpace(l))); ValidLevel(lv) {
