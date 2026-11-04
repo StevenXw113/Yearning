@@ -95,6 +95,11 @@ export default {
 
   'common.order': 'Order',
   'common.query': 'Query',
+  'common.no.data': 'No data',
+  'common.tip.order': 'Total SQL orders submitted, all statuses included',
+  'common.tip.query': 'Total query orders submitted, all statuses included',
+  'common.tip.source': 'Number of configured data sources',
+  'common.tip.user': 'Number of platform accounts',
   'common.board': 'Board',
   'common.board.sub': 'Homepage Bulletin board content editing',
   'common.advisor.sub': 'SQL optimization using chatGPT',

@@ -8,7 +8,12 @@
           :total="banner.order"
         >
           <template #action>
-            <InfoCircleOutlined />
+            <a-tooltip
+              :title="$t('common.tip.order')"
+              :trigger="['hover', 'click']"
+            >
+              <InfoCircleOutlined />
+            </a-tooltip>
           </template>
           <template #content>
             <MiniArea
@@ -27,7 +32,12 @@
           :total="banner.query"
         >
           <template #action>
-            <InfoCircleOutlined />
+            <a-tooltip
+              :title="$t('common.tip.query')"
+              :trigger="['hover', 'click']"
+            >
+              <InfoCircleOutlined />
+            </a-tooltip>
           </template>
           <template #content>
             <MiniArea
@@ -46,7 +56,12 @@
           :total="banner.source"
         >
           <template #action>
-            <InfoCircleOutlined />
+            <a-tooltip
+              :title="$t('common.tip.source')"
+              :trigger="['hover', 'click']"
+            >
+              <InfoCircleOutlined />
+            </a-tooltip>
           </template>
           <template #content>
             <a-progress
@@ -69,7 +84,12 @@
           :total="banner.user"
         >
           <template #action>
-            <InfoCircleOutlined />
+            <a-tooltip
+              :title="$t('common.tip.user')"
+              :trigger="['hover', 'click']"
+            >
+              <InfoCircleOutlined />
+            </a-tooltip>
           </template>
           <template #content>
             <a-progress
@@ -174,7 +194,14 @@
     loading.value = false;
     // 骨架屏期间图表容器还没渲染，等它换成真实节点后再画
     await nextTick();
-    query.value?.makeBuild(banner.value.total_order);
-    order.value?.makeBuild(banner.value.total_order);
+    // 日汇总表还没跑过定时任务时 total_order 可能为空/缺失，
+    // 兜成数组让两张迷你图各自走「暂无数据」而不是抛错一起消失
+    const series = Array.isArray(banner.value.total_order)
+      ? banner.value.total_order
+      : [];
+    await Promise.all([
+      order.value?.makeBuild(series),
+      query.value?.makeBuild(series),
+    ]);
   });
 </script>

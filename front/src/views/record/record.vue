@@ -29,8 +29,10 @@
 
 <script lang="ts" setup>
   import { getRecordAxis } from '@/apis/record';
-  import { onMounted, ref } from 'vue';
+  import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { isDark } from '@/style/theme';
+  import { g2LabelFill, g2Theme } from '@/lib/chartTheme';
   import RecordOrder from './order.vue';
   import RecordQuery from './query.vue';
   import RecordArchive from './archive.vue';
@@ -43,26 +45,35 @@
 
   const current = ref<string>('order');
 
-  const orderTypeChart = async (id: string, data: any) => {
+  // 接口数据存一份，主题切换时按新主题重建（Canvas 不会跟着 CSS 变量变色）
+  let axisData: any[] = [];
+  let chart: import('@antv/g2').Chart | null = null;
+
+  const orderTypeChart = async () => {
     const { Chart } = await import('@antv/g2');
-    const chart = new Chart({
+    chart?.destroy();
+    chart = new Chart({
       container: 'g2-container',
       autoFit: true,
       height: 300,
+      // 缺省 light 主题的轴文字是 #1D2129，暗色背景上几乎不可见
+      theme: g2Theme(),
     });
 
     // G2 v5:type 的 0/1 → DDL/DML 直接在数据侧转换(替代 v4 的 scale.formatter,
     // v5 的 scale 键语义按通道而非字段);自定义 tooltip 用 interaction 原生 render
-    const rows = (Array.isArray(data) ? data : []).map((i: any) => ({
+    const rows = axisData.map((i: any) => ({
       time: i.time,
       type: i.type === '0' ? 'DDL' : 'DML',
       count: i.count,
     }));
     chart.data(rows);
     chart.scale('y', { nice: true });
+    chart.axis('x', { labelFill: g2LabelFill() });
     chart.axis('y', {
       labelFormatter: (val: any) => `${val} /per`,
       grid: false,
+      labelFill: g2LabelFill(),
     });
 
     chart
@@ -145,8 +156,16 @@
 
   onMounted(async () => {
     const { data } = await getRecordAxis();
-    orderTypeChart('container', data.payload);
+    axisData = Array.isArray(data.payload) ? data.payload : [];
+    await orderTypeChart();
   });
+
+  // 主题切换后重建画布，否则轴文字还停在上一套配色
+  watch(isDark, () => {
+    if (axisData.length) orderTypeChart();
+  });
+
+  onBeforeUnmount(() => chart?.destroy());
 </script>
 
 <!-- 原 insertCss 运行时注入的全局样式（G2 图表容器 + 自定义 tooltip），

@@ -95,6 +95,11 @@ export default {
 
   'common.order': '工单',
   'common.query': '查询',
+  'common.no.data': '暂无数据',
+  'common.tip.order': '累计提交的 SQL 工单数量（含全部状态）',
+  'common.tip.query': '累计提交的查询工单数量（含全部状态）',
+  'common.tip.source': '已配置的数据源数量',
+  'common.tip.user': '平台账号数量',
   'common.board': '公告',
   'common.board.sub': '主页公告栏内容编辑',
   'common.advisor.sub': '使用ChatGPT进行SQL优化',
