@@ -125,7 +125,7 @@ func TestRulesManifest(t *testing.T) {
 	want := renderManifest(en, dis)
 	path := filepath.Join(root, manifestName)
 	got, err := os.ReadFile(path)
-	if err != nil || string(got) != want {
+	if err != nil || normalizeEOL(string(got)) != want {
 		if os.Getenv("UPDATE_RULES_MANIFEST") == "1" {
 			if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
 				t.Fatalf("写入 %s 失败: %v", manifestName, err)
@@ -151,6 +151,14 @@ func TestRulesManifest(t *testing.T) {
 		}
 		t.Logf("当前应为：启用 %d 条、未启用 %d 条", len(en), len(dis))
 	}
+}
+
+// normalizeEOL 统一换行后再比较清单内容。
+//
+// 清单由本测试生成（LF），而仓库在 Windows 上按 core.autocrlf 以 CRLF 检出。
+// 直接按字节比较会让同一个提交在不同平台得出相反结论——这里只比内容，不比换行。
+func normalizeEOL(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
 
 // parseManifestRules 提取清单文件里登记的全部规则名。
