@@ -17,15 +17,32 @@ import (
 // redisTimeout 建立连接与探活的超时。
 const redisTimeout = 15 * time.Second
 
+// 连接参数与主程序 src/model/redis.go 一致（云厂商文档推荐值）。
+const (
+	redisDialTimeout  = 2 * time.Second
+	redisIOTimeout    = 2 * time.Second
+	redisPoolTimeout  = 3 * time.Second
+	redisPoolSize     = 200
+	redisMaxIdleConns = 200
+	redisMaxRetries   = 3
+	redisMaxRedirects = 3
+	redisConnMaxIdle  = 30 * time.Minute
+)
+
 // redisOptions 按 DataSource 构造客户端选项。口令为空表示未开认证（Redis 允许无密码）。
 func redisOptions(ds *api.DataSource) *redis.Options {
 	opt := &redis.Options{
-		Addr:         net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port))),
-		Password:     ds.Password,
-		DB:           0,
-		DialTimeout:  redisTimeout,
-		ReadTimeout:  redisTimeout,
-		WriteTimeout: redisTimeout,
+		Addr:            net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port))),
+		Password:        ds.Password,
+		DB:              0,
+		DialTimeout:     redisDialTimeout,
+		ReadTimeout:     redisIOTimeout,
+		WriteTimeout:    redisIOTimeout,
+		PoolTimeout:     redisPoolTimeout,
+		PoolSize:        redisPoolSize,
+		MaxIdleConns:    redisMaxIdleConns,
+		MaxRetries:      redisMaxRetries,
+		ConnMaxIdleTime: redisConnMaxIdle,
 	}
 	if ds.Username != "" {
 		opt.Username = ds.Username
@@ -36,11 +53,17 @@ func redisOptions(ds *api.DataSource) *redis.Options {
 // redisClusterOptions 集群选项：数据源 ip:port 只作种子节点，其余节点经 CLUSTER SLOTS 自动发现。
 func redisClusterOptions(ds *api.DataSource) *redis.ClusterOptions {
 	opt := &redis.ClusterOptions{
-		Addrs:        []string{net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port)))},
-		Password:     ds.Password,
-		DialTimeout:  redisTimeout,
-		ReadTimeout:  redisTimeout,
-		WriteTimeout: redisTimeout,
+		Addrs:           []string{net.JoinHostPort(ds.Ip, strconv.Itoa(int(ds.Port)))},
+		Password:        ds.Password,
+		DialTimeout:     redisDialTimeout,
+		ReadTimeout:     redisIOTimeout,
+		WriteTimeout:    redisIOTimeout,
+		PoolTimeout:     redisPoolTimeout,
+		PoolSize:        redisPoolSize,
+		MaxIdleConns:    redisMaxIdleConns,
+		MaxRetries:      redisMaxRetries,
+		ConnMaxIdleTime: redisConnMaxIdle,
+		MaxRedirects:    redisMaxRedirects,
 	}
 	if ds.Username != "" {
 		opt.Username = ds.Username

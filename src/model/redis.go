@@ -20,6 +20,20 @@ const DBTypeRedis = 3
 // RedisTimeout 建立连接与探活的超时
 const RedisTimeout = 15 * time.Second
 
+// 连接参数取云厂商文档推荐值（腾讯云 Redis 连接示例 / 华为云 DCS 客户端建议）。
+// 不设 MinIdleConns：客户端按会话/工单建、用完即关，预建空闲连接只会堆在服务端。
+// ponytail: 读写 2s 是文档值，大 key 假性超时就把 redisIOTimeout 调大。
+const (
+	redisDialTimeout  = 2 * time.Second
+	redisIOTimeout    = 2 * time.Second
+	redisPoolTimeout  = 3 * time.Second
+	redisPoolSize     = 200
+	redisMaxIdleConns = 200
+	redisMaxRetries   = 3
+	redisMaxRedirects = 3
+	redisConnMaxIdle  = 30 * time.Minute
+)
+
 // RedisDefaultDatabases Redis 默认的逻辑库数量（redis.conf 的 databases，默认 16）
 const RedisDefaultDatabases = 16
 
@@ -35,12 +49,17 @@ type RedisConn = redis.UniversalClient
 // 认证支持 Redis 6+ 的 ACL 用户名：留空即旧版的「只有密码」。
 func RedisOptions(s *CoreDataSource, password string) *redis.Options {
 	opt := &redis.Options{
-		Addr:         net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
-		Password:     password,
-		DB:           0,
-		DialTimeout:  RedisTimeout,
-		ReadTimeout:  RedisTimeout,
-		WriteTimeout: RedisTimeout,
+		Addr:            net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
+		Password:        password,
+		DB:              0,
+		DialTimeout:     redisDialTimeout,
+		ReadTimeout:     redisIOTimeout,
+		WriteTimeout:    redisIOTimeout,
+		PoolTimeout:     redisPoolTimeout,
+		PoolSize:        redisPoolSize,
+		MaxIdleConns:    redisMaxIdleConns,
+		MaxRetries:      redisMaxRetries,
+		ConnMaxIdleTime: redisConnMaxIdle,
 	}
 	if s.Username != "" {
 		opt.Username = s.Username
@@ -52,11 +71,17 @@ func RedisOptions(s *CoreDataSource, password string) *redis.Options {
 // go-redis 会经 CLUSTER SLOTS 自动发现其余节点。
 func RedisClusterOptions(s *CoreDataSource, password string) *redis.ClusterOptions {
 	opt := &redis.ClusterOptions{
-		Addrs:        []string{net.JoinHostPort(s.IP, strconv.Itoa(s.Port))},
-		Password:     password,
-		DialTimeout:  RedisTimeout,
-		ReadTimeout:  RedisTimeout,
-		WriteTimeout: RedisTimeout,
+		Addrs:           []string{net.JoinHostPort(s.IP, strconv.Itoa(s.Port))},
+		Password:        password,
+		DialTimeout:     redisDialTimeout,
+		ReadTimeout:     redisIOTimeout,
+		WriteTimeout:    redisIOTimeout,
+		PoolTimeout:     redisPoolTimeout,
+		PoolSize:        redisPoolSize,
+		MaxIdleConns:    redisMaxIdleConns,
+		MaxRetries:      redisMaxRetries,
+		ConnMaxIdleTime: redisConnMaxIdle,
+		MaxRedirects:    redisMaxRedirects,
 	}
 	if s.Username != "" {
 		opt.Username = s.Username
