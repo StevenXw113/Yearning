@@ -9,6 +9,8 @@ Yearning.exe
 *.test
 *.out
 juno
+# 本地编译输出目录（含部署时重定向的运行日志）
+/bin/
 
 # ===== Go 临时/测试目录 =====
 .tmpgotest/
