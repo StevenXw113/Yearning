@@ -84,11 +84,23 @@ func FetchSource(c yee.Context) (err error) {
 	permission := permission.NewPermissionService(model.DB()).CreatePermissionList(user)
 	switch u.Tp {
 	case "count":
-		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"ddl": len(permission.DDLSource), "dml": len(permission.DMLSource), "query": len(permission.QuerySource)}))
+		ddl := len(permission.DDLSource)
+		// Redis 只走「变更(DML)」入口，DDL 计数里要剔除，否则数字与卡片对不上
+		if ddl > 0 {
+			var redisInDDL int64
+			model.DB().Model(model.CoreDataSource{}).
+				Where("source_id IN (?) AND db_type = ?", permission.DDLSource, model.DBTypeRedis).
+				Count(&redisInDDL)
+			ddl -= int(redisInDDL)
+		}
+		return c.JSON(http.StatusOK, common.SuccessPayload(map[string]interface{}{"ddl": ddl, "dml": len(permission.DMLSource), "query": len(permission.QuerySource)}))
 	case "dml":
 		model.DB().Select("source,id_c,source_id,db_type").Where("source_id IN (?)", permission.DMLSource).Find(&source)
 	case "ddl":
-		model.DB().Select("source,id_c,source_id,db_type").Where("source_id IN (?)", permission.DDLSource).Find(&source)
+		// Redis 没有 DDL / DML 之分：只在「变更」入口出现一次，避免同一个源在两处重复出现
+		model.DB().Select("source,id_c,source_id,db_type").
+			Where("source_id IN (?) AND db_type <> ?", permission.DDLSource, model.DBTypeRedis).
+			Find(&source)
 	case "query":
 		var ord model.CoreQueryOrder
 		// 如果打开查询审核,判断该用户是否存在查询中的工单.如果存在则直接返回该查询工单允许的数据源

@@ -186,7 +186,8 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 }
 
 // RedisDatabases 返回可选的逻辑库名（db0..dbN），供查询页的树使用。
-// 集群只有 db0；单机/代理以 CONFIG GET databases 为准，托管 Redis 常禁用 CONFIG，读不到就按默认 16 个。
+// 集群只有 db0；单机/代理以 CONFIG GET databases 为准（实例配了多少就列多少，空库也要能选），
+// 托管 Redis 常禁用 CONFIG，读不到时退回 INFO keyspace / 默认 16 个。
 func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 	client, err := s.ConnectRedis()
 	if err != nil {
@@ -201,22 +202,17 @@ func (s *CoreDataSource) RedisDatabases() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()
 
-	// 优先 INFO keyspace：只列出确实有键的库。托管实例的 databases 常配成 256，
-	// 全列出来会让查询页的树里出现几百个空库。
-	if info, ierr := client.Info(ctx, "keyspace").Result(); ierr == nil {
-		if dbs := keyspaceDatabases(info); len(dbs) > 0 {
-			return dbs, nil
-		}
-		return []string{"db0"}, nil
-	}
-
 	n := RedisDefaultDatabases
-	// CONFIG 可能被托管服务禁用，失败不当错误、退回默认值
 	if m, cerr := client.ConfigGet(ctx, "databases").Result(); cerr == nil {
 		if raw, ok := m["databases"]; ok {
-			if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 && parsed <= 256 {
+			if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 {
 				n = parsed
 			}
+		}
+	} else if info, ierr := client.Info(ctx, "keyspace").Result(); ierr == nil {
+		// CONFIG 被禁用时只能看 keyspace：此时列出有键的库，好过给 16 个空库
+		if dbs := keyspaceDatabases(info); len(dbs) > 0 {
+			return dbs, nil
 		}
 	}
 	out := make([]string, 0, n)
