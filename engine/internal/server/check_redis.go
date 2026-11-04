@@ -26,5 +26,10 @@ func checkRedis(req *api.CheckRequest) *api.CheckReply {
 	}
 	rec := findingsRecord(strings.TrimSpace(req.Sql), req.Schema,
 		redischeck.Messages(findings), redischeck.Severity(findings), redischeck.Blocked(findings) != nil)
+	// 影响行数按「受影响的键数」给，与 DEL/MSET 的实际影响面一致；
+	// 检测阶段没有执行，只能给命令字面量里的键数（FLUSHALL 这类无键命令记 0）。
+	if cmd, perr := redischeck.Parse(req.Sql); perr == nil {
+		rec.AffectRows = uint32(len(cmd.Keys))
+	}
 	return &api.CheckReply{Ok: true, Records: []*api.Record{rec}}
 }
