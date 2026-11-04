@@ -206,3 +206,16 @@ func TestRedisQueryIntegration(t *testing.T) {
 		t.Error("写命令应被拒绝")
 	}
 }
+
+// 键名含空格/引号时拼命令必须转义，否则切词会把键名拆错
+func TestRedisPreviewSQLQuotesKey(t *testing.T) {
+	if got := redisPreviewSQL("string", "a b"); got != `GET "a b"` {
+		t.Errorf("含空格的键名应加引号: %q", got)
+	}
+	if got := redisPreviewSQL("hash", `a"b`); got != `HGETALL "a\"b"` {
+		t.Errorf("含引号的键名应转义: %q", got)
+	}
+	if got := redisPreviewSQL("hash", "app:h"); got != "HGETALL app:h" {
+		t.Errorf("普通键名不应加引号: %q", got)
+	}
+}

@@ -489,3 +489,62 @@ func hasFinding(findings []Finding, rule string, level Level) bool {
 	}
 	return false
 }
+
+// 多行命令必须显式拒绝：换行在切词里等同空格，第二条会被吞成参数
+func TestRedisParseRejectsMultiLine(t *testing.T) {
+	for _, line := range []string{"SET a 1\nSET b 2", "SET a 1\r\nDEL a"} {
+		if _, err := Parse(line); err == nil {
+			t.Errorf("多行命令应被拒绝: %q", line)
+		}
+	}
+	if _, err := Parse("SET a 1 EX 60"); err != nil {
+		t.Errorf("单行命令不应报错: %v", err)
+	}
+}
+
+// OBJECT / MEMORY 缺键时不能切 args 造成越界 panic
+func TestRedisKeyExtractionWithoutKey(t *testing.T) {
+	for _, line := range []string{"OBJECT ENCODING", "MEMORY USAGE"} {
+		cmd, err := Parse(line)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		if cmd.KeysKnown {
+			t.Errorf("%s 缺键时应按「键未知」处理", line)
+		}
+	}
+	cmd, err := Parse("OBJECT ENCODING app:k")
+	if err != nil {
+		t.Fatalf("带键的 OBJECT 不应报错: %v", err)
+	}
+	if !cmd.KeysKnown || len(cmd.Keys) != 1 || cmd.Keys[0] != "app:k" {
+		t.Errorf("带键时应识别出键: %+v", cmd)
+	}
+}
+
+// SCAN 的 MATCH 必须限定业务前缀：MATCH * 等同全量遍历
+func TestRedisScanMatchRequiredScope(t *testing.T) {
+	cfg := Config{ScanMatchRequired: true, Mode: ModeQuery}
+	blocked := func(line string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == "RedisScanMatchRequired" {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{"SCAN 0", "SCAN 0 COUNT 10", "SCAN 0 MATCH *", "HSCAN app:h 0 MATCH *"} {
+		if !blocked(line) {
+			t.Errorf("%q 未限定业务前缀，应被拦截", line)
+		}
+	}
+	for _, line := range []string{"SCAN 0 MATCH app:*", "HSCAN app:h 0 MATCH field:*"} {
+		if blocked(line) {
+			t.Errorf("%q 已限定前缀，不应拦截", line)
+		}
+	}
+}

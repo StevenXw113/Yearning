@@ -35,10 +35,14 @@ func init() {
 		hit: func(_ Config, cmd *Command) string {
 			switch cmd.Name {
 			case "SCAN", "HSCAN", "SSCAN", "ZSCAN":
-				if cmd.HasAnyArg("MATCH") {
-					return ""
+				pattern, ok := scanMatchPattern(cmd)
+				if !ok {
+					return cmd.Name + " 未带 MATCH，会遍历整个键空间；请加上业务前缀限定范围"
 				}
-				return cmd.Name + " 未带 MATCH，会遍历整个键空间；请加上业务前缀限定范围"
+				// MATCH * 与不写 MATCH 等价：模式里没有任何字面前缀，等于全量遍历
+				if strings.Trim(pattern, "*?") == "" {
+					return cmd.Name + " 的 MATCH 模式 " + pattern + " 没有限定业务前缀，等同于全量遍历"
+				}
 			}
 			return ""
 		},
@@ -181,4 +185,14 @@ func readElements(cmd *Command) (int64, bool) {
 		return n, true
 	}
 	return 0, false
+}
+
+// scanMatchPattern 取 SCAN 家族里 MATCH 的模式；ok=false 表示未带 MATCH
+func scanMatchPattern(cmd *Command) (string, bool) {
+	for i := 1; i+1 < cmd.ArgCount(); i++ {
+		if strings.EqualFold(cmd.Arg(i), "MATCH") {
+			return cmd.Arg(i + 1), true
+		}
+	}
+	return "", false
 }

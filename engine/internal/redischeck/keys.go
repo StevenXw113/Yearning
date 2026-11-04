@@ -100,7 +100,12 @@ func commandKeys(args []string) (src, dst []string, ok bool) {
 		// OBJECT ENCODING key / MEMORY USAGE key
 		switch strings.ToUpper(argAt(args, 1)) {
 		case "ENCODING", "FREQ", "IDLETIME", "REFCOUNT", "USAGE":
-			return args[2:3], nil, true
+			// 缺键（只写了 OBJECT ENCODING）时不能直接切，args 长度为 2 会越界 panic；
+			// 按「键识别失败」处理，交给 Syntax / KeyExtraction 规则拦。
+			if len(args) > 2 {
+				return args[2:3], nil, true
+			}
+			return nil, nil, false
 		}
 		return nil, nil, true
 	case "XGROUP", "XINFO":

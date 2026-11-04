@@ -179,6 +179,12 @@ func FetchRedisKeyDetail(c yee.Context) (err error) {
 	if sourceId == "" || key == "" {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}
+	// 与 WS 执行同一套数据源权限：查询工单只代表「可以查询」，
+	// 不代表能拿任意数据源的 source_id 来探测键信息。
+	if !permission.NewPermissionService(model.DB()).Equal(&permission.Control{User: user, Kind: vars.QUERY, SourceId: sourceId}) {
+		c.Logger().Criticalf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, sourceId)
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("无权访问该数据源，请确认查询权限"))
+	}
 	var u model.CoreDataSource
 	model.DB().Where("source_id =?", sourceId).First(&u)
 	if u.SourceId == "" || u.DBType != model.DBTypeRedis {

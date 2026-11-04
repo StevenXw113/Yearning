@@ -201,6 +201,11 @@ type Command struct {
 
 // Parse 解析一行命令
 func Parse(line string) (*Command, error) {
+	// 一行只能一条命令：换行在切词里等同空格，第二条命令会被吞成参数
+	// （SET a 1\nSET b 2 会被审成一条 SET），必须显式拒绝而不是静默合并。
+	if strings.ContainsAny(line, "\r\n") {
+		return nil, errors.New("一行只能提交一条 Redis 命令（不支持多行/多命令）")
+	}
 	args, err := Split(line)
 	if err != nil {
 		return nil, err
@@ -345,5 +350,3 @@ func (c *Command) HasAnyArg(names ...string) bool {
 	}
 	return false
 }
-
-

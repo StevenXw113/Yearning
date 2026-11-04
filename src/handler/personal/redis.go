@@ -95,19 +95,21 @@ func RedisKeyDetail(u *model.CoreDataSource, db int, key string) (map[string]int
 // redisPreviewSQL 按值类型选一条只读命令；none（键不存在）不生成命令。
 // 集合类都带上限：查询页是同步等结果的，全量读取会拖垮连接，翻页交给用户自己写。
 func redisPreviewSQL(typ, key string) string {
+	// 键名必须转义：含空格会被切词拆成多个参数、含引号会让切词报错
+	k := rediscmd.Quote(key)
 	switch strings.ToLower(typ) {
 	case "string":
-		return "GET " + key
+		return "GET " + k
 	case "hash":
-		return "HGETALL " + key
+		return "HGETALL " + k
 	case "list":
-		return fmt.Sprintf("LRANGE %s 0 99", key)
+		return "LRANGE " + k + " 0 99"
 	case "set":
-		return fmt.Sprintf("SSCAN %s 0 COUNT 100", key)
+		return "SSCAN " + k + " 0 COUNT 100"
 	case "zset":
-		return fmt.Sprintf("ZRANGE %s 0 99 WITHSCORES", key)
+		return "ZRANGE " + k + " 0 99 WITHSCORES"
 	case "stream":
-		return fmt.Sprintf("XRANGE %s - + COUNT 20", key)
+		return "XRANGE " + k + " - + COUNT 20"
 	}
 	return ""
 }
