@@ -13,13 +13,17 @@ func init() {
 		cat: CategorySecurity, modes: writeOnly, level: LevelError,
 		enabled: func(c Config) bool { return c.RequireTTL },
 		hit: func(_ Config, cmd *Command) string {
-			if cmd.Name != "SET" {
-				return ""
+			switch {
+			case cmd.Name == "SET":
+				if cmd.HasAnyArg("EX", "PX", "EXAT", "PXAT", "KEEPTTL") {
+					return ""
+				}
+				return "SET 未设置过期时间，键会常驻内存；如确需永久保存请登记豁免或在规则集中关闭该规则"
+			case inNameSet(requireTtlCommands, cmd.Name):
+				// 这些命令本身不支持过期参数，新建键只能靠后续 EXPIRE
+				return cmd.Name + " 会创建键但不带过期时间；缓存类数据请在同一流程里补 EXPIRE/PEXPIRE"
 			}
-			if cmd.HasAnyArg("EX", "PX", "EXAT", "PXAT", "KEEPTTL") {
-				return ""
-			}
-			return "SET 未设置过期时间，键会常驻内存；如确需永久保存请登记豁免或在规则集中关闭该规则"
+			return ""
 		},
 	})
 
@@ -34,6 +38,8 @@ func init() {
 					return ""
 				}
 				return cmd.Name + " 会清除键 " + cmd.Arg(1) + " 原有的 TTL；如需保留请加 KEEPTTL"
+			case "MSET", "MSETNX":
+				return cmd.Name + " 逐键覆盖写入，会清除这些键原有的 TTL"
 			}
 			return ""
 		},
@@ -190,4 +196,19 @@ func immediateExpire(cmd *Command) bool {
 		}
 	}
 	return false
+}
+
+// requireTtlCommands 会创建键、且命令本身不带过期参数：新建后需另发 EXPIRE
+var requireTtlCommands = map[string]struct{}{
+	"SETNX": {}, "MSETNX": {},
+	"HSET": {}, "HSETNX": {}, "HMSET": {},
+	"LPUSH": {}, "RPUSH": {}, "LPUSHX": {}, "RPUSHX": {}, "LINSERT": {},
+	"SADD": {}, "ZADD": {}, "XADD": {},
+	"INCR": {}, "DECR": {}, "INCRBY": {}, "DECRBY": {}, "INCRBYFLOAT": {},
+	"SETBIT": {}, "PFADD": {}, "GEOADD": {},
+}
+
+func inNameSet(set map[string]struct{}, name string) bool {
+	_, ok := set[name]
+	return ok
 }

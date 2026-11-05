@@ -422,7 +422,8 @@ func redisQuery(name string, args []string, res interface{}, insulateWordList st
 
 // scalarKeyCommands 只作用于单个键、返回标量的命令：展示时把键名单独成一列
 var scalarKeyCommands = map[string]bool{
-	"GET": true, "GETDEL": true, "GETSET": true, "GETEX": true, "STRLEN": true,
+	// 只登记查询页白名单里的命令：写命令（GETDEL/GETSET/GETEX）永远到不了这里
+	"GET": true, "STRLEN": true,
 	"GETRANGE": true, "TYPE": true, "TTL": true, "PTTL": true,
 	"HGET": true, "HLEN": true, "HEXISTS": true,
 	"LLEN": true, "LINDEX": true, "LPOS": true,

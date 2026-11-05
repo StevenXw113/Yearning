@@ -97,6 +97,7 @@ cel-go / connectrpc / LSP 等无关依赖。
 | --- | --- | --- |
 | 上游规则（Bytebase） | `internal/bytebase/` | **整体重建**（勿手改） |
 | 自研规则 | `internal/customrules/` | **完全不动** |
+| 自研方言规则 | `internal/mongocheck/`、`internal/redischeck/`、`internal/dorischeck/` | **完全不动**（不依赖 bytebase） |
 
 ### 规则级别：拦截 / 提示 / 观察
 
@@ -233,6 +234,9 @@ engine/
 ├── internal/mysqlparse/           # 解析器封装：语句拆分 / 语法校验
 ├── internal/server/               # HTTP 实现（http.go 路由/认证/埋点，check.go 审核链路、rules.go 规则映射）
 ├── internal/customrules/          # 自研审核规则（同步不覆盖，可自由扩展）
+├── internal/redischeck/           # Redis 审核规则（按命令语义判定，53 条起）
+├── internal/mongocheck/           # MongoDB 审核规则（自研）
+├── internal/dorischeck/           # Doris 建表审核规则（自研）
 ├── internal/archguard/            # 架构护栏测试：耦合边界 + 规则映射一致性
 ├── scripts/                       # sync-bytebase.sh 同步 / trim-bytebase.py 裁剪
 ├── Dockerfile

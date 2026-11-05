@@ -43,6 +43,9 @@
             :label="$t('db.allow.diag')"
           >
             <a-switch v-model:checked="dbForm.allow_diag_commands" />
+            <div style="color: #8c8c8c; font-size: 12px; margin-top: 4px">
+              {{ $t('db.allow.diag.tips') }}
+            </div>
           </a-form-item>
           <a-form-item :label="$t('db.kind')">
             <a-switch

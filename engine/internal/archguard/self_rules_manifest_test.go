@@ -246,7 +246,7 @@ func readFile(t *testing.T, path string) string {
 
 // TestRedisSwitchesAreImplemented 反向核对：AuditRole 里每个 Redis* 开关都必须有实现。
 //
-// 与 Mongo 侧不同的是，Redis 的 15 个开关全都是静态审核规则（没有执行期例外），
+// 与 Mongo 侧不同的是，Redis 的开关全都是静态审核规则（没有执行期例外），
 // 所以这里的判据更直接：proto 字段名归一化后应当等于某条规则的 Name。
 func TestRedisSwitchesAreImplemented(t *testing.T) {
 	covered := map[string]bool{}

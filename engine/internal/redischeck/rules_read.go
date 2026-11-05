@@ -80,8 +80,9 @@ func init() {
 			switch cmd.Name {
 			case "HGETALL", "HKEYS", "HVALS", "SMEMBERS", "SUNION", "SINTER", "SDIFF":
 				return cmd.Name + " 会一次返回整个集合，大 key 上容易拖垮查询连接，建议改用 SCAN 系命令"
-			case "LRANGE", "ZRANGE", "ZREVRANGE", "ZRANGEBYSCORE", "ZREVRANGEBYSCORE", "ZRANGEBYLEX", "ZREVRANGEBYLEX":
-				if fullRange(cmd) {
+			default:
+				// 区间命令集合只在 isRangeRead 里维护一份
+				if isRangeRead(cmd.Name) && fullRange(cmd) {
 					return cmd.Name + " 取的是整段区间，大 key 上会一次返回全部元素，建议分页取"
 				}
 			}

@@ -118,16 +118,22 @@ func TestCheckWriteMode(t *testing.T) {
 	allow := []string{
 		"SET app:k v EX 60",
 		"DEL app:k1 app:k2",
-		"HSET app:h f v",
-		"LPUSH app:l a b",
 		"EXPIRE app:k 60",
-		"SADD app:s a b",
 	}
 	for _, line := range allow {
 		if _, findings, err := Check(line, cfg); err != nil {
 			t.Errorf("Check(%q) 不该报错: %v", line, err)
 		} else if Blocked(findings) != nil {
 			t.Errorf("Check(%q) 不该被拦截: %+v", line, Blocked(findings))
+		}
+	}
+
+	// 建值但本身不带过期参数的命令：RequireTTL 打开时同样要拦（缓存类键没有 TTL 就会常驻）
+	for _, line := range []string{"HSET app:h f v", "LPUSH app:l a b", "SADD app:s a b", "INCR app:n"} {
+		if _, findings, err := Check(line, cfg); err != nil {
+			t.Errorf("Check(%q) 不该报错: %v", line, err)
+		} else if b := Blocked(findings); b == nil || b.Rule != "RedisRequireTtl" {
+			t.Errorf("Check(%q) 应被 RedisRequireTtl 拦截: %+v", line, b)
 		}
 	}
 
