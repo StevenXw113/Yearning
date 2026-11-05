@@ -36,9 +36,7 @@ func ValidLevel(l Level) bool {
 	return false
 }
 
-// Mode 审核模式，对应 enginev1.CheckRequest.mode。
-// 同一个引擎服务两种入口，必须由调用方明说在审哪一种——申请页里填 GET
-// 要报「不是变更命令」，而不是悄悄按查询规则放行。
+// Mode 审核模式，由调用方显式指定（申请页填 GET 要报「不是变更命令」）。
 type Mode string
 
 const (
@@ -55,10 +53,7 @@ type Finding struct {
 	Message string
 }
 
-// Rule 一条静态审核规则。
-//
-// Name 严格 1:1 对应 enginev1.AuditRole 里的开关字段与 RuleLevels 的 key：
-// 规则页按它渲染开关、按它存级别、archguard 按它核对三处是否一致。
+// Rule 一条静态审核规则。Name 与 AuditRole 字段、RuleLevels 的 key 严格 1:1。
 type Rule interface {
 	// Name 规则名
 	Name() string
@@ -89,16 +84,11 @@ var (
 // itoa 小工具，省得每处都 import strconv
 func itoa(n int) string { return strconv.Itoa(n) }
 
-// finding 用规则自带的 Name 与生效级别造一条命中。
-// 级别取 cfg.Level(r)：规则集里配了就用配置值，否则用规则自带的 DefaultLevel。
 func finding(r Rule, cfg Config, msg string) []Finding {
 	return []Finding{{Rule: r.Name(), Level: cfg.Level(r), Message: msg}}
 }
 
-// commandRule 表驱动规则：一条规则只需声明「开关 + 命中判定 + 说明」。
-//
-// Redis 规则绝大多数是「某个开关打开时，某类命令或某种参数形态就该被拦」。
-// 用同一个结构声明，避免为每条规则写一个类型，也让新增规则的改动量可预期。
+// commandRule 表驱动：一条规则只声明「开关 + 命中判定 + 说明」。
 type commandRule struct {
 	name    string
 	desc    string

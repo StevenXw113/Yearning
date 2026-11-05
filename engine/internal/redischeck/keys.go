@@ -23,13 +23,7 @@ var noKeyCommands = map[string]struct{}{
 	"UNSUBSCRIBE": {}, "PUNSUBSCRIBE": {}, "SUNSUBSCRIBE": {},
 }
 
-// commandKeys 取命令访问的源键与目标键。
-//
-// 键权限类规则（前缀 / 保护键 / 敏感键 / DB 范围）都以它为准：
-// 源键和目标键都要检查，例如 RENAME src dst、COPY src dst、MSET k1 v1 k2 v2。
-//
-// 第三个返回 false 表示命令未登记语义，无法判断它访问了哪些键；
-// RedisUnknownCommand 与 RedisKeyExtraction 分别负责拦下这种情况。
+// commandKeys 取源键与目标键（键权限类规则都依赖它）；false = 未登记语义。
 func commandKeys(args []string) (src, dst []string, ok bool) {
 	if len(args) == 0 {
 		return nil, nil, true

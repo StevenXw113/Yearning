@@ -24,13 +24,10 @@ const DBTypeRedis = 3
 // RedisTimeout 建立连接与探活的超时
 const RedisTimeout = 15 * time.Second
 
-// 连接参数取云厂商文档推荐值（腾讯云 Redis 连接示例 / 华为云 DCS 客户端建议）。
-// 客户端现在进程级复用（见 redisClientPool），空闲连接会长期留在服务端：
-// 不设 MinIdleConns（按需建连），MaxIdleConns 收敛到 20，避免数据源多时堆积。
+// 连接参数取云厂商文档推荐值；客户端进程级复用后空闲连接常驻，MaxIdleConns 收敛到 20。
 const (
 	redisDialTimeout = 2 * time.Second
-	// 读写分开：读放宽到 5s——大 hash 的 HGETALL、稀疏键空间的 SCAN 在 2s 下会假性超时；
-	// 写命令都是单键操作，保持文档建议的 2s。
+	// 读放宽到 5s（大 key HGETALL、稀疏 SCAN 在 2s 下假性超时），写保持 2s。
 	redisReadTimeout  = 5 * time.Second
 	redisWriteTimeout = 2 * time.Second
 	redisPoolTimeout  = 3 * time.Second

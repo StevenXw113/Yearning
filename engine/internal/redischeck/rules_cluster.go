@@ -162,13 +162,10 @@ func init() {
 		hit:     transactionHit("当前入口按单条命令审核，无法保证 MULTI/EXEC 成对且事务内命令全部受审"),
 	})
 
-	// 读一致性：分片架构下多键读由不同分片各自返回，结果不是同一时刻的快照。
-	// 用 warn 而不是 error——跨分片读是集群的正常用法，业务上多数能接受；
-	// 「代理会直接报错」的那些由 RedisProxyCrossShard 拦。
+	// 读一致性：跨分片读不是同一快照。只提示不拦，所以只能归 Performance
+	// （安全类默认级别被护栏限死 error）；会被代理直接拒绝的由 ProxyCrossShard 拦。
 	Register(commandRule{
 		name: "RedisReadConsistency", desc: "分片架构下多键读不是同一时刻快照，可能一部分读到旧值",
-		// 归提示类：跨分片读是集群的正常用法，业务上多数能接受；
-		// 安全类规则的默认级别被护栏限定为 error，而这里不该直接拦截
 		cat: CategoryPerformance, modes: allModes, level: LevelWarn,
 		enabled: func(c Config) bool {
 			if !c.ReadConsistency {

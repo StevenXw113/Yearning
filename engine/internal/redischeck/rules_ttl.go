@@ -96,11 +96,8 @@ func init() {
 	})
 }
 
-// expireSeconds 取命令本次设置的过期时间（秒）。
-//
-// 第二个返回 false 表示「没设过期时间」或形态认不出来（SET 不带过期选项、
-// KEEPTTL、参数不是数字）——那属于 RequireTtl 的范围，这里不猜。
-// 绝对值时间戳（EXAT / PXAT / EXPIREAT / PEXPIREAT）按当前时间折算成剩余秒数。
+// expireSeconds 取本次设置的过期秒数；false = 没设或认不出（不猜）。
+// 绝对时间戳按当前时间折算成剩余秒数。
 func expireSeconds(cmd *Command) (int64, bool) {
 	switch cmd.Name {
 	case "SETEX", "EXPIRE":

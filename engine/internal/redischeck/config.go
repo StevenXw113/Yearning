@@ -7,15 +7,8 @@ import (
 	"engine/api"
 )
 
-// Config 规则开关的取值快照，由 server 从 api.AuditRole 构造。
-//
-// 字段是**显式类型**：规则直接读 cfg.ForbidDangerous，拼错名字编译期就报错。
-// 需要靠反射消灭的不是这些字段，而是「AuditRole 字段 → Config 字段」那一层手工映射
-// （一行一个、规则一多必漏，漏了不报错，只是页面勾了不生效）。
-// ConfigFromAPI 按名字对应关系自动填，由 archguard 护栏核对。
-//
-// 多参数规则统一压在一个字段里（例如 DbScope 写成 "0-15"），
-// 因为 AuditRole 的 Redis* 开关与规则必须一一对应，一条规则只给一个开关。
+// Config 规则开关快照，由 server 从 api.AuditRole 按名字反射构造。
+// 多参数规则压在一个字段里（如 DbScope 写成 "0-15"），保证一规则一开关。
 type Config struct {
 	// ---- 基础校验与权限 ----
 	// CommandSyntax 校验命令、子命令、参数数量与选项组合
@@ -165,12 +158,7 @@ type Config struct {
 	CommandCount int
 }
 
-// ConfigFromAPI 从规则集构造 Config。
-//
-// 按名字对应关系反射填充：AuditRole 里 redis_* 的字段会自动填进 Config 的同名字段
-// （忽略大小写与下划线）。因此新增一条规则只需在 Config 里加字段 + 写规则文件，
-// 不必再在 server 侧补映射；「AuditRole 有而 Config 没有」由 archguard 的
-// TestRedisConfigCoversAllSwitches 挡下。
+// ConfigFromAPI 按名字反射填充（忽略大小写与下划线）；漏映射由 archguard 挡下。
 func ConfigFromAPI(r *api.AuditRole, mode Mode) Config {
 	cfg := Config{Mode: mode}
 	if r == nil {
@@ -204,18 +192,14 @@ func ConfigFromAPI(r *api.AuditRole, mode Mode) Config {
 	return cfg
 }
 
-// Has 配置里是否存在该开关字段（忽略大小写与下划线）。
-// 供 archguard 核对「AuditRole 里的每个 Redis* 开关都能被取到」。
+// Has 配置里是否有该开关字段，供 archguard 核对。
 func (Config) Has(name string) bool {
 	return reflect.ValueOf(Config{}).FieldByNameFunc(func(n string) bool {
 		return normSwitch(n) == protoFieldKey(name)
 	}).IsValid()
 }
 
-// protoFieldKey 把 AuditRole 字段名归一化成 Config 字段名：
-// RedisForbidDangerous → forbiddangerous。
-// AuditRole 的 Redis 前缀字段在 Config 里不重复写——字段已经在本包里；
-// 规则名常量仍保留完整名字，那是规则集的 key。
+// protoFieldKey RedisForbidDangerous → forbiddangerous
 func protoFieldKey(protoName string) string {
 	return strings.TrimPrefix(normSwitch(protoName), "redis")
 }
