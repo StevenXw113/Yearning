@@ -124,6 +124,10 @@ func ReferQueryOrder(c yee.Context, user *factory.Token) (err error) {
 }
 
 func FetchQueryDatabaseInfo(c yee.Context) (err error) {
+	user := new(factory.Token).JwtParse(c).Username
+	if !querySourceAllowed(c, user, c.QueryParam("source_id")) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("无权访问该数据源，请确认查询权限"))
+	}
 	var u model.CoreDataSource
 
 	model.DB().Where("source_id =?", c.QueryParam("source_id")).First(&u)
@@ -167,6 +171,16 @@ func FetchQueryDatabaseInfo(c yee.Context) (err error) {
 	return c.JSON(http.StatusOK, common.SuccessPayload(result.QueryList))
 }
 
+// querySourceAllowed 查询页的元数据接口统一鉴权：查询工单只代表「可以查询」，
+// 具体数据源还必须在该用户的 QuerySource 权限内，否则拿任意 source_id 就能探测库/表/键。
+func querySourceAllowed(c yee.Context, user, sourceId string) bool {
+	if permission.NewPermissionService(model.DB()).Equal(&permission.Control{User: user, Kind: vars.QUERY, SourceId: sourceId}) {
+		return true
+	}
+	c.Logger().Criticalf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, sourceId)
+	return false
+}
+
 // FetchRedisKeyDetail 查询页右键「查看数据」用：返回该键的类型与应执行的那条只读命令。
 // 与 WS 执行同一套查询工单鉴权——这里能拿到命令建议，但真正执行仍要过 WS 的只读白名单。
 func FetchRedisKeyDetail(c yee.Context) (err error) {
@@ -179,10 +193,7 @@ func FetchRedisKeyDetail(c yee.Context) (err error) {
 	if sourceId == "" || key == "" {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}
-	// 与 WS 执行同一套数据源权限：查询工单只代表「可以查询」，
-	// 不代表能拿任意数据源的 source_id 来探测键信息。
-	if !permission.NewPermissionService(model.DB()).Equal(&permission.Control{User: user, Kind: vars.QUERY, SourceId: sourceId}) {
-		c.Logger().Criticalf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, sourceId)
+	if !querySourceAllowed(c, user, sourceId) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("无权访问该数据源，请确认查询权限"))
 	}
 	var u model.CoreDataSource
@@ -204,6 +215,10 @@ func FetchQueryTableInfo(c yee.Context) (err error) {
 	// todo source改方法 不然中文无法识别
 	source := c.QueryParam("source_id")
 	unescape, _ := url.QueryUnescape(source)
+	user := new(factory.Token).JwtParse(c).Username
+	if !querySourceAllowed(c, user, unescape) {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE("无权访问该数据源，请确认查询权限"))
+	}
 
 	var u model.CoreDataSource
 
