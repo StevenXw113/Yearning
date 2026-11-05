@@ -219,6 +219,14 @@ export default {
   RedisBigKeySyncDelete: '同步删除大 key 会阻塞服务端，建议改用 UNLINK',
   RedisProductionWrite: '生产数据源上的写命令，需要写明影响面与回滚方式',
   RedisCommandCompatibility: '命令需要更高的 Redis 版本，当前实例不支持',
+  RedisBatchExpireConcentration:
+    'TTL 取整点（整小时）会让同类键在同一时刻集中失效，建议加随机抖动',
+  RedisDeleteManifestRequired:
+    '批量删除（≥ 10 个键）需要附待删键清单并确认已备份',
+  RedisMaxTransactionCommands:
+    '单次提交内的命令数上限（0 表示不限制），超过请拆分提交',
+  RedisScriptTemplateScope:
+    '脚本只能访问显式声明（KEYS 下标不越界）且在允许前缀内的键',
   DorisRequireDistribution:
     'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
   DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',

@@ -45,7 +45,8 @@ func init() {
 		hit: func(cfg Config, cmd *Command) string {
 			var bad []string
 			for _, k := range cmd.Keys {
-				if !strings.HasPrefix(k, cfg.KeyPrefix) {
+				// 与 RedisScriptTemplateScope 共用同一套前缀语义（支持多前缀与通配）
+				if !keyPrefixAllowed(cfg.KeyPrefix, k) {
 					bad = append(bad, k)
 				}
 			}

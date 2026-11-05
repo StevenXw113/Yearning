@@ -855,3 +855,103 @@ func TestRedisEnvRules(t *testing.T) {
 		t.Error("versionLess 比较不对")
 	}
 }
+
+// 剩余 4 条：批量过期、删除清单、事务命令数、脚本键范围
+func TestRedisRemainingRules(t *testing.T) {
+	found := func(cfg Config, line, rule string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == rule {
+				return true
+			}
+		}
+		return false
+	}
+
+	// 整小时 TTL 才算集中过期风险
+	expire := Config{BatchExpireConcentration: true, Mode: ModeWrite}
+	if !found(expire, "SET k v EX 3600", "RedisBatchExpireConcentration") {
+		t.Error("EX 3600 应提示集中过期")
+	}
+	if found(expire, "SET k v EX 3721", "RedisBatchExpireConcentration") {
+		t.Error("非整点 TTL 不应提示")
+	}
+
+	// 10 个键起提示补清单
+	manifest := Config{DeleteManifestRequired: true, Mode: ModeWrite}
+	tenKeys := "DEL"
+	for i := 0; i < 10; i++ {
+		tenKeys += " k" + itoa(i)
+	}
+	if !found(manifest, tenKeys, "RedisDeleteManifestRequired") {
+		t.Error("删除 10 个键应提示附清单")
+	}
+	if found(manifest, "DEL k0 k1", "RedisDeleteManifestRequired") {
+		t.Error("少量删除不应提示")
+	}
+
+	// 事务命令数：事实由调用方传入
+	txn := Config{MaxTransactionCommands: 5, CommandCount: 10, Mode: ModeWrite}
+	if !found(txn, "SET k v", "RedisMaxTransactionCommands") {
+		t.Error("命令数超上限应拦")
+	}
+	txn.CommandCount = 3
+	if found(txn, "SET k v", "RedisMaxTransactionCommands") {
+		t.Error("未超上限不应拦")
+	}
+
+	// 脚本键范围
+	script := Config{ScriptTemplateScope: true, KeyPrefix: "app:*", Mode: ModeWrite}
+	if !found(script, `EVAL "return 1" 1 other:k`, "RedisScriptTemplateScope") {
+		t.Error("脚本访问前缀外的键应拦")
+	}
+	if found(script, `EVAL "return 1" 1 app:k`, "RedisScriptTemplateScope") {
+		t.Error("前缀内的键不应拦")
+	}
+	if !found(script, `EVAL "return KEYS[2]" 1 app:k`, "RedisScriptTemplateScope") {
+		t.Error("KEYS 下标越界应拦")
+	}
+	if found(script, `EVAL "return KEYS[0]" 1 app:k`, "RedisScriptTemplateScope") {
+		t.Error("KEYS 下标合法时不应拦")
+	}
+}
+
+// 前缀语义：字面前缀、通配前缀、多前缀都要能配；两条规则共用同一套判定
+func TestRedisKeyPrefixSemantics(t *testing.T) {
+	blocked := func(cfg Config, line string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == "RedisKeyPrefix" {
+				return true
+			}
+		}
+		return false
+	}
+
+	literal := Config{KeyPrefix: "app:", Mode: ModeWrite}
+	if blocked(literal, "SET app:k v") {
+		t.Error("字面前缀应放行 app:k")
+	}
+	if !blocked(literal, "SET other:k v") {
+		t.Error("字面前缀应拦截 other:k")
+	}
+
+	glob := Config{KeyPrefix: "app:*", Mode: ModeWrite}
+	if blocked(glob, "SET app:k v") {
+		t.Error("通配前缀 app:* 应放行 app:k")
+	}
+
+	multi := Config{KeyPrefix: "app:,biz:", Mode: ModeWrite}
+	if blocked(multi, "SET biz:k v") {
+		t.Error("多前缀应放行 biz:k")
+	}
+	if !blocked(multi, "SET other:k v") {
+		t.Error("多前缀仍应拦截 other:k")
+	}
+}

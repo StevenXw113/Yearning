@@ -139,6 +139,12 @@ type Config struct {
 	ProductionWrite      bool
 	CommandCompatibility bool
 
+	// ---- 事务/脚本/批量（依赖单命令内可观测的信号）----
+	BatchExpireConcentration bool
+	DeleteManifestRequired   bool
+	MaxTransactionCommands   int
+	ScriptTemplateScope      bool
+
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。
 	Levels map[string]string
@@ -155,6 +161,8 @@ type Config struct {
 	// Production 数据源是否生产环境；RedisVersion 目标实例的 Redis 版本（探测得到）
 	Production   bool
 	RedisVersion string
+	// CommandCount 本次提交包含的命令数（单命令入口恒为 1），供事务上限规则判定
+	CommandCount int
 }
 
 // ConfigFromAPI 从规则集构造 Config。

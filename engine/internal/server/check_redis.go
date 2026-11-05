@@ -23,6 +23,10 @@ func checkRedis(req *api.CheckRequest) *api.CheckReply {
 	cfg := redischeck.ConfigFromAPI(req.Rule, redischeck.Mode(req.GetMode()))
 	cfg.Schema = req.Schema
 	cfg.KeySnapshot = req.KeySnapshot
+	cfg.CommandCount = req.CommandCount
+	if cfg.CommandCount <= 0 {
+		cfg.CommandCount = 1
+	}
 	if req.Source != nil {
 		cfg.Deployment = strings.ToLower(strings.TrimSpace(req.Source.RedisMode))
 		cfg.Production = req.Source.IsProduction

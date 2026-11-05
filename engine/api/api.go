@@ -195,25 +195,29 @@ type AuditRole struct {
 	RedisStreamStateChange      bool `json:"redis_stream_state_change"`
 	RedisTransactionIntegrity   bool `json:"redis_transaction_integrity"`
 	// --- Cluster / Proxy 拓扑(依据部署形态生效) ---
-	RedisClusterDbZero           bool `json:"redis_cluster_db_zero"`
-	RedisClusterCrossSlot        bool `json:"redis_cluster_cross_slot"`
-	RedisClusterScanScope        bool `json:"redis_cluster_scan_scope"`
-	RedisClusterTransactionSlot  bool `json:"redis_cluster_transaction_slot"`
-	RedisClusterScriptSlot       bool `json:"redis_cluster_script_slot"`
-	RedisProxyDbSupport          bool `json:"redis_proxy_db_support"`
-	RedisProxyCrossShard         bool `json:"redis_proxy_cross_shard"`
-	RedisProxyScanScope          bool `json:"redis_proxy_scan_scope"`
-	RedisProxyCommandSupport     bool `json:"redis_proxy_command_support"`
-	RedisProxyAtomicity          bool `json:"redis_proxy_atomicity"`
-	RedisProxyScriptSupport      bool `json:"redis_proxy_script_support"`
-	RedisProxyTransactionSupport bool `json:"redis_proxy_transaction_support"`
-	RedisReadConsistency         bool `json:"redis_read_consistency"`
-	RedisTypeMismatch            bool `json:"redis_type_mismatch"`
-	RedisOverwriteExisting       bool `json:"redis_overwrite_existing"`
-	RedisLargeValueRead          bool `json:"redis_large_value_read"`
-	RedisBigKeySyncDelete        bool `json:"redis_big_key_sync_delete"`
-	RedisProductionWrite         bool `json:"redis_production_write"`
-	RedisCommandCompatibility    bool `json:"redis_command_compatibility"`
+	RedisClusterDbZero            bool `json:"redis_cluster_db_zero"`
+	RedisClusterCrossSlot         bool `json:"redis_cluster_cross_slot"`
+	RedisClusterScanScope         bool `json:"redis_cluster_scan_scope"`
+	RedisClusterTransactionSlot   bool `json:"redis_cluster_transaction_slot"`
+	RedisClusterScriptSlot        bool `json:"redis_cluster_script_slot"`
+	RedisProxyDbSupport           bool `json:"redis_proxy_db_support"`
+	RedisProxyCrossShard          bool `json:"redis_proxy_cross_shard"`
+	RedisProxyScanScope           bool `json:"redis_proxy_scan_scope"`
+	RedisProxyCommandSupport      bool `json:"redis_proxy_command_support"`
+	RedisProxyAtomicity           bool `json:"redis_proxy_atomicity"`
+	RedisProxyScriptSupport       bool `json:"redis_proxy_script_support"`
+	RedisProxyTransactionSupport  bool `json:"redis_proxy_transaction_support"`
+	RedisReadConsistency          bool `json:"redis_read_consistency"`
+	RedisTypeMismatch             bool `json:"redis_type_mismatch"`
+	RedisOverwriteExisting        bool `json:"redis_overwrite_existing"`
+	RedisLargeValueRead           bool `json:"redis_large_value_read"`
+	RedisBigKeySyncDelete         bool `json:"redis_big_key_sync_delete"`
+	RedisProductionWrite          bool `json:"redis_production_write"`
+	RedisCommandCompatibility     bool `json:"redis_command_compatibility"`
+	RedisBatchExpireConcentration bool `json:"redis_batch_expire_concentration"`
+	RedisDeleteManifestRequired   bool `json:"redis_delete_manifest_required"`
+	RedisMaxTransactionCommands   int  `json:"redis_max_transaction_commands"`
+	RedisScriptTemplateScope      bool `json:"redis_script_template_scope"`
 
 	// ------- Doris 建表审核规则(internal/dorischeck,自研)-------
 	// Doris 兼容 MySQL 协议与查询/DML 语法,但建表 DDL 是自有语法
@@ -288,6 +292,8 @@ type CheckRequest struct {
 	// KeySnapshot 命令涉及键的状态快照（Redis 专用，由调用方探测）。
 	// 键不存在于 map 表示未探测，规则不得据此判定「不存在」。
 	KeySnapshot map[string]KeyState `json:"key_snapshot,omitempty"`
+	// CommandCount 本次提交包含的命令数（单命令入口为 1），供事务上限规则判定。
+	CommandCount int `json:"command_count,omitempty"`
 	// Mode 审核模式:空 / "write" = 变更命令审核(申请页检测、工单执行前复检),
 	// "query" = 只读命令审核(查询页)。
 	// 空值按 write 处理,保证旧调用方行为不变;不靠命令名自动推断模式——

@@ -238,3 +238,27 @@ func matchAny(patterns []string, key string) bool {
 	}
 	return false
 }
+
+// keyPrefixAllowed 键是否落在允许的前缀范围内。
+//
+// 配置支持逗号/空白分隔的多个前缀；含 * 或 ? 的按通配匹配，其余按字面前缀。
+// RedisKeyPrefix 与 RedisScriptTemplateScope 共用这套语义——两处各写一套
+// 会让同一份配置在两条规则下得出相反结论。
+func keyPrefixAllowed(raw, key string) bool {
+	prefixes := splitPatterns(raw)
+	if len(prefixes) == 0 {
+		return true
+	}
+	for _, p := range prefixes {
+		if strings.ContainsAny(p, "*?") {
+			if globMatch(p, key) {
+				return true
+			}
+			continue
+		}
+		if strings.HasPrefix(key, p) {
+			return true
+		}
+	}
+	return false
+}

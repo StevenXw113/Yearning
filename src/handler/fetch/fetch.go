@@ -316,9 +316,10 @@ func FetchSQLTest(c yee.Context) (err error) {
 		}
 	}
 	rep, err := client.Check(ctx, &api.CheckRequest{
-		Sql:         u.SQL,
-		Schema:      u.Database,
-		KeySnapshot: keySnapshot,
+		Sql:          u.SQL,
+		Schema:       u.Database,
+		KeySnapshot:  keySnapshot,
+		CommandCount: strings.Count(u.SQL, "\n") + 1,
 		Source: &api.DataSource{
 			Ip:           s.IP,
 			Port:         int32(s.Port),

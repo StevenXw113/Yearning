@@ -701,6 +701,10 @@ const rule: Rule[] = [
   redisRule('RedisBigKeySyncDelete', 'statement', 0, 'warn'),
   redisRule('RedisProductionWrite', 'statement', 0, 'warn'),
   redisRule('RedisCommandCompatibility', 'statement', 0, 'error'),
+  redisRule('RedisBatchExpireConcentration', 'statement', 0, 'warn'),
+  redisRule('RedisDeleteManifestRequired', 'statement', 0, 'warn'),
+  redisRule('RedisMaxTransactionCommands', 'engine', 1, 'error'),
+  redisRule('RedisScriptTemplateScope', 'statement', 0, 'error'),
   {
     name: 'DorisRequireDistribution',
     category: 'table',

@@ -140,9 +140,10 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 		}
 	}
 	rep, err := client.Check(ctx, &api.CheckRequest{
-		Sql:         command,
-		Schema:      schema,
-		KeySnapshot: keySnapshot,
+		Sql:          command,
+		Schema:       schema,
+		KeySnapshot:  keySnapshot,
+		CommandCount: strings.Count(command, "\n") + 1,
 		Source: &api.DataSource{
 			Kind:         calls.DataSourceKind(source.DBType),
 			RedisMode:    model.RedisDeploymentOf(source),

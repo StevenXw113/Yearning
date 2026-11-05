@@ -153,25 +153,29 @@ type AuditRole struct {
 	RedisStreamStateChange      bool `json:"RedisStreamStateChange"`
 	RedisTransactionIntegrity   bool `json:"RedisTransactionIntegrity"`
 	// Cluster / Proxy 拓扑（依据部署形态生效）
-	RedisClusterDbZero           bool `json:"RedisClusterDbZero"`
-	RedisClusterCrossSlot        bool `json:"RedisClusterCrossSlot"`
-	RedisClusterScanScope        bool `json:"RedisClusterScanScope"`
-	RedisClusterTransactionSlot  bool `json:"RedisClusterTransactionSlot"`
-	RedisClusterScriptSlot       bool `json:"RedisClusterScriptSlot"`
-	RedisProxyDbSupport          bool `json:"RedisProxyDbSupport"`
-	RedisProxyCrossShard         bool `json:"RedisProxyCrossShard"`
-	RedisProxyScanScope          bool `json:"RedisProxyScanScope"`
-	RedisProxyCommandSupport     bool `json:"RedisProxyCommandSupport"`
-	RedisProxyAtomicity          bool `json:"RedisProxyAtomicity"`
-	RedisProxyScriptSupport      bool `json:"RedisProxyScriptSupport"`
-	RedisProxyTransactionSupport bool `json:"RedisProxyTransactionSupport"`
-	RedisReadConsistency         bool `json:"RedisReadConsistency"`
-	RedisTypeMismatch            bool `json:"RedisTypeMismatch"`
-	RedisOverwriteExisting       bool `json:"RedisOverwriteExisting"`
-	RedisLargeValueRead          bool `json:"RedisLargeValueRead"`
-	RedisBigKeySyncDelete        bool `json:"RedisBigKeySyncDelete"`
-	RedisProductionWrite         bool `json:"RedisProductionWrite"`
-	RedisCommandCompatibility    bool `json:"RedisCommandCompatibility"`
+	RedisClusterDbZero            bool `json:"RedisClusterDbZero"`
+	RedisClusterCrossSlot         bool `json:"RedisClusterCrossSlot"`
+	RedisClusterScanScope         bool `json:"RedisClusterScanScope"`
+	RedisClusterTransactionSlot   bool `json:"RedisClusterTransactionSlot"`
+	RedisClusterScriptSlot        bool `json:"RedisClusterScriptSlot"`
+	RedisProxyDbSupport           bool `json:"RedisProxyDbSupport"`
+	RedisProxyCrossShard          bool `json:"RedisProxyCrossShard"`
+	RedisProxyScanScope           bool `json:"RedisProxyScanScope"`
+	RedisProxyCommandSupport      bool `json:"RedisProxyCommandSupport"`
+	RedisProxyAtomicity           bool `json:"RedisProxyAtomicity"`
+	RedisProxyScriptSupport       bool `json:"RedisProxyScriptSupport"`
+	RedisProxyTransactionSupport  bool `json:"RedisProxyTransactionSupport"`
+	RedisReadConsistency          bool `json:"RedisReadConsistency"`
+	RedisTypeMismatch             bool `json:"RedisTypeMismatch"`
+	RedisOverwriteExisting        bool `json:"RedisOverwriteExisting"`
+	RedisLargeValueRead           bool `json:"RedisLargeValueRead"`
+	RedisBigKeySyncDelete         bool `json:"RedisBigKeySyncDelete"`
+	RedisProductionWrite          bool `json:"RedisProductionWrite"`
+	RedisCommandCompatibility     bool `json:"RedisCommandCompatibility"`
+	RedisBatchExpireConcentration bool `json:"RedisBatchExpireConcentration"`
+	RedisDeleteManifestRequired   bool `json:"RedisDeleteManifestRequired"`
+	RedisMaxTransactionCommands   int  `json:"RedisMaxTransactionCommands"`
+	RedisScriptTemplateScope      bool `json:"RedisScriptTemplateScope"`
 	// Doris 建表审核规则（自研 dorischeck）：建表必须有分桶、BUCKETS 上限、副本数、KEY 模型
 	DorisRequireDistribution bool `json:"DorisRequireDistribution"`
 	DorisBucketLimit         int  `json:"DorisBucketLimit"`

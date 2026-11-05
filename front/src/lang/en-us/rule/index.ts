@@ -267,6 +267,14 @@ export default {
   RedisBigKeySyncDelete: 'Synchronous deletion of a big key blocks the server; prefer UNLINK',
   RedisProductionWrite: 'Write against a production data source; describe blast radius and rollback',
   RedisCommandCompatibility: 'Command requires a newer Redis version than this instance provides',
+  RedisBatchExpireConcentration:
+    'Round-hour TTLs make similar keys expire at the same instant; add jitter',
+  RedisDeleteManifestRequired:
+    'Bulk deletion (10+ keys) requires a key manifest and confirmed backup',
+  RedisMaxTransactionCommands:
+    'Max commands per submission (0 = unlimited); split larger submissions',
+  RedisScriptTemplateScope:
+    'Scripts may only touch explicitly declared keys (no KEYS index overflow) within the allowed prefix',
   DorisRequireDistribution:
     'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',

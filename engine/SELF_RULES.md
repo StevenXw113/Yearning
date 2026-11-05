@@ -45,8 +45,9 @@
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 
-## Redis 侧 · internal/redischeck（73 条）
+## Redis 侧 · internal/redischeck（77 条）
 
+- `RedisBatchExpireConcentration` — 开关：`RedisBatchExpireConcentration`；TTL 取整点（整小时）会让同类键在同一时刻集中失效，建议加随机抖动
 - `RedisBigKeySyncDelete` — 开关：`RedisBigKeySyncDelete`；同步删除大 key 会阻塞服务端，建议改用 UNLINK
 - `RedisClusterCrossSlot` — 开关：`RedisClusterCrossSlot`；Cluster 中多键命令必须落在同一 slot，否则拦截
 - `RedisClusterDbZero` — 开关：`RedisClusterDbZero`；原生 Cluster 仅允许 DB 0；选择其它 DB 时拦截
@@ -58,6 +59,7 @@
 - `RedisCopyOverwrite` — 开关：`RedisCopyOverwrite`；COPY 使用 REPLACE 等覆盖行为时提示，并检查源键、目标键及目标 DB 权限
 - `RedisDbScope` — 开关：`RedisDbScope`；命令只能访问指定 DB 范围；超出授权范围时拦截；格式如 0-15
 - `RedisDeleteKey` — 开关：`RedisDeleteKey`；执行 DEL、UNLINK 时提示数据删除风险
+- `RedisDeleteManifestRequired` — 开关：`RedisDeleteManifestRequired`；批量删除需要附待删键清单并确认已备份
 - `RedisExpensiveRead` — 开关：`RedisExpensiveRead`；SORT、集合交并差及其他复杂读取，输入规模未知或超过预算时提示
 - `RedisForbidAclChange` — 开关：`RedisForbidAclChange`；禁止修改用户及权限的 ACL 子命令，如 SETUSER、DELUSER、LOAD
 - `RedisForbidAdmin` — 开关：`RedisForbidAdmin`；禁止修改实例配置或连接状态的管理子命令，如 CONFIG SET/REWRITE/RESETSTAT、CLIENT KILL/PAUSE；只读子命令单独审核
@@ -94,6 +96,7 @@
 - `RedisMaxReadElements` — 开关：`RedisMaxReadElements`；单次范围查询或随机读取请求的元素数上限，0 表示不限制；无法确定上限时提示
 - `RedisMaxReadKeys` — 开关：`RedisMaxReadKeys`；MGET 等单条批量读取命令的键数上限，0 表示不限制
 - `RedisMaxScanCount` — 开关：`RedisMaxScanCount`；SCAN、HSCAN、SSCAN、ZSCAN 的 COUNT 建议不超过配置值；COUNT 仅是工作量提示，不代表结果条数上限
+- `RedisMaxTransactionCommands` — 开关：`RedisMaxTransactionCommands`；单次事务（提交）内的命令数上限，0 表示不限制
 - `RedisMaxTtl` — 开关：`RedisMaxTtl`；过期时间超过业务最大值时提示；最大值按业务配置，0 表示不检查
 - `RedisMaxValueSize` — 开关：`RedisMaxValueSize`；单个新写入值的字节数上限，0 表示不限制；超过上限拦截
 - `RedisMaxWriteElements` — 开关：`RedisMaxWriteElements`；单条命令新增或修改的字段、成员、列表元素数上限，0 表示不限制
@@ -113,6 +116,7 @@
 - `RedisReadConsistency` — 开关：`RedisReadConsistency`；分片架构下多键读不是同一时刻快照，可能一部分读到旧值
 - `RedisRequireTtl` — 开关：`RedisRequireTtl`；缓存类键新建后必须有过期时间；明确登记为永久数据的业务键可豁免
 - `RedisScanMatchRequired` — 开关：`RedisScanMatchRequired`；SCAN 必须指定允许的业务匹配范围；MATCH 规则无法确认属于授权范围时拦截
+- `RedisScriptTemplateScope` — 开关：`RedisScriptTemplateScope`；脚本只能访问显式声明（KEYS 下标不越界）且在允许前缀内的键
 - `RedisSensitiveKeyAccess` — 开关：`RedisSensitiveKeyAccess`；访问凭据、Token、个人信息等敏感业务键时提示；敏感范围由业务配置
 - `RedisStoreOperation` — 开关：`RedisStoreOperation`；集合计算或排序结果写入目标键时，检查输入规模、目标覆盖及所有源键和目标键权限
 - `RedisStreamStateChange` — 开关：`RedisStreamStateChange`；消费组变更、消息确认、认领等操作会改变消费状态，执行时提示
