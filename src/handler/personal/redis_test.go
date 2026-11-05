@@ -2,7 +2,6 @@ package personal
 
 import (
 	"context"
-	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -153,17 +152,15 @@ func TestRedisDisplayBlobGuard(t *testing.T) {
 	}
 }
 
-// 查询页只能执行只读命令：写命令必须在建连之前就被拒绝
-// （getClient 传 nil —— 如果校验没拦住，这里会 panic 而不是断言失败）
-func TestRunRedisCommandRejectsWrites(t *testing.T) {
-	nilClient := func(int) (model.RedisConn, error) { return nil, nil }
+// 查询页只能执行只读命令：写命令必须在借客户端、建连之前就被拒绝
+func TestPrepareRedisCommandRejectsWrites(t *testing.T) {
 	for _, cmd := range []string{"SET k v", "DEL k", "FLUSHALL", "KEYS *", "HSET h f v"} {
-		if _, err := runRedisCommand(nilClient, "db0", cmd, "", false); err == nil {
-			t.Errorf("runRedisCommand(%q) 应被拒绝", cmd)
+		if _, _, err := prepareRedisCommand("db0", cmd, false); err == nil {
+			t.Errorf("prepareRedisCommand(%q) 应被拒绝", cmd)
 		}
 	}
 	// 空命令同样是用法错误
-	if _, err := runRedisCommand(nilClient, "db0", "  ", "", false); err == nil {
+	if _, _, err := prepareRedisCommand("db0", "  ", false); err == nil {
 		t.Error("空命令应报错")
 	}
 }
@@ -203,7 +200,12 @@ func TestRedisQueryIntegration(t *testing.T) {
 	}
 	// 只读命令走通，且结果能被转成表格
 	for _, cmd := range []string{"PING", "DBSIZE", "SCAN 0 MATCH yrn:test:* COUNT 10"} {
-		q, err := runRedisCommand(func(int) (model.RedisConn, error) { return client, nil }, "db0", cmd, "", false)
+		_, args, perr := prepareRedisCommand("db0", cmd, false)
+		if perr != nil {
+			t.Errorf("prepareRedisCommand(%q) 失败: %v", cmd, perr)
+			continue
+		}
+		q, err := runRedisCommand(client, args, "")
 		if err != nil {
 			t.Errorf("runRedisCommand(%q) 失败: %v", cmd, err)
 			continue
@@ -213,7 +215,7 @@ func TestRedisQueryIntegration(t *testing.T) {
 		}
 	}
 	// 写命令即使能连上也必须被拦
-	if _, err := runRedisCommand(func(int) (model.RedisConn, error) { return client, nil }, "db0", "SET yrn:test:x 1", "", false); err == nil {
+	if _, _, err := prepareRedisCommand("db0", "SET yrn:test:x 1", false); err == nil {
 		t.Error("写命令应被拒绝")
 	}
 }
@@ -232,22 +234,18 @@ func TestRedisPreviewSQLQuotesKey(t *testing.T) {
 }
 
 // 查询页执行授权：诊断命令默认拦，INFO 只读分节放行，开关打开后放行
-func TestRunRedisCommandDiagPolicy(t *testing.T) {
-	sentinel := errors.New("connect-sentinel")
-	denyConn := func(int) (model.RedisConn, error) { return nil, sentinel }
-
+func TestPrepareRedisCommandDiagPolicy(t *testing.T) {
 	for _, cmd := range []string{"SLOWLOG GET 1", "DUMP demo", "INFO", "LATENCY HISTORY x"} {
-		_, err := runRedisCommand(denyConn, "db0", cmd, "", false)
-		if err == nil || errors.Is(err, sentinel) {
-			t.Errorf("%q 应在策略层被拦截，实际走到了连接: %v", cmd, err)
+		if _, _, err := prepareRedisCommand("db0", cmd, false); err == nil {
+			t.Errorf("%q 应在策略层被拦截", cmd)
 		}
 	}
 	// INFO 的只读 section 不算诊断
-	if _, err := runRedisCommand(denyConn, "db0", "INFO keyspace", "", false); !errors.Is(err, sentinel) {
-		t.Errorf("INFO keyspace 应放行到连接阶段，实际: %v", err)
+	if _, _, err := prepareRedisCommand("db0", "INFO keyspace", false); err != nil {
+		t.Errorf("INFO keyspace 应放行，实际: %v", err)
 	}
 	// 打开诊断开关后放行
-	if _, err := runRedisCommand(denyConn, "db0", "SLOWLOG GET 1", "", true); !errors.Is(err, sentinel) {
-		t.Errorf("开启诊断后 SLOWLOG 应放行到连接阶段，实际: %v", err)
+	if _, _, err := prepareRedisCommand("db0", "SLOWLOG GET 1", true); err != nil {
+		t.Errorf("开启诊断后 SLOWLOG 应放行，实际: %v", err)
 	}
 }

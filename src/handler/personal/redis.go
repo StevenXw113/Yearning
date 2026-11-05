@@ -62,39 +62,38 @@ func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]int
 // 所以把「看这个键」翻译成一条按类型选择的命令；执行仍走查询页 WS
 // （只读白名单 + 查询侧规则审核 + 审计落库），不另开结果通道。
 func RedisKeyDetail(u *model.CoreDataSource, db int, key string) (map[string]interface{}, error) {
-	client, err := u.RedisClient(db)
-	if err != nil {
-		return nil, err
-	}
+	var detail map[string]interface{}
+	err := u.WithRedisClient(db, func(client model.RedisConn) error {
+		ctx, cancel := context.WithTimeout(context.Background(), redisCommandTimeout)
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), redisCommandTimeout)
-	defer cancel()
-
-	typ, err := client.Type(ctx, key).Result()
-	if err != nil {
-		return nil, err
-	}
-	detail := map[string]interface{}{
-		"key":  key,
-		"type": typ,
-		"sql":  redisPreviewSQL(typ, key),
-	}
-	// 下面三项是锦上添花：托管实例可能禁用 TTL 之外的对象命令，取不到就省略
-	if ttl, terr := client.TTL(ctx, key).Result(); terr == nil {
-		// go-redis 用负值表示「无过期(-1) / 键不存在(-2)」，直接除会变成 0
-		sec := int64(ttl / time.Second)
-		if ttl < 0 {
-			sec = int64(ttl)
+		typ, err := client.Type(ctx, key).Result()
+		if err != nil {
+			return err
 		}
-		detail["ttl"] = sec
-	}
-	if size, serr := client.Do(ctx, "MEMORY", "USAGE", key).Int64(); serr == nil {
-		detail["size"] = size
-	}
-	if enc, eerr := client.ObjectEncoding(ctx, key).Result(); eerr == nil {
-		detail["encoding"] = enc
-	}
-	return detail, nil
+		detail = map[string]interface{}{
+			"key":  key,
+			"type": typ,
+			"sql":  redisPreviewSQL(typ, key),
+		}
+		// 下面三项是锦上添花：托管实例可能禁用 TTL 之外的对象命令，取不到就省略
+		if ttl, terr := client.TTL(ctx, key).Result(); terr == nil {
+			// go-redis 用负值表示「无过期(-1) / 键不存在(-2)」，直接除会变成 0
+			sec := int64(ttl / time.Second)
+			if ttl < 0 {
+				sec = int64(ttl)
+			}
+			detail["ttl"] = sec
+		}
+		if size, serr := client.Do(ctx, "MEMORY", "USAGE", key).Int64(); serr == nil {
+			detail["size"] = size
+		}
+		if enc, eerr := client.ObjectEncoding(ctx, key).Result(); eerr == nil {
+			detail["encoding"] = enc
+		}
+		return nil
+	})
+	return detail, err
 }
 
 // redisPreviewSQL 按值类型选一条只读命令；none（键不存在）不生成命令。
@@ -123,8 +122,9 @@ func redisPreviewSQL(typ, key string) string {
 // 权限校验、申请校验、查询侧审核、审计落库、消息格式都与 SQL 版保持一致，
 // 只有「执行」这步换成 Redis 命令，且按目标逻辑库建连。
 //
-// 客户端按库复用走进程级连接池（model.RedisClient）：go-redis 在建连时发 SELECT，
-// 换库必须换客户端，但同一数据源×库在整个进程内只需一个客户端。
+// 客户端按库复用走进程级连接池（model.WithRedisClient）：go-redis 在建连时发 SELECT，
+// 换库必须换客户端，但同一数据源×库在整个进程内只需一个客户端；
+// 借出/归还由引用计数管理，编辑数据源不会打断在途命令。
 func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSource, user string) {
 	var b []byte
 	for {
@@ -155,8 +155,19 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: blocked.Error()}))
 			continue
 		}
+		// 先校验（不建连）：写命令、越权诊断命令在借客户端之前就拒绝
+		db, args, cerr := prepareRedisCommand(msg.Ref.Schema, msg.Ref.Sql, u.AllowDiagCommands)
+		if cerr != nil {
+			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: cerr.Error()}))
+			continue
+		}
 		clock := time.Now()
-		result, err := runRedisCommand(u.RedisClient, msg.Ref.Schema, msg.Ref.Sql, u.InsulateWordList, u.AllowDiagCommands)
+		var result *Query
+		err := u.WithRedisClient(db, func(client model.RedisConn) error {
+			var rerr error
+			result, rerr = runRedisCommand(client, args, u.InsulateWordList)
+			return rerr
+		})
 		if err != nil {
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()}))
 			continue
@@ -172,33 +183,36 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 	}
 }
 
-// runRedisCommand 执行一条只读命令并转成前端表格契约。
+// prepareRedisCommand 校验只读白名单与诊断授权，并把库名解析成库号。
+// 与执行分开：非法命令必须在借客户端、建连之前就被拒绝。
 //
 // 命令是**一行文本**（`GET user:1`、`SCAN 0 MATCH user:* COUNT 100`），
 // 与 Mongo 的 JSON 命令不同，所以先用 rediscmd 切词再交给驱动。
-func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, command, insulateWordList string, allowDiag bool) (*Query, error) {
+func prepareRedisCommand(schema, command string, allowDiag bool) (int, []string, error) {
 	// 查询页硬保底：只读命令白名单。不走规则集——能在这里执行写命令，
 	// 等于绕过整个工单审批链路。
 	kind, args, err := rediscmd.Validate(command)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	if kind != rediscmd.KindQuery {
-		return nil, errors.New("查询页只能执行只读命令（GET / SCAN / HGETALL / LRANGE 等），变更请到工单申请页提交")
+		return 0, nil, errors.New("查询页只能执行只读命令（GET / SCAN / HGETALL / LRANGE 等），变更请到工单申请页提交")
 	}
 	// 执行授权：只读命令也分档。诊断类（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量）
 	// 能看到配置或其它业务信息，默认关闭，按数据源开关放行。
 	if ok, reason := (api.RedisPolicy{AllowDiag: allowDiag}).QueryAllowed(args); !ok {
-		return nil, errors.New(reason)
+		return 0, nil, errors.New(reason)
 	}
 	db, err := model.RedisParseDB(schema)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
-	client, err := getClient(db)
-	if err != nil {
-		return nil, err
-	}
+	return db, args, nil
+}
+
+// runRedisCommand 用借到的客户端执行一条只读命令并转成前端表格契约。
+// args 由 prepareRedisCommand 校验并切好词。
+func runRedisCommand(client model.RedisConn, args []string, insulateWordList string) (*Query, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), redisCommandTimeout)
 	defer cancel()
 
