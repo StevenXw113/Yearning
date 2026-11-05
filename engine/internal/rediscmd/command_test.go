@@ -122,3 +122,15 @@ func TestCommandNameCaseInsensitive(t *testing.T) {
 		t.Error("小写 keys 也应被拦")
 	}
 }
+
+// 执行期硬保底与提交期同一条底线：一行一条命令
+func TestRedisValidateRejectsMultiLine(t *testing.T) {
+	for _, line := range []string{"SET a 1\nSET b 2", "DEL a\r\nDEL b"} {
+		if _, _, err := Validate(line); err == nil {
+			t.Errorf("多行命令应被拒绝: %q", line)
+		}
+	}
+	if _, _, err := Validate("SET a 1 EX 60"); err != nil {
+		t.Errorf("单行命令不应报错: %v", err)
+	}
+}

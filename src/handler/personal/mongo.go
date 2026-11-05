@@ -131,28 +131,23 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), querySideCheckTimeout)
 	defer cancel()
-	// Redis 键状态快照：探测失败按未知处理
+	// Redis 键状态快照：探测失败返回 nil，规则按未知处理
 	var keySnapshot map[string]api.KeyState
 	if source.DBType == model.DBTypeRedis {
 		db, _ := model.RedisParseDB(schema)
-		if _, args, verr := rediscmd.Validate(command); verr == nil {
-			keySnapshot = model.RedisKeySnapshot(source, db, rediscmd.CandidateKeys(args, model.RedisKeyStateLimit))
-		}
+		keySnapshot = rediscmd.KeySnapshot(source, db, command)
 	}
+	src := &api.DataSource{Kind: calls.DataSourceKind(source.DBType)}
+	calls.FillRedisFacts(src, source)
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:          command,
 		Schema:       schema,
 		KeySnapshot:  keySnapshot,
 		CommandCount: strings.Count(command, "\n") + 1,
-		Source: &api.DataSource{
-			Kind:         calls.DataSourceKind(source.DBType),
-			RedisMode:    model.RedisDeploymentOf(source),
-			IsProduction: source.IsProduction,
-			RedisVersion: model.RedisVersionOf(source),
-		},
-		Lang: model.C.General.Lang,
-		Rule: engine.AuditRoleToAPI(rule),
-		Mode: engine.CheckModeQuery,
+		Source:       src,
+		Lang:         model.C.General.Lang,
+		Rule:         engine.AuditRoleToAPI(rule),
+		Mode:         engine.CheckModeQuery,
 	})
 	if err != nil {
 		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil

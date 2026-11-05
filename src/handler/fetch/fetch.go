@@ -306,35 +306,32 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	// Redis 键状态快照：探测失败按未知处理（规则只提示不拦）
+	// Redis 键状态快照：探测失败返回 nil，规则按未知处理（只提示不拦）
 	var keySnapshot map[string]api.KeyState
 	if s.DBType == model.DBTypeRedis {
 		db, _ := model.RedisParseDB(u.Database)
-		if _, args, verr := rediscmd.Validate(u.SQL); verr == nil {
-			keySnapshot = model.RedisKeySnapshot(&s, db, rediscmd.CandidateKeys(args, model.RedisKeyStateLimit))
-		}
+		keySnapshot = rediscmd.KeySnapshot(&s, db, u.SQL)
 	}
+	src := &api.DataSource{
+		Ip:       s.IP,
+		Port:     int32(s.Port),
+		Username: s.Username,
+		Password: p,
+		Ca:       s.CAFile,
+		Cert:     s.Cert,
+		Key:      s.KeyFile,
+		Kind:     calls.DataSourceKind(s.DBType),
+		AuthDb:   s.AuthDatabase,
+	}
+	calls.FillRedisFacts(src, &s)
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:          u.SQL,
 		Schema:       u.Database,
 		KeySnapshot:  keySnapshot,
 		CommandCount: strings.Count(u.SQL, "\n") + 1,
-		Source: &api.DataSource{
-			Ip:           s.IP,
-			Port:         int32(s.Port),
-			Username:     s.Username,
-			Password:     p,
-			Ca:           s.CAFile,
-			Cert:         s.Cert,
-			Key:          s.KeyFile,
-			Kind:         calls.DataSourceKind(s.DBType),
-			AuthDb:       s.AuthDatabase,
-			RedisMode:    model.RedisDeploymentOf(&s),
-			IsProduction: s.IsProduction,
-			RedisVersion: model.RedisVersionOf(&s),
-		},
-		Lang: model.C.General.Lang,
-		Rule: engine.AuditRoleToAPI(rule),
+		Source:       src,
+		Lang:         model.C.General.Lang,
+		Rule:         engine.AuditRoleToAPI(rule),
 		// 申请页检测：显式声明按变更命令审核，Mongo 数据源填 find 会报「不是变更命令」
 		Mode: engine.CheckModeWrite,
 	})

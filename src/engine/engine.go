@@ -133,12 +133,13 @@ type AuditRole struct {
 	RedisCopyOverwrite      bool `json:"RedisCopyOverwrite"`
 	RedisStoreOperation     bool `json:"RedisStoreOperation"`
 	// --- TTL 与缓存规范 ---
-	RedisRequireTTL         bool `json:"RedisRequireTtl"`
-	RedisTtlLossOnOverwrite bool `json:"RedisTtlLossOnOverwrite"`
-	RedisForbidPersist      bool `json:"RedisForbidPersist"`
-	RedisMinTTL             int  `json:"RedisMinTtl"`
-	RedisMaxTTL             int  `json:"RedisMaxTtl"`
-	RedisImmediateExpire    bool `json:"RedisImmediateExpire"`
+	RedisRequireTTL         bool   `json:"RedisRequireTtl"`
+	RedisRequireTtlExempt   string `json:"RedisRequireTtlExempt"`
+	RedisTtlLossOnOverwrite bool   `json:"RedisTtlLossOnOverwrite"`
+	RedisForbidPersist      bool   `json:"RedisForbidPersist"`
+	RedisMinTTL             int    `json:"RedisMinTtl"`
+	RedisMaxTTL             int    `json:"RedisMaxTtl"`
+	RedisImmediateExpire    bool   `json:"RedisImmediateExpire"`
 	// --- 删除与大 Key ---
 	RedisDeleteKey          bool   `json:"RedisDeleteKey"`
 	RedisMaxDeleteKeys      int    `json:"RedisMaxDeleteKeys"`

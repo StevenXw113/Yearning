@@ -666,6 +666,7 @@ const rule: Rule[] = [
   redisRule('RedisCopyOverwrite', 'statement', 0, 'warn'),
   redisRule('RedisStoreOperation', 'statement', 0, 'warn'),
   redisRule('RedisRequireTtl', 'system', 0, 'error'),
+  redisRule('RedisRequireTtlExempt', 'system', 2, 'error'),
   redisRule('RedisTtlLossOnOverwrite', 'system', 0, 'warn'),
   redisRule('RedisForbidPersist', 'system', 0, 'error'),
   redisRule('RedisMinTtl', 'system', 1, 'warn'),

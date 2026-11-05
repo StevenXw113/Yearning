@@ -56,3 +56,14 @@ func OrderToAPI(o *model.CoreSqlOrder) *api.Order {
 		File:        o.File,
 	}
 }
+
+// FillRedisFacts 填 Redis 运行时事实（部署形态/生产标记/版本）；非 Redis 空操作。
+// 三处 Check 入口共用，漏传会让拓扑与键状态规则静默失效。
+func FillRedisFacts(ds *api.DataSource, s *model.CoreDataSource) {
+	if ds == nil || s == nil || s.DBType != model.DBTypeRedis {
+		return
+	}
+	ds.RedisMode = model.RedisDeploymentOf(s)
+	ds.IsProduction = s.IsProduction
+	ds.RedisVersion = model.RedisVersionOf(s)
+}

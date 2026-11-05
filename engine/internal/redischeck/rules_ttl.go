@@ -12,16 +12,24 @@ func init() {
 		name: "RedisRequireTtl", desc: "缓存类键新建后必须有过期时间；明确登记为永久数据的业务键可豁免",
 		cat: CategorySecurity, modes: writeOnly, level: LevelError,
 		enabled: func(c Config) bool { return c.RequireTTL },
-		hit: func(_ Config, cmd *Command) string {
-			switch {
-			case cmd.Name == "SET":
-				if cmd.HasAnyArg("EX", "PX", "EXAT", "PXAT", "KEEPTTL") {
-					return ""
+		hit: func(cfg Config, cmd *Command) string {
+			if cmd.Name != "SET" && !inNameSet(requireTtlCommands, cmd.Name) {
+				return ""
+			}
+			if cmd.Name == "SET" && cmd.HasAnyArg("EX", "PX", "EXAT", "PXAT", "KEEPTTL") {
+				return ""
+			}
+			for _, k := range cmd.Keys {
+				// 豁免前缀（登记为永久数据的业务键）；空配置表示无豁免
+				if cfg.RequireTtlExempt != "" && keyPrefixAllowed(cfg.RequireTtlExempt, k) {
+					continue
 				}
-				return "SET 未设置过期时间，键会常驻内存；如确需永久保存请登记豁免或在规则集中关闭该规则"
-			case inNameSet(requireTtlCommands, cmd.Name):
-				// 这些命令本身不支持过期参数，新建键只能靠后续 EXPIRE
-				return cmd.Name + " 会创建键但不带过期时间；缓存类数据请在同一流程里补 EXPIRE/PEXPIRE"
+				// 快照里有这个键说明是追加，不是新建；快照缺席按未知处理，照常提示
+				if st, seen := cfg.KeySnapshot[k]; seen && st.Type != "" && st.Type != "none" {
+					continue
+				}
+				return cmd.Name + " 新建键 " + k + " 时没有设置过期时间；" +
+					"缓存类数据请补 EXPIRE/PEXPIRE，永久数据请登记豁免前缀"
 			}
 			return ""
 		},

@@ -170,6 +170,8 @@ export default {
   RedisStoreOperation: '集合计算或排序结果写入目标键时，检查输入规模、目标覆盖及所有源键和目标键权限',
   RedisRequireTtl: '缓存类键新建后必须有过期时间；明确登记为永久数据的业务键可豁免',
   RedisTtlLossOnOverwrite: '覆盖写入可能清除原 TTL，且未明确指定过期策略或保留 TTL 时提示',
+  RedisRequireTtlExempt:
+    '豁免前缀（逗号分隔）：登记为永久数据的业务键不要求 TTL',
   RedisForbidPersist: '禁止 PERSIST，避免将有过期时间的缓存转为永久保存；允许永久化的业务可单独豁免',
   RedisMinTtl: '过期时间低于业务最小值时提示；0 表示不检查',
   RedisMaxTtl: '过期时间超过业务最大值时提示；0 表示不检查',

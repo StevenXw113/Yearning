@@ -116,23 +116,25 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	src := &api.DataSource{
+		Ip:       source.IP,
+		Port:     int32(source.Port),
+		Username: source.Username,
+		Password: password,
+		Ca:       source.CAFile,
+		Cert:     source.Cert,
+		Key:      source.KeyFile,
+		Kind:     calls.DataSourceKind(source.DBType),
+		AuthDb:   source.AuthDatabase,
+	}
+	calls.FillRedisFacts(src, source)
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:    order.SQL,
 		Schema: order.DataBase,
-		Source: &api.DataSource{
-			Ip:       source.IP,
-			Port:     int32(source.Port),
-			Username: source.Username,
-			Password: password,
-			Ca:       source.CAFile,
-			Cert:     source.Cert,
-			Key:      source.KeyFile,
-			Kind:     calls.DataSourceKind(source.DBType),
-			AuthDb:   source.AuthDatabase,
-		},
-		Lang: model.C.General.Lang,
-		Rule: engine.AuditRoleToAPI(rule),
-		Mode: engine.CheckModeWrite,
+		Source: src,
+		Lang:   model.C.General.Lang,
+		Rule:   engine.AuditRoleToAPI(rule),
+		Mode:   engine.CheckModeWrite,
 	})
 	if err != nil || rep == nil || !rep.Ok {
 		return false, fmt.Sprintf("引擎审核失败: %v", calls.CombineReplyErr(rep, err))

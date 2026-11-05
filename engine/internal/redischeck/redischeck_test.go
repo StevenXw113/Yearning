@@ -955,3 +955,60 @@ func TestRedisKeyPrefixSemantics(t *testing.T) {
 		t.Error("多前缀仍应拦截 other:k")
 	}
 }
+
+// RequireTtl 用快照区分新建与追加，并支持豁免前缀
+func TestRedisRequireTtlUsesSnapshot(t *testing.T) {
+	cfg := Config{
+		RequireTTL:       true,
+		RequireTtlExempt: "app:perm:",
+		KeySnapshot:      map[string]api.KeyState{"app:h": {Type: "hash", Len: 3}},
+		Mode:             ModeWrite,
+	}
+	hit := func(line string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == "RedisRequireTtl" {
+				return true
+			}
+		}
+		return false
+	}
+
+	if hit("HSET app:h f v") {
+		t.Error("已存在的键属于追加，不应拦")
+	}
+	if !hit("HSET app:new f v") {
+		t.Error("新建键无 TTL 应拦")
+	}
+	if hit("HSET app:perm:x f v") {
+		t.Error("豁免前缀应放行")
+	}
+	if hit("SET app:k v EX 60") {
+		t.Error("带 TTL 的 SET 不应拦")
+	}
+	if !hit("SET app:k2 v") {
+		t.Error("不带 TTL 的新键 SET 应拦")
+	}
+}
+
+// 安全类规则不允许被配成 observe（观察=放行）
+func TestRedisSecurityRuleCannotBeObserve(t *testing.T) {
+	cfg := Config{
+		ForbidDangerous: true,
+		Levels:          map[string]string{"RedisForbidDangerous": "observe"},
+		Mode:            ModeWrite,
+	}
+	_, findings, err := Check("FLUSHALL", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) == 0 {
+		t.Fatal("应命中")
+	}
+	if findings[0].Level == LevelObserve {
+		t.Errorf("安全类规则不应降为 observe，实际 %v", findings[0].Level)
+	}
+}

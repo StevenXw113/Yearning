@@ -211,6 +211,8 @@ export default {
   RedisRequireTtl: 'Cache keys must carry a TTL; registered permanent keys may be exempted',
   RedisTtlLossOnOverwrite:
     'Warn when an overwrite may drop the existing TTL without KEEPTTL or a new expiry',
+  RedisRequireTtlExempt:
+    'Exempt prefixes (comma separated): permanent business keys skip the TTL requirement',
   RedisForbidPersist: 'Forbid PERSIST; permanent business keys may be exempted',
   RedisMinTtl: 'Warn when the TTL is below the business minimum; 0 = no check',
   RedisMaxTtl: 'Warn when the TTL exceeds the business maximum; 0 = no check',

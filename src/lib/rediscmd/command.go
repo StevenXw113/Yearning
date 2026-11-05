@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"Yearning-go/src/model"
+
 	"engine/api"
 )
 
@@ -235,4 +237,13 @@ func CandidateKeys(args []string, limit int) []string {
 		out = append(out, a)
 	}
 	return out
+}
+
+// KeySnapshot 探测命令涉及键的状态，供审核规则判定；解析失败返回 nil（按未知处理）。
+func KeySnapshot(u *model.CoreDataSource, db int, sql string) map[string]api.KeyState {
+	_, args, err := Validate(sql)
+	if err != nil {
+		return nil
+	}
+	return model.RedisKeySnapshot(u, db, CandidateKeys(args, model.RedisKeyStateLimit))
 }

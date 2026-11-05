@@ -39,7 +39,7 @@
             </a-select>
           </a-form-item>
           <!-- Redis 没有表概念，目标库下面直接就是键 -->
-          <a-form-item v-if="dbType !== 3" :label="$t('common.table.table')">
+          <a-form-item v-if="dbType !== DBType.Redis" :label="$t('common.table.table')">
             <a-select
               v-model:value="orderItems.table"
               :dropdown-match-select-width="false"
@@ -103,7 +103,7 @@
         <a-space direction="vertical" :size="8" style="width: 100%">
           <a-space wrap :size="8">
             <a-button
-              v-if="dbType !== 3"
+              v-if="dbType !== DBType.Redis"
               size="small"
               :loading="loadingTblBtn"
               @click="fetchTableArch"
@@ -176,7 +176,7 @@
           </a-tab-pane>
           <!-- Redis 没有字段/索引：这两个页签只在 SQL / MongoDB / Doris 下出现 -->
           <a-tab-pane
-            v-if="dbType !== 3"
+            v-if="dbType !== DBType.Redis"
             :key="2"
             :tab="$t('order.apply.tab.table')"
             force-render
@@ -185,7 +185,7 @@
             <c-table :tbl-ref="archRef" row-key="field"></c-table>
           </a-tab-pane>
           <a-tab-pane
-            v-if="dbType !== 3"
+            v-if="dbType !== DBType.Redis"
             :key="3"
             :tab="$t('order.apply.tab.index')"
           >

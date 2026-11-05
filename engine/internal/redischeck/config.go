@@ -77,6 +77,8 @@ type Config struct {
 
 	// ---- TTL 与缓存规范 ----
 	RequireTTL bool
+	// RequireTtlExempt 豁免前缀（逗号分隔），命中的键不要求 TTL
+	RequireTtlExempt string
 	// TtlLossOnOverwrite 覆盖写入可能清除原 TTL 时提示
 	TtlLossOnOverwrite bool
 	ForbidPersist      bool
@@ -204,14 +206,18 @@ func protoFieldKey(protoName string) string {
 	return strings.TrimPrefix(normSwitch(protoName), "redis")
 }
 
-// Level 取规则的生效级别：RuleLevels 里配了且合法就用配置值，否则用规则自带的默认级别。
+// Level 取生效级别；安全类不允许配成 observe（观察=放行，权限与危险命令不能这么配）。
 func (c Config) Level(r Rule) Level {
+	lv := r.DefaultLevel()
 	if l, ok := c.Levels[r.Name()]; ok {
-		if lv := Level(strings.ToLower(strings.TrimSpace(l))); ValidLevel(lv) {
-			return lv
+		if v := Level(strings.ToLower(strings.TrimSpace(l))); ValidLevel(v) {
+			lv = v
 		}
 	}
-	return r.DefaultLevel()
+	if r.Category() == CategorySecurity && lv == LevelObserve {
+		return LevelWarn
+	}
+	return lv
 }
 
 // queryMode 是否查询模式（大小写与空白不敏感）

@@ -152,19 +152,7 @@ func slotHostMatch(client *redis.Client, host string) bool {
 
 // redisParseDB 把工单/查询库名（dbN）解析成库号。空名表示默认 db0；
 // 非法值报错而不是静默落 db0——在错误的库上执行变更比报错严重得多。
-func redisParseDB(name string) (int, error) {
-	if name == "" {
-		return 0, nil
-	}
-	if len(name) < 3 || !strings.EqualFold(name[:2], "db") {
-		return 0, fmt.Errorf("非法的 Redis 库名 %q，应为 db0..dbN", name)
-	}
-	n, err := strconv.Atoi(name[2:])
-	if err != nil || n < 0 {
-		return 0, fmt.Errorf("非法的 Redis 库名 %q，应为 db0..dbN", name)
-	}
-	return n, nil
-}
+func redisParseDB(name string) (int, error) { return api.ParseRedisDB(name) }
 
 // execRedis 执行 Redis 变更工单：硬保底 → 连接 → 执行 → 回滚。
 //

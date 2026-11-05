@@ -524,20 +524,7 @@ func (s *CoreDataSource) RedisScanKeys(db int, pattern string, limit int) ([]str
 // RedisParseDB 把查询页传来的库名（dbN）解析成库号。
 // 空名表示默认 db0；非法值报错——静默回落 db0 会让命令跑到错误的库上。
 // 库名只作为选择器使用，不参与任何命令拼接。
-func RedisParseDB(name string) (int, error) {
-	s := strings.TrimSpace(name)
-	if s == "" {
-		return 0, nil
-	}
-	if len(s) < 3 || !strings.EqualFold(s[:2], "db") {
-		return 0, fmt.Errorf("非法逻辑库名 %q，应形如 db0", name)
-	}
-	n, err := strconv.Atoi(s[2:])
-	if err != nil || n < 0 {
-		return 0, fmt.Errorf("非法逻辑库名 %q，应形如 db0", name)
-	}
-	return n, nil
-}
+func RedisParseDB(name string) (int, error) { return api.ParseRedisDB(name) }
 
 // RedisKeyStateLimit 单次审核最多探测的键数，防止 MGET 把探测放大成几十次往返。
 const RedisKeyStateLimit = 20

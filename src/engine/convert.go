@@ -123,6 +123,7 @@ func AuditRoleToAPI(r *AuditRole) *api.AuditRole {
 		RedisCopyOverwrite:             r.RedisCopyOverwrite,
 		RedisStoreOperation:            r.RedisStoreOperation,
 		RedisRequireTtl:                r.RedisRequireTTL,
+		RedisRequireTtlExempt:          r.RedisRequireTtlExempt,
 		RedisTtlLossOnOverwrite:        r.RedisTtlLossOnOverwrite,
 		RedisForbidPersist:             r.RedisForbidPersist,
 		RedisMinTtl:                    int32(r.RedisMinTTL),

@@ -25,7 +25,7 @@ type Outcome struct {
 //  5. 用前镜像生成回滚命令
 //
 // 与 Mongo 侧的差别：Redis 没有「命中行数上限」这类执行期限制需要从规则集读，
-// 键数在执行前就是确定的（RedisMaxAffectKeys 已在引擎侧静态审核）。
+// 键数在执行前就是确定的（RedisMaxWriteKeys / RedisMaxDeleteKeys 已在引擎侧静态审核）。
 func Execute(ctx context.Context, client redis.UniversalClient, line string) (Outcome, error) {
 	var out Outcome
 

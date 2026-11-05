@@ -253,9 +253,14 @@ func TestRedisSwitchesAreImplemented(t *testing.T) {
 	for _, r := range redischeck.All() {
 		covered[normSwitch(r.Name())] = true
 	}
+	// 参数型字段挂在某条规则上，本身不是规则开关
+	params := map[string]bool{"redisrequirettlexempt": true}
 	found := 0
 	for _, name := range auditRoleFields(t) {
 		if !strings.HasPrefix(strings.ToLower(name), "redis") {
+			continue
+		}
+		if params[normSwitch(name)] {
 			continue
 		}
 		found++

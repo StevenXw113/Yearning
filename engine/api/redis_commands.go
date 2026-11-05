@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -150,4 +152,20 @@ func infoOnlySafe(args []string) bool {
 		}
 	}
 	return true
+}
+
+// ParseRedisDB 把 dbN 解析成库号；空名 = db0，非法值报错。引擎与主程序共用。
+func ParseRedisDB(name string) (int, error) {
+	s := strings.TrimSpace(name)
+	if s == "" {
+		return 0, nil
+	}
+	if len(s) < 3 || !strings.EqualFold(s[:2], "db") {
+		return 0, fmt.Errorf("非法的 Redis 库名 %q，应为 db0..dbN", name)
+	}
+	n, err := strconv.Atoi(s[2:])
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("非法的 Redis 库名 %q，应为 db0..dbN", name)
+	}
+	return n, nil
 }

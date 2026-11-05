@@ -154,6 +154,11 @@ func Classify(name string) int {
 // 抓前镜像的条数上限同类）。可配置的审核（开关 + error/warn/observe 级别）
 // 由引擎侧的 internal/redischeck 完成，两边判定语义保持一致。
 func Validate(line string) (int, []string, error) {
+	// 与提交期（src/lib/rediscmd.Validate）同一条底线：一行一条命令，
+	// 换行会被切词当成空格，第二条命令被吞成参数。
+	if strings.ContainsAny(line, "\r\n") {
+		return KindQuery, nil, errors.New("一行只能提交一条 Redis 命令（不支持多行/多命令）")
+	}
 	args, err := Split(line)
 	if err != nil {
 		return KindQuery, nil, err

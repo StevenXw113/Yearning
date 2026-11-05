@@ -38,7 +38,7 @@
               >
               <!-- Redis 的「结构」就是类型/TTL/大小，已在查看数据时一并给出 -->
               <a-menu-item
-                v-if="dbType !== 3"
+                v-if="dbType !== DBType.Redis"
                 key="2"
                 @click="showTableArch(treeKey)"
               >
