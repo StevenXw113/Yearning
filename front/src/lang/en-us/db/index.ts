@@ -1,5 +1,6 @@
 export default {
   'db.port': 'Port',
+  'db.is.production': 'Production data source',
   'db.allow.diag': 'Allow diagnostic commands',
   'db.allow.diag.tips':
     'Redis only: allow SLOWLOG / LATENCY / DUMP / COMMAND and full INFO from the query page. These expose instance configuration or other tenants\' executions, off by default',

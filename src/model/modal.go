@@ -172,6 +172,9 @@ type CoreDataSource struct {
 	// RedisMode Redis 部署形态（standalone / cluster / proxy），空 = 自动探测。
 	// 自动探测依赖 CLUSTER INFO，部分云代理判不准，可用这里手动指定。
 	RedisMode string `gorm:"type:varchar(20);not null;default ''" json:"redis_mode"`
+	// IsProduction 是否生产数据源：审核侧对生产写入给出「补影响面/回滚」提示。
+	// 列由 AutoMigrate 自动添加。
+	IsProduction bool `gorm:"type:tinyint(2);not null;default 0" json:"is_production"`
 }
 
 type CoreGrained struct {

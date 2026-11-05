@@ -26,6 +26,8 @@ export interface Source {
   allow_diag_commands?: boolean;
   // Redis 部署形态：空/auto = 自动探测；standalone/cluster/proxy 手动指定
   redis_mode?: string;
+  // 是否生产数据源：审核侧对生产写入给出「补影响面/回滚」提示
+  is_production?: boolean;
 }
 
 // 数据源类型取值（与后端 db_type 对齐）：模板与脚本里不要再写魔法数

@@ -11,6 +11,7 @@ package rediscmd
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"engine/api"
@@ -198,4 +199,40 @@ func isWriteCommand(name string) bool {
 		return true
 	}
 	return false
+}
+
+// notKeyWords 命令参数里明显不是键的关键字（选项、修饰符、单位）
+var notKeyWords = map[string]struct{}{
+	"EX": {}, "PX": {}, "EXAT": {}, "PXAT": {}, "KEEPTTL": {}, "NX": {}, "XX": {}, "GT": {}, "LT": {}, "CH": {}, "INCR": {},
+	"MATCH": {}, "COUNT": {}, "LIMIT": {}, "WITHSCORES": {}, "WITHSCORE": {}, "BY": {}, "GET": {},
+	"BEFORE": {}, "AFTER": {}, "LEFT": {}, "RIGHT": {}, "REPLACE": {}, "ABSTTL": {}, "IDLE": {}, "FREQ": {},
+	"STREAMS": {}, "BLOCK": {}, "NOACK": {}, "GROUP": {}, "CONSUMER": {}, "MAXLEN": {}, "MINID": {},
+	"ENCODING": {}, "USAGE": {}, "REFCOUNT": {},
+}
+
+// CandidateKeys 从参数里挑出「可能是键」的候选，供键状态快照探测使用。
+//
+// 这里不需要精确的键识别：多探一个键只是一次 TYPE，探错也不会影响审核结论
+// （快照里多出来的键不会被任何规则引用）。精确识别在引擎侧（redischeck.keys）。
+func CandidateKeys(args []string, limit int) []string {
+	if len(args) < 2 || limit <= 0 {
+		return nil
+	}
+	out := make([]string, 0, limit)
+	for _, a := range args[1:] {
+		if len(out) >= limit {
+			break
+		}
+		if a == "" {
+			continue
+		}
+		if _, ok := notKeyWords[strings.ToUpper(a)]; ok {
+			continue
+		}
+		if _, err := strconv.ParseFloat(a, 64); err == nil {
+			continue // 纯数字是计数/分值一类参数，不是键
+		}
+		out = append(out, a)
+	}
+	return out
 }

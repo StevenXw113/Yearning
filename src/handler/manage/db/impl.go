@@ -87,6 +87,7 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 		// Redis：查询页是否允许诊断命令；编辑表单里是开关，必须显式写回（map 更新没有零值跳过）
 		"allow_diag_commands": source.AllowDiagCommands,
 		"redis_mode":          source.RedisMode,
+		"is_production":       source.IsProduction,
 	})
 	// 地址/口令/形态可能都变了：丢掉旧客户端与部署形态缓存，下次访问重新建连探测
 	// （非 Redis 数据源是空操作）

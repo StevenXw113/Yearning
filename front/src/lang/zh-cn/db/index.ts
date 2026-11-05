@@ -1,5 +1,6 @@
 export default {
   'db.port': '端口',
+  'db.is.production': '生产数据源',
   'db.allow.diag': '允许诊断命令',
   'db.allow.diag.tips':
     'Redis 专用：允许查询页执行 SLOWLOG / LATENCY / DUMP / COMMAND / INFO 全量。这些命令能看到实例配置或其它业务的执行信息，默认关闭',

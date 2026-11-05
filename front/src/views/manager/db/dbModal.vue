@@ -47,6 +47,13 @@
               {{ $t('db.allow.diag.tips') }}
             </div>
           </a-form-item>
+          <!-- 生产标记：审核侧对生产写入给出「补影响面/回滚」提示 -->
+          <a-form-item
+            v-if="dbForm.db_type === DBType.Redis"
+            :label="$t('db.is.production')"
+          >
+            <a-switch v-model:checked="dbForm.is_production" />
+          </a-form-item>
           <!-- Redis 部署形态：自动探测靠 CLUSTER INFO，部分云代理判不准，允许手动指定 -->
           <a-form-item
             v-if="dbForm.db_type === DBType.Redis"
@@ -216,6 +223,7 @@
     rule_id: 0,
     allow_diag_commands: false,
     redis_mode: '',
+    is_production: false,
   } as Source);
 
   const schemaList = ref<string[]>([]);

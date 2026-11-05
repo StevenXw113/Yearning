@@ -213,6 +213,12 @@ export default {
     'Proxy 集群只支持单分片内事务，MULTI/EXEC 与 WATCH 跨分片无法保证',
   RedisReadConsistency:
     '分片架构下多键读不是同一时刻快照，可能一部分读到旧值',
+  RedisTypeMismatch: '写命令的键类型与命令期望不符，执行会直接报 WRONGTYPE',
+  RedisOverwriteExisting: '覆盖写入已存在的键，原值会丢失',
+  RedisLargeValueRead: '读取超大 key（超过 1 MB）会长时间占用查询连接',
+  RedisBigKeySyncDelete: '同步删除大 key 会阻塞服务端，建议改用 UNLINK',
+  RedisProductionWrite: '生产数据源上的写命令，需要写明影响面与回滚方式',
+  RedisCommandCompatibility: '命令需要更高的 Redis 版本，当前实例不支持',
   DorisRequireDistribution:
     'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
   DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',

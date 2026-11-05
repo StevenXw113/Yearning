@@ -695,6 +695,12 @@ const rule: Rule[] = [
   redisRule('RedisProxyScriptSupport', 'statement', 0, 'error'),
   redisRule('RedisProxyTransactionSupport', 'statement', 0, 'error'),
   redisRule('RedisReadConsistency', 'statement', 0, 'warn'),
+  redisRule('RedisTypeMismatch', 'statement', 0, 'error'),
+  redisRule('RedisOverwriteExisting', 'statement', 0, 'warn'),
+  redisRule('RedisLargeValueRead', 'statement', 0, 'warn'),
+  redisRule('RedisBigKeySyncDelete', 'statement', 0, 'warn'),
+  redisRule('RedisProductionWrite', 'statement', 0, 'warn'),
+  redisRule('RedisCommandCompatibility', 'statement', 0, 'error'),
   {
     name: 'DorisRequireDistribution',
     category: 'table',

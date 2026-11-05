@@ -129,6 +129,16 @@ type Config struct {
 	// ReadConsistency 多分片读取不是同一时刻快照（跨 slot 多键读）
 	ReadConsistency bool
 
+	// ---- 键状态类（依赖调用方探测后传入的 KeySnapshot）----
+	TypeMismatch      bool
+	OverwriteExisting bool
+	LargeValueRead    bool
+	BigKeySyncDelete  bool
+
+	// ---- 环境与版本（依赖调用方传入的运行时事实）----
+	ProductionWrite      bool
+	CommandCompatibility bool
+
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。
 	Levels map[string]string
@@ -139,6 +149,12 @@ type Config struct {
 	Deployment string
 	// Schema 本次命令的目标逻辑库（dbN），供 ClusterDbZero / ProxyDbSupport 判定。
 	Schema string
+	// KeySnapshot 命令涉及键的状态（类型/大小/元素数），由调用方探测后传入。
+	// 缺席的键表示「未探测到」：规则按未知处理，不得据此判定「键不存在」。
+	KeySnapshot map[string]api.KeyState
+	// Production 数据源是否生产环境；RedisVersion 目标实例的 Redis 版本（探测得到）
+	Production   bool
+	RedisVersion string
 }
 
 // ConfigFromAPI 从规则集构造 Config。

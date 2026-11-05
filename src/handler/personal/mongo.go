@@ -14,6 +14,7 @@ import (
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/mongodb"
+	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 
 	"engine/api"
@@ -130,13 +131,27 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), querySideCheckTimeout)
 	defer cancel()
+	// Redis 键状态快照：查询页执行前探测（引擎不连库），探测失败按未知处理
+	var keySnapshot map[string]api.KeyState
+	if source.DBType == model.DBTypeRedis {
+		db, _ := model.RedisParseDB(schema)
+		if _, args, verr := rediscmd.Validate(command); verr == nil {
+			keySnapshot = model.RedisKeySnapshot(source, db, rediscmd.CandidateKeys(args, model.RedisKeyStateLimit))
+		}
+	}
 	rep, err := client.Check(ctx, &api.CheckRequest{
-		Sql:    command,
-		Schema: schema,
-		Source: &api.DataSource{Kind: calls.DataSourceKind(source.DBType), RedisMode: model.RedisDeploymentOf(source)},
-		Lang:   model.C.General.Lang,
-		Rule:   engine.AuditRoleToAPI(rule),
-		Mode:   engine.CheckModeQuery,
+		Sql:         command,
+		Schema:      schema,
+		KeySnapshot: keySnapshot,
+		Source: &api.DataSource{
+			Kind:         calls.DataSourceKind(source.DBType),
+			RedisMode:    model.RedisDeploymentOf(source),
+			IsProduction: source.IsProduction,
+			RedisVersion: model.RedisVersionOf(source),
+		},
+		Lang: model.C.General.Lang,
+		Rule: engine.AuditRoleToAPI(rule),
+		Mode: engine.CheckModeQuery,
 	})
 	if err != nil {
 		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil

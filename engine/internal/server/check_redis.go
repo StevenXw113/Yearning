@@ -22,8 +22,11 @@ func isRedisSource(src *api.DataSource) bool {
 func checkRedis(req *api.CheckRequest) *api.CheckReply {
 	cfg := redischeck.ConfigFromAPI(req.Rule, redischeck.Mode(req.GetMode()))
 	cfg.Schema = req.Schema
+	cfg.KeySnapshot = req.KeySnapshot
 	if req.Source != nil {
 		cfg.Deployment = strings.ToLower(strings.TrimSpace(req.Source.RedisMode))
+		cfg.Production = req.Source.IsProduction
+		cfg.RedisVersion = strings.TrimSpace(req.Source.RedisVersion)
 	}
 	_, findings, err := redischeck.Check(req.Sql, cfg)
 	if err != nil {

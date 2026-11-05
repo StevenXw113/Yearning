@@ -23,6 +23,10 @@ type DataSource struct {
 	// RedisMode Redis 部署形态:standalone / cluster / proxy。
 	// 空 = 未知(探测失败或尚未探测):Cluster/Proxy 相关规则此时不生效,避免误拦。
 	RedisMode string `json:"redis_mode"`
+	// IsProduction 数据源是否生产环境(RedisProductionWrite 判定用)
+	IsProduction bool `json:"is_production"`
+	// RedisVersion 目标实例的 Redis 版本(探测得到的 redis_version,空 = 未知)
+	RedisVersion string `json:"redis_version"`
 }
 
 // AuditRole 审核规则,与 Yearning engine.AuditRole 对齐。
@@ -204,6 +208,12 @@ type AuditRole struct {
 	RedisProxyScriptSupport      bool `json:"redis_proxy_script_support"`
 	RedisProxyTransactionSupport bool `json:"redis_proxy_transaction_support"`
 	RedisReadConsistency         bool `json:"redis_read_consistency"`
+	RedisTypeMismatch            bool `json:"redis_type_mismatch"`
+	RedisOverwriteExisting       bool `json:"redis_overwrite_existing"`
+	RedisLargeValueRead          bool `json:"redis_large_value_read"`
+	RedisBigKeySyncDelete        bool `json:"redis_big_key_sync_delete"`
+	RedisProductionWrite         bool `json:"redis_production_write"`
+	RedisCommandCompatibility    bool `json:"redis_command_compatibility"`
 
 	// ------- Doris 建表审核规则(internal/dorischeck,自研)-------
 	// Doris 兼容 MySQL 协议与查询/DML 语法,但建表 DDL 是自有语法
@@ -258,12 +268,26 @@ type Record struct {
 	Rollback string `json:"rollback"`
 }
 
+// KeyState 审核前探测到的键状态（Redis）。
+//
+// 键类型、是否存在、大小这些事实只能连库才拿得到，而引擎是纯文本审核、
+// 不连库：由调用方探测后随请求传入，规则只做判定。缺键表示「未探测到」，
+// 规则按未知处理，不据此拦截。
+type KeyState struct {
+	Type string `json:"type"` // none / string / hash / list / set / zset / stream
+	Size int64  `json:"size"` // 字节数（MEMORY USAGE），取不到为 0
+	Len  int64  `json:"len"`  // 元素数（HLEN/LLEN/SCARD/ZCARD/XLEN），取不到为 0
+}
+
 type CheckRequest struct {
 	Sql    string      `json:"sql"`
 	Schema string      `json:"schema"`
 	Source *DataSource `json:"source"`
 	Lang   string      `json:"lang"`
 	Rule   *AuditRole  `json:"rule"`
+	// KeySnapshot 命令涉及键的状态快照（Redis 专用，由调用方探测）。
+	// 键不存在于 map 表示未探测，规则不得据此判定「不存在」。
+	KeySnapshot map[string]KeyState `json:"key_snapshot,omitempty"`
 	// Mode 审核模式:空 / "write" = 变更命令审核(申请页检测、工单执行前复检),
 	// "query" = 只读命令审核(查询页)。
 	// 空值按 write 处理,保证旧调用方行为不变;不靠命令名自动推断模式——

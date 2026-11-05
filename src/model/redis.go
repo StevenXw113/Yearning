@@ -13,6 +13,8 @@ import (
 
 	"Yearning-go/src/lib/enc"
 
+	"engine/api"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -550,4 +552,138 @@ func RedisParseDB(name string) (int, error) {
 		return 0, fmt.Errorf("非法逻辑库名 %q，应形如 db0", name)
 	}
 	return n, nil
+}
+
+// RedisKeyStateLimit 单次审核最多探测的键数：命令涉及的键通常 1~2 个，
+// 上限只防止 MGET 这类命令把探测放大成几十次往返。
+const RedisKeyStateLimit = 20
+
+// RedisKeySnapshot 探测命令涉及键的状态（类型/占用/元素数），供审核规则判定。
+//
+// 引擎不连库：类型、是否存在、大小这些事实只能连库拿到，由主程序探测后随请求传入。
+// 两次 pipeline 完成（TYPE + MEMORY USAGE，再按类型取元素数）；
+// 拿不到的键不出现在结果里——规则按「未知」处理，探测失败不会变成误拦。
+func RedisKeySnapshot(s *CoreDataSource, db int, keys []string) map[string]api.KeyState {
+	if s == nil || len(keys) == 0 {
+		return nil
+	}
+	if len(keys) > RedisKeyStateLimit {
+		keys = keys[:RedisKeyStateLimit]
+	}
+	out := map[string]api.KeyState{}
+	_ = s.WithRedisClient(db, func(client RedisConn) error {
+		ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
+		defer cancel()
+
+		pipe := client.Pipeline()
+		types := make([]*redis.StatusCmd, len(keys))
+		sizes := make([]*redis.Cmd, len(keys))
+		for i, k := range keys {
+			types[i] = pipe.Type(ctx, k)
+			sizes[i] = pipe.Do(ctx, "MEMORY", "USAGE", k)
+		}
+		_, _ = pipe.Exec(ctx)
+
+		for i, k := range keys {
+			st := api.KeyState{}
+			if t, err := types[i].Result(); err == nil {
+				st.Type = t
+			}
+			if v, err := sizes[i].Int64(); err == nil {
+				st.Size = v
+			}
+			if st.Type != "" && st.Type != "none" {
+				out[k] = st
+			}
+		}
+
+		// 第二轮：元素数（按类型选命令）
+		pipe2 := client.Pipeline()
+		lens := map[string]*redis.IntCmd{}
+		for k, st := range out {
+			switch st.Type {
+			case "hash":
+				lens[k] = pipe2.HLen(ctx, k)
+			case "list":
+				lens[k] = pipe2.LLen(ctx, k)
+			case "set":
+				lens[k] = pipe2.SCard(ctx, k)
+			case "zset":
+				lens[k] = pipe2.ZCard(ctx, k)
+			case "stream":
+				lens[k] = pipe2.XLen(ctx, k)
+			}
+		}
+		if len(lens) > 0 {
+			_, _ = pipe2.Exec(ctx)
+		}
+		for k, c := range lens {
+			if v, err := c.Result(); err == nil {
+				st := out[k]
+				st.Len = v
+				out[k] = st
+			}
+		}
+		return nil
+	})
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// redisVersionTTL 版本探测缓存时长：实例版本基本不动，避免每次检测都跑 INFO
+const redisVersionTTL = 10 * time.Minute
+
+type redisVersionEntry struct {
+	version  string
+	expireAt time.Time
+}
+
+var (
+	redisVersionCache   = map[string]redisVersionEntry{}
+	redisVersionCacheMu sync.Mutex
+)
+
+// RedisVersionOf 探测目标实例的 Redis 版本（INFO server 的 redis_version）。
+// 探测失败返回空串表示未知——审核侧按「版本未知不拦」处理，避免误伤。
+func RedisVersionOf(s *CoreDataSource) string {
+	if s == nil || s.DBType != DBTypeRedis {
+		return ""
+	}
+	key := s.SourceId
+	redisVersionCacheMu.Lock()
+	if e, ok := redisVersionCache[key]; ok && time.Now().Before(e.expireAt) {
+		redisVersionCacheMu.Unlock()
+		return e.version
+	}
+	redisVersionCacheMu.Unlock()
+
+	version := ""
+	_ = s.WithRedisClient(0, func(client RedisConn) error {
+		ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
+		defer cancel()
+		info, err := client.Info(ctx, "server").Result()
+		if err != nil {
+			return err
+		}
+		version = redisVersionFromInfo(info)
+		return nil
+	})
+
+	redisVersionCacheMu.Lock()
+	redisVersionCache[key] = redisVersionEntry{version: version, expireAt: time.Now().Add(redisVersionTTL)}
+	redisVersionCacheMu.Unlock()
+	return version
+}
+
+// redisVersionFromInfo 从 INFO server 的文本里取 redis_version
+func redisVersionFromInfo(info string) string {
+	for _, line := range strings.Split(info, "\n") {
+		line = strings.TrimSpace(line)
+		if v, ok := strings.CutPrefix(line, "redis_version:"); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }

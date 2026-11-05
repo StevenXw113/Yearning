@@ -769,3 +769,89 @@ func TestRedisForbidReadonlySwitchesMode(t *testing.T) {
 		}
 	}
 }
+
+// 键状态类规则：判定依据是调用方传入的快照；快照缺席按未知处理，不拦
+func TestRedisKeyStateRules(t *testing.T) {
+	snap := map[string]api.KeyState{
+		"app:h": {Type: "hash", Size: 200, Len: 5},
+		"big:s": {Type: "string", Size: 2 << 20},
+		"big:l": {Type: "list", Size: 100, Len: 5000},
+	}
+	has := func(cfg Config, line, rule string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == rule {
+				return true
+			}
+		}
+		return false
+	}
+
+	// 类型不符：hash 上做 LPUSH 一定 WRONGTYPE
+	mismatch := Config{TypeMismatch: true, KeySnapshot: snap, Mode: ModeWrite}
+	if !has(mismatch, "LPUSH app:h x", "RedisTypeMismatch") {
+		t.Error("向 hash 键 LPUSH 应被拦")
+	}
+	if has(mismatch, "HSET app:h f v", "RedisTypeMismatch") {
+		t.Error("向 hash 键 HSET 不应被拦")
+	}
+	// 快照里没有的键 = 未探测，不能据此判定
+	if has(mismatch, "LPUSH app:unknown x", "RedisTypeMismatch") {
+		t.Error("未探测的键不应被拦")
+	}
+
+	overwrite := Config{OverwriteExisting: true, KeySnapshot: snap, Mode: ModeWrite}
+	if !has(overwrite, "SET app:h v", "RedisOverwriteExisting") {
+		t.Error("覆盖已存在的键应提示")
+	}
+	if has(overwrite, "SET app:new v", "RedisOverwriteExisting") {
+		t.Error("新键不应提示覆盖")
+	}
+
+	large := Config{LargeValueRead: true, KeySnapshot: snap, Mode: ModeQuery}
+	if !has(large, "GET big:s", "RedisLargeValueRead") {
+		t.Error("读取 >1MB 的键应提示")
+	}
+	if has(large, "GET app:h", "RedisLargeValueRead") {
+		t.Error("小键不应提示")
+	}
+
+	del := Config{BigKeySyncDelete: true, KeySnapshot: snap, Mode: ModeWrite}
+	if !has(del, "DEL big:l", "RedisBigKeySyncDelete") {
+		t.Error("DEL 大 key 应提示改用 UNLINK")
+	}
+	if has(del, "UNLINK big:l", "RedisBigKeySyncDelete") {
+		t.Error("UNLINK 不应提示")
+	}
+}
+
+// 生产标记与版本兼容
+func TestRedisEnvRules(t *testing.T) {
+	prod := Config{Production: true, ProductionWrite: true, Mode: ModeWrite}
+	if _, findings, _ := Check("SET k v EX 60", prod); len(findings) == 0 {
+		t.Error("生产源写命令应提示")
+	}
+	if _, findings, _ := Check("SET k v EX 60", Config{Production: false, ProductionWrite: true, Mode: ModeWrite}); len(findings) != 0 {
+		t.Error("非生产源不应提示")
+	}
+
+	compat := Config{RedisVersion: "6.2.7", CommandCompatibility: true, Mode: ModeWrite}
+	if _, findings, _ := Check("SINTERCARD 2 s1 s2", Config{RedisVersion: "6.2.7", CommandCompatibility: true, Mode: ModeQuery}); len(findings) == 0 {
+		t.Error("6.2 上 SINTERCARD 应被拦")
+	}
+	if _, findings, _ := Check("SINTERCARD 2 s1 s2", Config{RedisVersion: "7.0.0", CommandCompatibility: true, Mode: ModeQuery}); len(findings) != 0 {
+		t.Error("7.0 上 SINTERCARD 不应被拦")
+	}
+	// 版本未知不拦
+	if _, findings, _ := Check("SINTERCARD 2 s1 s2", Config{CommandCompatibility: true, Mode: ModeQuery}); len(findings) != 0 {
+		t.Error("版本未知时不应拦")
+	}
+	_ = compat
+
+	if !versionLess("6.2.7", "7.0") || versionLess("7.0.1", "7.0") || versionLess("", "7.0") {
+		t.Error("versionLess 比较不对")
+	}
+}

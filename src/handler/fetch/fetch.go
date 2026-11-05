@@ -24,6 +24,7 @@ import (
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/permission"
+	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
@@ -305,20 +306,32 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	// Redis 键状态快照：类型/占用/是否存在只能连库拿到，引擎只做判定。
+	// 探测失败不影响检测（快照为空 = 未知，规则只提示不拦）。
+	var keySnapshot map[string]api.KeyState
+	if s.DBType == model.DBTypeRedis {
+		db, _ := model.RedisParseDB(u.Database)
+		if _, args, verr := rediscmd.Validate(u.SQL); verr == nil {
+			keySnapshot = model.RedisKeySnapshot(&s, db, rediscmd.CandidateKeys(args, model.RedisKeyStateLimit))
+		}
+	}
 	rep, err := client.Check(ctx, &api.CheckRequest{
-		Sql:    u.SQL,
-		Schema: u.Database,
+		Sql:         u.SQL,
+		Schema:      u.Database,
+		KeySnapshot: keySnapshot,
 		Source: &api.DataSource{
-			Ip:        s.IP,
-			Port:      int32(s.Port),
-			Username:  s.Username,
-			Password:  p,
-			Ca:        s.CAFile,
-			Cert:      s.Cert,
-			Key:       s.KeyFile,
-			Kind:      calls.DataSourceKind(s.DBType),
-			AuthDb:    s.AuthDatabase,
-			RedisMode: model.RedisDeploymentOf(&s),
+			Ip:           s.IP,
+			Port:         int32(s.Port),
+			Username:     s.Username,
+			Password:     p,
+			Ca:           s.CAFile,
+			Cert:         s.Cert,
+			Key:          s.KeyFile,
+			Kind:         calls.DataSourceKind(s.DBType),
+			AuthDb:       s.AuthDatabase,
+			RedisMode:    model.RedisDeploymentOf(&s),
+			IsProduction: s.IsProduction,
+			RedisVersion: model.RedisVersionOf(&s),
 		},
 		Lang: model.C.General.Lang,
 		Rule: engine.AuditRoleToAPI(rule),

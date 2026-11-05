@@ -45,13 +45,15 @@
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 
-## Redis 侧 · internal/redischeck（67 条）
+## Redis 侧 · internal/redischeck（73 条）
 
+- `RedisBigKeySyncDelete` — 开关：`RedisBigKeySyncDelete`；同步删除大 key 会阻塞服务端，建议改用 UNLINK
 - `RedisClusterCrossSlot` — 开关：`RedisClusterCrossSlot`；Cluster 中多键命令必须落在同一 slot，否则拦截
 - `RedisClusterDbZero` — 开关：`RedisClusterDbZero`；原生 Cluster 仅允许 DB 0；选择其它 DB 时拦截
 - `RedisClusterScanScope` — 开关：`RedisClusterScanScope`；Cluster 下 SCAN 只覆盖单个节点，不能当作全局遍历
 - `RedisClusterScriptSlot` — 开关：`RedisClusterScriptSlot`；Cluster 脚本/函数必须显式声明同 slot 的键；未验证时拦截
 - `RedisClusterTransactionSlot` — 开关：`RedisClusterTransactionSlot`；Cluster 事务要求所有键同一 slot；单命令入口无法保证，拦截
+- `RedisCommandCompatibility` — 开关：`RedisCommandCompatibility`；命令需要更高的 Redis 版本，当前实例不支持
 - `RedisCommandSyntax` — 开关：`RedisCommandSyntax`；检查命令、子命令、参数数量及选项组合；语法非法或参数不完整时拦截
 - `RedisCopyOverwrite` — 开关：`RedisCopyOverwrite`；COPY 使用 REPLACE 等覆盖行为时提示，并检查源键、目标键及目标 DB 权限
 - `RedisDbScope` — 开关：`RedisDbScope`；命令只能访问指定 DB 范围；超出授权范围时拦截；格式如 0-15
@@ -85,6 +87,7 @@
 - `RedisKeyPrefix` — 开关：`RedisKeyPrefix`；键名必须位于授权前缀范围内，所有源键和目标键均需检查；留空表示不检查前缀
 - `RedisLargeOffsetWrite` — 开关：`RedisLargeOffsetWrite`；SETRANGE、SETBIT 等按偏移写入的操作，预计对象最终大小超过阈值时拦截，0 表示不限制
 - `RedisLargeRangeDelete` — 开关：`RedisLargeRangeDelete`；集合范围删除、列表裁剪及 Stream 裁剪等操作，影响元素数量未知或超过阈值时提示
+- `RedisLargeValueRead` — 开关：`RedisLargeValueRead`；读取超大 key（> 1 MB）会占用查询连接与带宽
 - `RedisMaxCommandPayload` — 开关：`RedisMaxCommandPayload`；单条命令参数总字节数上限，0 表示不限制；防止多个小值绕过单值大小限制
 - `RedisMaxDeleteKeys` — 开关：`RedisMaxDeleteKeys`；单条删除命令键数上限，0 表示不限制；超过上限转批量删除审核
 - `RedisMaxKeyLen` — 开关：`RedisMaxKeyLen`；键名长度上限（字节），0 表示不限制
@@ -97,6 +100,8 @@
 - `RedisMaxWriteKeys` — 开关：`RedisMaxWriteKeys`；单条写入命令涉及的键数上限，0 表示不限制；超过上限转批量审核
 - `RedisMinTtl` — 开关：`RedisMinTtl`；过期时间低于业务最小值时提示；最小值按业务配置，0 表示不检查
 - `RedisNonIdempotentWrite` — 开关：`RedisNonIdempotentWrite`；INCR、DECR、计数增量、列表弹出等重复执行会改变结果的操作，提示重复执行风险
+- `RedisOverwriteExisting` — 开关：`RedisOverwriteExisting`；覆盖写入已存在的键，原值会丢失
+- `RedisProductionWrite` — 开关：`RedisProductionWrite`；生产数据源上的写命令，需要确认影响面与回滚方式
 - `RedisProtectedKeyDelete` — 开关：`RedisProtectedKeyDelete`；禁止删除匹配保护规则的锁、幂等键、核心状态及其他关键业务键；多个规则用逗号分隔
 - `RedisProxyAtomicity` — 开关：`RedisProxyAtomicity`；源→目的类命令跨分片无法保证原子性（SMOVE/RENAME/RPOPLPUSH/BITOP/MSETNX 等要求同 slot）
 - `RedisProxyCommandSupport` — 开关：`RedisProxyCommandSupport`；Proxy 集群未实现或受限的命令（如 Redis 4.0 代理不支持 BZPOPMAX/BZPOPMIN）
@@ -113,6 +118,7 @@
 - `RedisStreamStateChange` — 开关：`RedisStreamStateChange`；消费组变更、消息确认、认领等操作会改变消费状态，执行时提示
 - `RedisTransactionIntegrity` — 开关：`RedisTransactionIntegrity`；MULTI/EXEC 必须组成完整审核单元；单命令入口无法保证，直接拦截
 - `RedisTtlLossOnOverwrite` — 开关：`RedisTtlLossOnOverwrite`；覆盖写入可能清除原 TTL，且未明确指定过期策略或保留 TTL 时提示
+- `RedisTypeMismatch` — 开关：`RedisTypeMismatch`；写命令的键类型与命令期望不符，执行会直接报 WRONGTYPE
 - `RedisUnknownCommand` — 开关：`RedisUnknownCommand`；禁止尚未登记语义的命令、模块命令及厂商扩展命令
 
 ## Doris 侧 · internal/dorischeck（4 条）

@@ -261,6 +261,12 @@ export default {
     'Proxy cluster only supports single-shard transactions; MULTI/EXEC and WATCH across shards are unreliable',
   RedisReadConsistency:
     'Multi-key reads across shards are not a single point-in-time snapshot; some values may be stale',
+  RedisTypeMismatch: 'Key type does not match what the write command expects; the command will fail with WRONGTYPE',
+  RedisOverwriteExisting: 'Overwriting an existing key discards its previous value',
+  RedisLargeValueRead: 'Reading a key larger than 1 MB holds the query connection for a long time',
+  RedisBigKeySyncDelete: 'Synchronous deletion of a big key blocks the server; prefer UNLINK',
+  RedisProductionWrite: 'Write against a production data source; describe blast radius and rollback',
+  RedisCommandCompatibility: 'Command requires a newer Redis version than this instance provides',
   DorisRequireDistribution:
     'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',
