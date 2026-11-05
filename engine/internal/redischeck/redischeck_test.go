@@ -659,16 +659,43 @@ func TestRedisTopologyRules(t *testing.T) {
 		t.Error("Cluster 下 db0 不应被拦截")
 	}
 
-	// Proxy：多键与 SCAN 拦截，单键放行
+	// Proxy：跨 slot 多键拦截、同 slot 放行、SCAN 拦截、单键放行
 	proxy := Config{Deployment: "proxy", ProxyCrossShard: true, ProxyScanScope: true, ProxyDbSupport: true, Mode: ModeQuery}
-	if !hit(proxy, "MGET a b") {
-		t.Error("Proxy 下多键命令应被拦截")
+	if !hit(proxy, "MGET k0 "+other) {
+		t.Error("Proxy 下跨 slot 多键应被拦截")
+	}
+	if hit(proxy, "MGET {t}a {t}b") {
+		t.Error("Proxy 下同 slot 多键不应被拦截")
 	}
 	if !hit(proxy, "SCAN 0 MATCH app:*") {
 		t.Error("Proxy 下 SCAN 应被拦截")
 	}
 	if hit(proxy, "GET a") {
 		t.Error("Proxy 下单键读不应被拦截")
+	}
+
+	// Proxy 能力类规则（依据华为云 DCS 文档：代理集群的命令支持与同 slot 要求）
+	cmdSupport := Config{Deployment: "proxy", ProxyCommandSupport: true, Mode: ModeWrite}
+	if !hit(cmdSupport, "BZPOPMAX k 0") {
+		t.Error("Proxy 下 BZPOPMAX 应被拦截")
+	}
+	atomic := Config{Deployment: "proxy", ProxyAtomicity: true, Mode: ModeWrite}
+	if !hit(atomic, "MSETNX k0 v "+other+" v2") {
+		t.Error("Proxy 下跨 slot 的 MSETNX 应被拦截")
+	}
+	if hit(atomic, "MSETNX {t}a 1 {t}b 2") {
+		t.Error("同 slot 的 MSETNX 不应被拦截")
+	}
+	script := Config{Deployment: "proxy", ProxyScriptSupport: true, Mode: ModeWrite}
+	if !hit(script, `EVAL "return 1" 0`) {
+		t.Error("Proxy 下未声明 key 的脚本应被拦截")
+	}
+	if hit(script, `EVAL "return 1" 1 {t}a`) {
+		t.Error("同 slot 且声明了 key 的脚本不应被拦截")
+	}
+	tx := Config{Deployment: "proxy", ProxyTransactionSupport: true, Mode: ModeWrite}
+	if !hit(tx, "MULTI") {
+		t.Error("Proxy 下 MULTI 应被拦截")
 	}
 
 	// 事务完整性：与部署形态无关，开关打开即拦

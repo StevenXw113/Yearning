@@ -202,7 +202,15 @@ export default {
     '代理模式多键命令分片行为未验证时拦截',
   RedisProxyScanScope:
     '代理模式扫描覆盖范围未知时拦截',
-  DorisRequireDistribution:
+
+  RedisProxyCommandSupport:
+    'Proxy 集群未实现或受限的命令（如 Redis 4.0 代理不支持 BZPOPMAX/BZPOPMIN）',
+  RedisProxyAtomicity:
+    '源→目的类命令跨分片无法保证原子性（SMOVE/RENAME/RPOPLPUSH/BITOP/MSETNX 等要求同 slot）',
+  RedisProxyScriptSupport:
+    'Proxy 集群要求脚本显式声明 key（numkeys ≥ 1）且所有 key 同 slot',
+  RedisProxyTransactionSupport:
+    'Proxy 集群只支持单分片内事务，MULTI/EXEC 与 WATCH 跨分片无法保证',  DorisRequireDistribution:
     'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
   DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',
   DorisReplicationNum: 'Doris：建表副本数期望值（0 不校验）',

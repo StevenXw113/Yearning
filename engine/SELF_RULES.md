@@ -45,7 +45,7 @@
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 
-## Redis 侧 · internal/redischeck（62 条）
+## Redis 侧 · internal/redischeck（66 条）
 
 - `RedisClusterCrossSlot` — 开关：`RedisClusterCrossSlot`；Cluster 中多键命令必须落在同一 slot，否则拦截
 - `RedisClusterDbZero` — 开关：`RedisClusterDbZero`；原生 Cluster 仅允许 DB 0；选择其它 DB 时拦截
@@ -98,9 +98,13 @@
 - `RedisMinTtl` — 开关：`RedisMinTtl`；过期时间低于业务最小值时提示；最小值按业务配置，0 表示不检查
 - `RedisNonIdempotentWrite` — 开关：`RedisNonIdempotentWrite`；INCR、DECR、计数增量、列表弹出等重复执行会改变结果的操作，提示重复执行风险
 - `RedisProtectedKeyDelete` — 开关：`RedisProtectedKeyDelete`；禁止删除匹配保护规则的锁、幂等键、核心状态及其他关键业务键；多个规则用逗号分隔
-- `RedisProxyCrossShard` — 开关：`RedisProxyCrossShard`；多键命令在 Proxy 上的分片与原子性未验证时拦截
+- `RedisProxyAtomicity` — 开关：`RedisProxyAtomicity`；源→目的类命令跨分片无法保证原子性（SMOVE/RENAME/RPOPLPUSH/BITOP/MSETNX 等要求同 slot）
+- `RedisProxyCommandSupport` — 开关：`RedisProxyCommandSupport`；Proxy 集群未实现或受限的命令（如 Redis 4.0 代理不支持 BZPOPMAX/BZPOPMIN）
+- `RedisProxyCrossShard` — 开关：`RedisProxyCrossShard`；多键命令的键跨 slot 时拦截（代理按 slot 路由，跨分片命令无法保证结果）
 - `RedisProxyDbSupport` — 开关：`RedisProxyDbSupport`；Proxy 未验证支持非 db0 逻辑库时拦截
 - `RedisProxyScanScope` — 开关：`RedisProxyScanScope`；Proxy 下扫描覆盖范围未知，不能作为全局扫描或批量变更依据
+- `RedisProxyScriptSupport` — 开关：`RedisProxyScriptSupport`；Proxy 集群要求脚本显式声明 key（numkeys ≥ 1）且所有 key 同 slot
+- `RedisProxyTransactionSupport` — 开关：`RedisProxyTransactionSupport`；Proxy 集群只支持单分片内事务，MULTI/EXEC 与 WATCH 跨分片无法保证
 - `RedisRequireTtl` — 开关：`RedisRequireTtl`；缓存类键新建后必须有过期时间；明确登记为永久数据的业务键可豁免
 - `RedisScanMatchRequired` — 开关：`RedisScanMatchRequired`；SCAN 必须指定允许的业务匹配范围；MATCH 规则无法确认属于授权范围时拦截
 - `RedisSensitiveKeyAccess` — 开关：`RedisSensitiveKeyAccess`；访问凭据、Token、个人信息等敏感业务键时提示；敏感范围由业务配置

@@ -191,14 +191,18 @@ type AuditRole struct {
 	RedisStreamStateChange      bool `json:"redis_stream_state_change"`
 	RedisTransactionIntegrity   bool `json:"redis_transaction_integrity"`
 	// --- Cluster / Proxy 拓扑(依据部署形态生效) ---
-	RedisClusterDbZero          bool `json:"redis_cluster_db_zero"`
-	RedisClusterCrossSlot       bool `json:"redis_cluster_cross_slot"`
-	RedisClusterScanScope       bool `json:"redis_cluster_scan_scope"`
-	RedisClusterTransactionSlot bool `json:"redis_cluster_transaction_slot"`
-	RedisClusterScriptSlot      bool `json:"redis_cluster_script_slot"`
-	RedisProxyDbSupport         bool `json:"redis_proxy_db_support"`
-	RedisProxyCrossShard        bool `json:"redis_proxy_cross_shard"`
-	RedisProxyScanScope         bool `json:"redis_proxy_scan_scope"`
+	RedisClusterDbZero           bool `json:"redis_cluster_db_zero"`
+	RedisClusterCrossSlot        bool `json:"redis_cluster_cross_slot"`
+	RedisClusterScanScope        bool `json:"redis_cluster_scan_scope"`
+	RedisClusterTransactionSlot  bool `json:"redis_cluster_transaction_slot"`
+	RedisClusterScriptSlot       bool `json:"redis_cluster_script_slot"`
+	RedisProxyDbSupport          bool `json:"redis_proxy_db_support"`
+	RedisProxyCrossShard         bool `json:"redis_proxy_cross_shard"`
+	RedisProxyScanScope          bool `json:"redis_proxy_scan_scope"`
+	RedisProxyCommandSupport     bool `json:"redis_proxy_command_support"`
+	RedisProxyAtomicity          bool `json:"redis_proxy_atomicity"`
+	RedisProxyScriptSupport      bool `json:"redis_proxy_script_support"`
+	RedisProxyTransactionSupport bool `json:"redis_proxy_transaction_support"`
 
 	// ------- Doris 建表审核规则(internal/dorischeck,自研)-------
 	// Doris 兼容 MySQL 协议与查询/DML 语法,但建表 DDL 是自有语法

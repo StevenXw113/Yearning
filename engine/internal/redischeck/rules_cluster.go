@@ -79,16 +79,74 @@ func init() {
 	})
 
 	Register(commandRule{
-		name: "RedisProxyCrossShard", desc: "多键命令在 Proxy 上的分片与原子性未验证时拦截",
+		name: "RedisProxyCrossShard", desc: "多键命令的键跨 slot 时拦截（代理按 slot 路由，跨分片命令无法保证结果）",
 		cat: CategorySecurity, modes: allModes, level: LevelError,
 		enabled: func(c Config) bool { return c.Deployment == "proxy" && c.ProxyCrossShard },
 		hit: func(_ Config, cmd *Command) string {
-			if len(cmd.Keys) < 2 {
+			if len(cmd.Keys) < 2 || sameSlot(cmd.Keys) {
 				return ""
 			}
-			return "代理模式下多键命令可能跨分片（" + itoa(len(cmd.Keys)) +
-				" 个键），分片与原子性未验证，请拆成单键命令"
+			return "键 " + strings.Join(cmd.Keys, "、") +
+				" 不在同一 slot：代理按 slot 路由，跨分片的多键命令会被拒绝或结果不一致；请用 {tag} 强制同 slot 或拆成单键"
 		},
+	})
+
+	Register(commandRule{
+		name: "RedisProxyCommandSupport", desc: "Proxy 集群未实现或受限的命令（如 Redis 4.0 代理不支持 BZPOPMAX/BZPOPMIN）",
+		cat: CategorySecurity, modes: allModes, level: LevelError,
+		enabled: func(c Config) bool { return c.Deployment == "proxy" && c.ProxyCommandSupport },
+		hit: func(_ Config, cmd *Command) string {
+			if _, bad := proxyUnsupportedCommands[cmd.Name]; bad {
+				return cmd.Name + " 在 Proxy 集群上未实现或受限" +
+					"（华为云 DCS：Redis 4.0 代理不支持 BZPOPMAX/BZPOPMIN；5.0+ 要求所有键同 slot）"
+			}
+			return ""
+		},
+	})
+
+	Register(commandRule{
+		name: "RedisProxyAtomicity", desc: "源→目的类命令跨分片无法保证原子性（SMOVE/RENAME/RPOPLPUSH/BITOP/MSETNX 等要求同 slot）",
+		cat: CategorySecurity, modes: allModes, level: LevelError,
+		enabled: func(c Config) bool { return c.Deployment == "proxy" && c.ProxyAtomicity },
+		hit: func(_ Config, cmd *Command) string {
+			if _, ok := proxyAtomicCommands[cmd.Name]; !ok {
+				return ""
+			}
+			if len(cmd.Keys) < 2 || sameSlot(cmd.Keys) {
+				return ""
+			}
+			return cmd.Name + " 涉及多个键且跨 slot：代理无法在单个分片内完成，原子性无法保证" +
+				"（请用 {tag} 强制同 slot，或拆成多条单键命令）"
+		},
+	})
+
+	Register(commandRule{
+		name: "RedisProxyScriptSupport", desc: "Proxy 集群要求脚本显式声明 key（numkeys ≥ 1）且所有 key 同 slot",
+		cat: CategorySecurity, modes: allModes, level: LevelError,
+		enabled: func(c Config) bool { return c.Deployment == "proxy" && c.ProxyScriptSupport },
+		hit: func(_ Config, cmd *Command) string {
+			switch cmd.Name {
+			case "EVAL", "EVALSHA", "EVAL_RO", "EVALSHA_RO", "FCALL", "FCALL_RO":
+			default:
+				return ""
+			}
+			n, ok := cmd.IntArg(2)
+			if !ok || n < 1 {
+				return cmd.Name + " 未声明 key：Proxy 集群要求 numkeys ≥ 1，" +
+					"否则报 ERR eval/evalsha numkeys must be bigger than zero in redis cluster mode"
+			}
+			if len(cmd.Keys) > 1 && !sameSlot(cmd.Keys) {
+				return cmd.Name + " 的 key 跨 slot：代理按第一个 key 路由，其余 key 会失败（请用 {tag} 同 slot）"
+			}
+			return ""
+		},
+	})
+
+	Register(commandRule{
+		name: "RedisProxyTransactionSupport", desc: "Proxy 集群只支持单分片内事务，MULTI/EXEC 与 WATCH 跨分片无法保证",
+		cat: CategorySecurity, modes: allModes, level: LevelError,
+		enabled: func(c Config) bool { return c.Deployment == "proxy" && c.ProxyTransactionSupport },
+		hit:     transactionHit("代理集群只支持单分片内事务：MULTI/EXEC 与 WATCH 跨分片无法保证，请拆成单键操作"),
 	})
 
 	Register(commandRule{
@@ -181,4 +239,32 @@ func crc16(s string) uint16 {
 		}
 	}
 	return crc
+}
+
+// proxyUnsupportedCommands Proxy 集群上未实现或明确受限的命令（华为云 DCS 实例受限使用命令）
+var proxyUnsupportedCommands = map[string]struct{}{
+	"BZPOPMAX": {}, "BZPOPMIN": {},
+}
+
+// proxyAtomicCommands 源→目的类命令：所有键必须同 slot，否则代理无法保证原子性
+var proxyAtomicCommands = map[string]struct{}{
+	"SMOVE": {}, "RENAME": {}, "RENAMENX": {}, "RPOPLPUSH": {}, "LMOVE": {}, "BLMOVE": {}, "COPY": {},
+	"BITOP": {}, "MSETNX": {},
+	"SINTERSTORE": {}, "SUNIONSTORE": {}, "SDIFFSTORE": {},
+	"ZUNIONSTORE": {}, "ZINTERSTORE": {}, "ZDIFFSTORE": {},
+	"PFMERGE": {},
+}
+
+// sameSlot 所有键是否落在同一 slot
+func sameSlot(keys []string) bool {
+	if len(keys) < 2 {
+		return true
+	}
+	first := redisSlot(keys[0])
+	for _, k := range keys[1:] {
+		if redisSlot(k) != first {
+			return false
+		}
+	}
+	return true
 }

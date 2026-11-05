@@ -250,7 +250,15 @@ export default {
     'Proxy mode: block multi-key commands whose sharding behaviour is unverified',
   RedisProxyScanScope:
     'Proxy mode: block scans when coverage and cursor semantics are unknown',
-  DorisRequireDistribution:
+
+  RedisProxyCommandSupport:
+    'Commands not implemented or restricted on Proxy cluster (e.g. BZPOPMAX/BZPOPMIN unsupported on Redis 4.0 proxy)',
+  RedisProxyAtomicity:
+    'Source-to-destination commands cannot stay atomic across shards (SMOVE/RENAME/RPOPLPUSH/BITOP/MSETNX need same slot)',
+  RedisProxyScriptSupport:
+    'Proxy cluster requires scripts to declare keys (numkeys >= 1) and all keys in the same slot',
+  RedisProxyTransactionSupport:
+    'Proxy cluster only supports single-shard transactions; MULTI/EXEC and WATCH across shards are unreliable',  DorisRequireDistribution:
     'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',
   DorisReplicationNum: 'Doris: expected replication num (0 = no check)',

@@ -690,6 +690,10 @@ const rule: Rule[] = [
   redisRule('RedisProxyDbSupport', 'statement', 0, 'error'),
   redisRule('RedisProxyCrossShard', 'statement', 0, 'error'),
   redisRule('RedisProxyScanScope', 'statement', 0, 'error'),
+  redisRule('RedisProxyCommandSupport', 'statement', 0, 'error'),
+  redisRule('RedisProxyAtomicity', 'statement', 0, 'error'),
+  redisRule('RedisProxyScriptSupport', 'statement', 0, 'error'),
+  redisRule('RedisProxyTransactionSupport', 'statement', 0, 'error'),
   {
     name: 'DorisRequireDistribution',
     category: 'table',

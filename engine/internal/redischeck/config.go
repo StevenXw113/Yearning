@@ -114,14 +114,18 @@ type Config struct {
 
 	// ---- Cluster / Proxy 拓扑 ----
 	// 这些开关只在对应部署形态下生效（见 Deployment），形态未知时一律不触发。
-	ClusterDbZero          bool
-	ClusterCrossSlot       bool
-	ClusterScanScope       bool
-	ClusterTransactionSlot bool
-	ClusterScriptSlot      bool
-	ProxyDbSupport         bool
-	ProxyCrossShard        bool
-	ProxyScanScope         bool
+	ClusterDbZero           bool
+	ClusterCrossSlot        bool
+	ClusterScanScope        bool
+	ClusterTransactionSlot  bool
+	ClusterScriptSlot       bool
+	ProxyDbSupport          bool
+	ProxyCrossShard         bool
+	ProxyScanScope          bool
+	ProxyCommandSupport     bool
+	ProxyAtomicity          bool
+	ProxyScriptSupport      bool
+	ProxyTransactionSupport bool
 
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。
