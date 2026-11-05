@@ -306,8 +306,7 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	// Redis 键状态快照：类型/占用/是否存在只能连库拿到，引擎只做判定。
-	// 探测失败不影响检测（快照为空 = 未知，规则只提示不拦）。
+	// Redis 键状态快照：探测失败按未知处理（规则只提示不拦）
 	var keySnapshot map[string]api.KeyState
 	if s.DBType == model.DBTypeRedis {
 		db, _ := model.RedisParseDB(u.Database)

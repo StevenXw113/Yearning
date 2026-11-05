@@ -5,8 +5,7 @@ import (
 	"strings"
 )
 
-// 环境与版本类规则：判定依据是调用方随请求传入的运行时事实
-// （数据源是否生产、目标实例的 Redis 版本），引擎本身不连库。
+// 环境与版本类规则：依据调用方传入的生产标记与 Redis 版本，引擎不连库。
 
 func init() {
 	Register(commandRule{

@@ -56,11 +56,7 @@ func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]int
 	return treeNodes(keys, "Table", true, model.DBTypeRedis), nil
 }
 
-// RedisKeyDetail 查询页「查看数据」的前置：键类型、TTL、大小与应执行的那条只读命令。
-//
-// Redis 没有表，也没有「一条命令看所有类型」的读法（GET 对 hash 直接 WRONGTYPE），
-// 所以把「看这个键」翻译成一条按类型选择的命令；执行仍走查询页 WS
-// （只读白名单 + 查询侧规则审核 + 审计落库），不另开结果通道。
+// RedisKeyDetail 把「看这个键」翻译成一条按类型选择的只读命令（GET 对 hash 会 WRONGTYPE）。
 func RedisKeyDetail(u *model.CoreDataSource, db int, key string) (map[string]interface{}, error) {
 	var detail map[string]interface{}
 	err := u.WithRedisClient(db, func(client model.RedisConn) error {

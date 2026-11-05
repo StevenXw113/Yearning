@@ -5,10 +5,7 @@ import (
 	"strings"
 )
 
-// RedisScope 命令语义：读到的是什么、有没有副作用。
-//
-// 只用一个「是否只读」的布尔无法表达风险差异——SLOWLOG 与 GET 都是只读，
-// 但前者能看到同实例其它业务的完整命令。查询页按档位授权就是这个类型的意义。
+// RedisScope 命令语义：SLOWLOG 与 GET 都只读，但风险差一个量级，授权要按档位。
 type RedisScope int
 
 const (
@@ -119,13 +116,8 @@ type RedisPolicy struct {
 	AllowDiag bool
 }
 
-// QueryAllowed 判定查询页能否执行这条命令。
-//
-// 与 RedisIsReadCommand 的分工：那个回答「语义上是不是只读」（审核分类用），
-// 这个回答「该数据源能不能执行」（执行授权用）。两者不能合并——
-// 申请页检测需要把只读命令判成「不是变更命令」，查询页则需要拦住诊断命令。
-//
-// ok=false 时 reason 直接给用户看。
+// QueryAllowed 判定查询页能否执行；与 RedisIsReadCommand 分工：一个管语义（审核分类），
+// 一个管授权（执行）。reason 直接给用户看。
 func (p RedisPolicy) QueryAllowed(args []string) (bool, string) {
 	if len(args) == 0 {
 		return false, "Redis 命令不能为空"

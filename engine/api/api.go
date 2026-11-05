@@ -272,11 +272,8 @@ type Record struct {
 	Rollback string `json:"rollback"`
 }
 
-// KeyState 审核前探测到的键状态（Redis）。
-//
-// 键类型、是否存在、大小这些事实只能连库才拿得到，而引擎是纯文本审核、
-// 不连库：由调用方探测后随请求传入，规则只做判定。缺键表示「未探测到」，
-// 规则按未知处理，不据此拦截。
+// KeyState 键状态快照（Redis）：由调用方探测后传入，引擎不连库。
+// 缺键 = 未探测到，规则按未知处理、不据此拦截。
 type KeyState struct {
 	Type string `json:"type"` // none / string / hash / list / set / zset / stream
 	Size int64  `json:"size"` // 字节数（MEMORY USAGE），取不到为 0
@@ -284,14 +281,12 @@ type KeyState struct {
 }
 
 type CheckRequest struct {
-	Sql    string      `json:"sql"`
-	Schema string      `json:"schema"`
-	Source *DataSource `json:"source"`
-	Lang   string      `json:"lang"`
-	Rule   *AuditRole  `json:"rule"`
-	// KeySnapshot 命令涉及键的状态快照（Redis 专用，由调用方探测）。
-	// 键不存在于 map 表示未探测，规则不得据此判定「不存在」。
-	KeySnapshot map[string]KeyState `json:"key_snapshot,omitempty"`
+	Sql         string              `json:"sql"`
+	Schema      string              `json:"schema"`
+	Source      *DataSource         `json:"source"`
+	Lang        string              `json:"lang"`
+	Rule        *AuditRole          `json:"rule"`
+	KeySnapshot map[string]KeyState `json:"key_snapshot,omitempty"` // 缺键 = 未探测，规则不得判「不存在」
 	// CommandCount 本次提交包含的命令数（单命令入口为 1），供事务上限规则判定。
 	CommandCount int `json:"command_count,omitempty"`
 	// Mode 审核模式:空 / "write" = 变更命令审核(申请页检测、工单执行前复检),

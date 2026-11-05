@@ -131,7 +131,7 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), querySideCheckTimeout)
 	defer cancel()
-	// Redis 键状态快照：查询页执行前探测（引擎不连库），探测失败按未知处理
+	// Redis 键状态快照：探测失败按未知处理
 	var keySnapshot map[string]api.KeyState
 	if source.DBType == model.DBTypeRedis {
 		db, _ := model.RedisParseDB(schema)

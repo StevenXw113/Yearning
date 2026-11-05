@@ -2,17 +2,11 @@ package redischeck
 
 import "strings"
 
-// 键状态类规则。
-//
-// 键类型、是否存在、大小这些事实只能连库拿到，而引擎是纯文本审核、不连库：
-// 由调用方（主程序）探测后随请求传入 Config.KeySnapshot，规则只做判定。
-// 快照里缺席的键表示「未探测到」——按未知处理，只提示不拦截：
-// 探测失败不该变成误拦。
+// 键状态类规则：键类型/大小由调用方探测后放进 Config.KeySnapshot，引擎不连库。
+// 快照里缺席的键按未知处理，只提示不拦截。
 const (
-	// largeValueBytes 单键字节数阈值（1 MB）：超过即视为大 key
-	largeValueBytes = 1 << 20
-	// bigKeyElements 元素数阈值：DEL 这类同步删除超过它就会阻塞服务端
-	bigKeyElements = 1000
+	largeValueBytes = 1 << 20 // 1 MB，超过视为大 key
+	bigKeyElements  = 1000    // DEL 同步删除超过它就会阻塞
 )
 
 func init() {

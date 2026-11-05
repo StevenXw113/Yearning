@@ -77,10 +77,7 @@ func NormalizeRedisMode(m string) string {
 	return ""
 }
 
-// RedisDeployment 返回部署形态（standalone / cluster / proxy），探测失败返回空串表示未知。
-//
-// 数据源上手动指定了形态就以它为准：自动探测依赖 CLUSTER INFO，部分云代理返回的信息
-// 不足以区分集群与代理（会被判成 standalone），那样 Cluster/Proxy 规则就永远不触发。
+// RedisDeployment 返回部署形态，手动配置优先（云代理靠 CLUSTER INFO 判不准）。
 func (s *CoreDataSource) RedisDeployment() string {
 	if m := NormalizeRedisMode(s.RedisMode); m != "" {
 		return m
@@ -235,18 +232,9 @@ func slotsMatchHost(slots []redis.ClusterSlot, host string) bool {
 	return false
 }
 
-// redisClientPool 进程级客户端缓存，键为「数据源 × 逻辑库」。
-//
-// go-redis 的 Client 本身就是连接池，但先前每个请求都新建即弃：一次「查看键详情」
-// 要付三次握手（探活客户端、换库客户端、真正执行命令各一条新连接）。
-// 客户端按数据源与库常驻后，握手只发生在首次访问与配置变更时。
-//
-// 借用带引用计数：WithRedisClient 借出、fn 返回归还。数据源被编辑/删除时
-// 旧客户端只是「退役」，等在途借用全部归还后才真正 Close——正在执行的命令
-// 不会被管理操作打断。
-//
-// 不设淘汰：条目数 = 数据源 × 库，量级几十；配置变更按指纹换新，
-// 数据源删除由 DropRedisClients 回收。条目失控时再上 LRU。
+// redisClientPool 进程级客户端缓存（数据源 × 逻辑库），避免每请求重新握手。
+// 借用带引用计数：编辑/删除数据源时旧客户端退役，等在途借用归还后才 Close。
+// 不设淘汰，条目量级几十；失控时再上 LRU。
 type redisClientPool struct {
 	mu      sync.Mutex
 	entries map[redisClientKey]*redisPoolEntry
@@ -554,15 +542,11 @@ func RedisParseDB(name string) (int, error) {
 	return n, nil
 }
 
-// RedisKeyStateLimit 单次审核最多探测的键数：命令涉及的键通常 1~2 个，
-// 上限只防止 MGET 这类命令把探测放大成几十次往返。
+// RedisKeyStateLimit 单次审核最多探测的键数，防止 MGET 把探测放大成几十次往返。
 const RedisKeyStateLimit = 20
 
-// RedisKeySnapshot 探测命令涉及键的状态（类型/占用/元素数），供审核规则判定。
-//
-// 引擎不连库：类型、是否存在、大小这些事实只能连库拿到，由主程序探测后随请求传入。
-// 两次 pipeline 完成（TYPE + MEMORY USAGE，再按类型取元素数）；
-// 拿不到的键不出现在结果里——规则按「未知」处理，探测失败不会变成误拦。
+// RedisKeySnapshot 探测键的类型/占用/元素数（两次 pipeline），供审核规则判定。
+// 拿不到的键不进结果——规则按未知处理，探测失败不会变成误拦。
 func RedisKeySnapshot(s *CoreDataSource, db int, keys []string) map[string]api.KeyState {
 	if s == nil || len(keys) == 0 {
 		return nil
@@ -645,8 +629,7 @@ var (
 	redisVersionCacheMu sync.Mutex
 )
 
-// RedisVersionOf 探测目标实例的 Redis 版本（INFO server 的 redis_version）。
-// 探测失败返回空串表示未知——审核侧按「版本未知不拦」处理，避免误伤。
+// RedisVersionOf 探测实例的 redis_version；空串 = 未知（审核侧不拦）。
 func RedisVersionOf(s *CoreDataSource) string {
 	if s == nil || s.DBType != DBTypeRedis {
 		return ""

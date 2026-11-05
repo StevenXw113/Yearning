@@ -5,17 +5,11 @@ import (
 	"strings"
 )
 
-// 规格里最后 4 条规则。
-//
-// 它们的原始描述都假设「能看到多条命令的上下文」，而当前入口是单命令审核：
-// 这里不硬凑，改为「单命令内可观测的等价信号」，判定依据写在各条注释里；
-// 唯一依赖多命令上下文的是 MaxTransactionCommands，事实由调用方（CommandCount）传入。
+// 规格里最后 4 条：原始描述假设多命令上下文，这里改用单命令内可观测的等价信号。
 
 const (
-	// deleteManifestKeys 批量删除需要附清单的键数阈值
-	deleteManifestKeys = 10
-	// expireRoundSeconds TTL 取整点（整小时整数倍）视为集中过期风险
-	expireRoundSeconds = 3600
+	deleteManifestKeys = 10   // 删除超过它要求附清单
+	expireRoundSeconds = 3600 // TTL 取整小时视为集中过期风险
 )
 
 func init() {
@@ -35,8 +29,7 @@ func init() {
 		},
 	})
 
-	// 2) 批量删除需要清单：键数达到阈值时要求附待删键清单。
-	//    MaxDeleteKeys 是硬上限（超了直接拦），这条是流程要求（提示补清单、确认备份）。
+	// 2) 批量删除附清单：与 MaxDeleteKeys（硬上限）互补，这条只是流程提示。
 	Register(commandRule{
 		name: "RedisDeleteManifestRequired", desc: "批量删除需要附待删键清单并确认已备份",
 		cat: CategoryStructure, modes: writeOnly, level: LevelWarn,
@@ -55,8 +48,7 @@ func init() {
 		},
 	})
 
-	// 3) 事务命令数：事务块大小只能由调用方统计（当前入口单命令，恒为 1）。
-	//    MULTI 本身已被 TransactionIntegrity 拦；这条面向「将来放开多命令提交」的工单。
+	// 3) 事务命令数：CommandCount 由调用方给（单命令入口恒为 1）。
 	Register(commandRule{
 		name: "RedisMaxTransactionCommands", desc: "单次事务（提交）内的命令数上限，0 表示不限制",
 		cat: CategoryPerformance, modes: allModes, level: LevelError,
@@ -70,9 +62,7 @@ func init() {
 		},
 	})
 
-	// 4) 脚本模板范围：脚本只能操作「显式声明 + 允许前缀内」的键。
-	//    numkeys 与实际键数不符、脚本引用 KEYS[i] 越界，都会让未声明的键参与操作，
-	//    在集群/代理上直接路由失败，在主从上也可能是绕过键权限的入口。
+	// 4) 脚本只能碰声明过且在允许前缀内的键（未声明的键在集群下无法路由）。
 	Register(commandRule{
 		name: "RedisScriptTemplateScope", desc: "脚本只能访问显式声明（KEYS 下标不越界）且在允许前缀内的键",
 		cat: CategorySecurity, modes: allModes, level: LevelError,

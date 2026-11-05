@@ -2,11 +2,8 @@ package redischeck
 
 import "strings"
 
-// Cluster / Proxy 拓扑类规则。
-//
-// 判定依据是部署形态（Config.Deployment），由主程序探测实例后随审核请求传入。
-// 形态未知（空串）时这些规则一律不生效：未知既不当违规，也不当安全——
-// 拿不到拓扑就贸然按集群语义拦，会把单机实例的正常命令全部误判。
+// Cluster / Proxy 拓扑类规则：依据 Config.Deployment，形态未知时不生效
+// （拿不到拓扑就按集群语义拦，会把单机实例的正常命令全误判）。
 func init() {
 	Register(commandRule{
 		name: "RedisClusterDbZero", desc: "原生 Cluster 仅允许 DB 0；选择其它 DB 时拦截",
