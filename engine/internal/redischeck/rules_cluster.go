@@ -164,6 +164,29 @@ func init() {
 		enabled: func(c Config) bool { return c.TransactionIntegrity },
 		hit:     transactionHit("当前入口按单条命令审核，无法保证 MULTI/EXEC 成对且事务内命令全部受审"),
 	})
+
+	// 读一致性：分片架构下多键读由不同分片各自返回，结果不是同一时刻的快照。
+	// 用 warn 而不是 error——跨分片读是集群的正常用法，业务上多数能接受；
+	// 「代理会直接报错」的那些由 RedisProxyCrossShard 拦。
+	Register(commandRule{
+		name: "RedisReadConsistency", desc: "分片架构下多键读不是同一时刻快照，可能一部分读到旧值",
+		// 归提示类：跨分片读是集群的正常用法，业务上多数能接受；
+		// 安全类规则的默认级别被护栏限定为 error，而这里不该直接拦截
+		cat: CategoryPerformance, modes: allModes, level: LevelWarn,
+		enabled: func(c Config) bool {
+			if !c.ReadConsistency {
+				return false
+			}
+			return c.Deployment == "cluster" || c.Deployment == "proxy"
+		},
+		hit: func(_ Config, cmd *Command) string {
+			if !isMultiKeyRead(cmd.Name) || len(cmd.Keys) < 2 || sameSlot(cmd.Keys) {
+				return ""
+			}
+			return cmd.Name + " 跨分片读取：" + itoa(len(cmd.Keys)) +
+				" 个键由不同分片各自返回，结果不是同一时刻快照；对一致性敏感的读取请用 {tag} 强制同 slot"
+		},
+	})
 }
 
 // scanFamilyHit 命中 SCAN 家族（游标遍历类命令）
@@ -267,4 +290,15 @@ func sameSlot(keys []string) bool {
 		}
 	}
 	return true
+}
+
+// isMultiKeyRead 一次读多个键的只读命令：跨分片时各键由不同分片返回，
+// 结果不是同一时刻的快照（可能出现一部分是旧值）。
+func isMultiKeyRead(name string) bool {
+	switch name {
+	case "MGET", "HMGET", "EXISTS", "TOUCH", "SMISMEMBER", "ZMSCORE",
+		"SINTER", "SUNION", "SDIFF", "PFCOUNT":
+		return true
+	}
+	return false
 }

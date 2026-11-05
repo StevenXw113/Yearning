@@ -258,7 +258,10 @@ export default {
   RedisProxyScriptSupport:
     'Proxy cluster requires scripts to declare keys (numkeys >= 1) and all keys in the same slot',
   RedisProxyTransactionSupport:
-    'Proxy cluster only supports single-shard transactions; MULTI/EXEC and WATCH across shards are unreliable',  DorisRequireDistribution:
+    'Proxy cluster only supports single-shard transactions; MULTI/EXEC and WATCH across shards are unreliable',
+  RedisReadConsistency:
+    'Multi-key reads across shards are not a single point-in-time snapshot; some values may be stale',
+  DorisRequireDistribution:
     'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',
   DorisReplicationNum: 'Doris: expected replication num (0 = no check)',

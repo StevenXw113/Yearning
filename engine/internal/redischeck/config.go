@@ -126,6 +126,8 @@ type Config struct {
 	ProxyAtomicity          bool
 	ProxyScriptSupport      bool
 	ProxyTransactionSupport bool
+	// ReadConsistency 多分片读取不是同一时刻快照（跨 slot 多键读）
+	ReadConsistency bool
 
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。

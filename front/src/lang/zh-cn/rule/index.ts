@@ -210,7 +210,10 @@ export default {
   RedisProxyScriptSupport:
     'Proxy 集群要求脚本显式声明 key（numkeys ≥ 1）且所有 key 同 slot',
   RedisProxyTransactionSupport:
-    'Proxy 集群只支持单分片内事务，MULTI/EXEC 与 WATCH 跨分片无法保证',  DorisRequireDistribution:
+    'Proxy 集群只支持单分片内事务，MULTI/EXEC 与 WATCH 跨分片无法保证',
+  RedisReadConsistency:
+    '分片架构下多键读不是同一时刻快照，可能一部分读到旧值',
+  DorisRequireDistribution:
     'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
   DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',
   DorisReplicationNum: 'Doris：建表副本数期望值（0 不校验）',

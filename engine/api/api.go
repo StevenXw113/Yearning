@@ -203,6 +203,7 @@ type AuditRole struct {
 	RedisProxyAtomicity          bool `json:"redis_proxy_atomicity"`
 	RedisProxyScriptSupport      bool `json:"redis_proxy_script_support"`
 	RedisProxyTransactionSupport bool `json:"redis_proxy_transaction_support"`
+	RedisReadConsistency         bool `json:"redis_read_consistency"`
 
 	// ------- Doris 建表审核规则(internal/dorischeck,自研)-------
 	// Doris 兼容 MySQL 协议与查询/DML 语法,但建表 DDL 是自有语法

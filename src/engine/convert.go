@@ -151,6 +151,7 @@ func AuditRoleToAPI(r *AuditRole) *api.AuditRole {
 		RedisProxyAtomicity:            r.RedisProxyAtomicity,
 		RedisProxyScriptSupport:        r.RedisProxyScriptSupport,
 		RedisProxyTransactionSupport:   r.RedisProxyTransactionSupport,
+		RedisReadConsistency:           r.RedisReadConsistency,
 		DorisRequireDistribution:       r.DorisRequireDistribution,
 		DorisBucketLimit:               int32(r.DorisBucketLimit),
 		DorisReplicationNum:            int32(r.DorisReplicationNum),

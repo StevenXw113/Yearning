@@ -165,6 +165,7 @@ type AuditRole struct {
 	RedisProxyAtomicity          bool `json:"RedisProxyAtomicity"`
 	RedisProxyScriptSupport      bool `json:"RedisProxyScriptSupport"`
 	RedisProxyTransactionSupport bool `json:"RedisProxyTransactionSupport"`
+	RedisReadConsistency         bool `json:"RedisReadConsistency"`
 	// Doris 建表审核规则（自研 dorischeck）：建表必须有分桶、BUCKETS 上限、副本数、KEY 模型
 	DorisRequireDistribution bool `json:"DorisRequireDistribution"`
 	DorisBucketLimit         int  `json:"DorisBucketLimit"`

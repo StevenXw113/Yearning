@@ -707,3 +707,65 @@ func TestRedisTopologyRules(t *testing.T) {
 		t.Error("普通写命令不应被事务规则拦截")
 	}
 }
+
+// 读一致性：分片架构下多键读不是同一时刻快照；同 slot 放行
+func TestRedisReadConsistency(t *testing.T) {
+	cfg := Config{Deployment: "cluster", ReadConsistency: true, Mode: ModeQuery}
+	hit := func(line string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == "RedisReadConsistency" {
+				return true
+			}
+		}
+		return false
+	}
+	other := ""
+	for i := 0; i < 500; i++ {
+		k := "k" + itoa(i)
+		if redisSlot(k) != redisSlot("k0") {
+			other = k
+			break
+		}
+	}
+	if other == "" {
+		t.Fatal("没找到不同 slot 的键")
+	}
+	if !hit("MGET k0 " + other) {
+		t.Error("跨 slot 的 MGET 应提示读一致性问题")
+	}
+	if hit("MGET {t}a {t}b") {
+		t.Error("同 slot 的 MGET 不应提示")
+	}
+	if hit("GET k0") {
+		t.Error("单键读不应提示")
+	}
+	// 非集群形态不触发
+	standalone := Config{Deployment: "standalone", ReadConsistency: true, Mode: ModeQuery}
+	if _, findings, _ := Check("MGET k0 "+other, standalone); len(findings) > 0 {
+		t.Errorf("单机形态不应触发: %+v", findings)
+	}
+}
+
+// READONLY / READWRITE 归连接状态控制：连接复用后会把读模式带给后续请求
+func TestRedisForbidReadonlySwitchesMode(t *testing.T) {
+	cfg := Config{ForbidConnectionControl: true, Mode: ModeWrite}
+	for _, line := range []string{"READONLY", "READWRITE"} {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		found := false
+		for _, f := range findings {
+			if f.Rule == "RedisForbidConnectionControl" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s 应被 RedisForbidConnectionControl 拦截", line)
+		}
+	}
+}

@@ -694,6 +694,7 @@ const rule: Rule[] = [
   redisRule('RedisProxyAtomicity', 'statement', 0, 'error'),
   redisRule('RedisProxyScriptSupport', 'statement', 0, 'error'),
   redisRule('RedisProxyTransactionSupport', 'statement', 0, 'error'),
+  redisRule('RedisReadConsistency', 'statement', 0, 'warn'),
   {
     name: 'DorisRequireDistribution',
     category: 'table',
