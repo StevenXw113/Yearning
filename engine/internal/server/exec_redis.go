@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"engine/api"
@@ -17,7 +19,8 @@ import (
 // redisTimeout 建立连接与探活的超时。
 const redisTimeout = 15 * time.Second
 
-// 连接参数与主程序 src/model/redis.go 一致（云厂商文档推荐值）。
+// 连接参数与主程序 src/model/redis.go 一致（云厂商文档推荐值）；
+// 客户端进程级复用后空闲连接会长期留着，MaxIdleConns 同样收敛到 20。
 const (
 	redisDialTimeout = 2 * time.Second
 	// 读放大到 5s（大 key 读取），写保持 2s，与主程序 src/model/redis.go 一致
@@ -25,7 +28,7 @@ const (
 	redisWriteTimeout = 2 * time.Second
 	redisPoolTimeout  = 3 * time.Second
 	redisPoolSize     = 200
-	redisMaxIdleConns = 200
+	redisMaxIdleConns = 20
 	redisMaxRetries   = 3
 	redisMaxRedirects = 3
 	redisConnMaxIdle  = 30 * time.Minute
@@ -93,6 +96,41 @@ func connectRedisDB(ds *api.DataSource, db int) (redis.UniversalClient, error) {
 	return client, nil
 }
 
+// redisClients 进程级客户端缓存，键 = 连接参数（含库号）。
+// Exec 每单新建即弃会让同一数据源反复支付 TCP+auth 握手（一次执行最多两次：
+// 探活 + 换库），与 dbpool.go 的 SQL 连接池同因同治。
+//
+// ponytail: 不做淘汰。条目 = 数据源×库，量级几十；口令变更走新指纹自然分流，
+// 旧条目只剩池对象本身，空闲连接由 ConnMaxIdleTime 收掉。
+var redisClients sync.Map
+
+// redisClient 取（或建）进程级共享客户端；调用方不要 Close。
+func redisClient(ds *api.DataSource, db int) (redis.UniversalClient, error) {
+	if ds == nil {
+		return nil, fmt.Errorf("数据源为空")
+	}
+	key := redisClientKey(ds, db)
+	if v, ok := redisClients.Load(key); ok {
+		return v.(redis.UniversalClient), nil
+	}
+	client, err := connectRedisDB(ds, db)
+	if err != nil {
+		return nil, err
+	}
+	actual, loaded := redisClients.LoadOrStore(key, client)
+	if loaded {
+		// 并发下另一个执行先建好了：用它的，关掉自己这份
+		_ = client.Close()
+		return actual.(redis.UniversalClient), nil
+	}
+	return client, nil
+}
+
+func redisClientKey(ds *api.DataSource, db int) string {
+	sum := sha256.Sum256([]byte(ds.Password))
+	return fmt.Sprintf("%s|%d|%s|%x|%d", ds.Ip, ds.Port, ds.Username, sum, db)
+}
+
 // slotHostMatch CLUSTER SLOTS 的节点地址是否与配置地址同主机：
 // 直连模式返回分片地址（可连），代理模式返回实例内网地址（客户端不可达）。
 func slotHostMatch(client *redis.Client, host string) bool {
@@ -141,11 +179,10 @@ func (e *Engine) execRedis(ctx context.Context, req *api.ExecRequest) (*api.Exec
 	if err != nil {
 		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
-	client, err := connectRedisDB(req.Source, dbNo)
+	client, err := redisClient(req.Source, dbNo)
 	if err != nil {
 		return &api.ExecReply{Ok: false, Error: "连接 Redis 失败: " + err.Error()}, nil
 	}
-	defer func() { _ = client.Close() }()
 
 	out, err := rediscmd.Execute(ctx, client, req.Order.Sql)
 	if err != nil {

@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"sort"
@@ -22,7 +23,8 @@ const DBTypeRedis = 3
 const RedisTimeout = 15 * time.Second
 
 // 连接参数取云厂商文档推荐值（腾讯云 Redis 连接示例 / 华为云 DCS 客户端建议）。
-// 不设 MinIdleConns：客户端按会话/工单建、用完即关，预建空闲连接只会堆在服务端。
+// 客户端现在进程级复用（见 redisClientPool），空闲连接会长期留在服务端：
+// 不设 MinIdleConns（按需建连），MaxIdleConns 收敛到 20，避免数据源多时堆积。
 const (
 	redisDialTimeout = 2 * time.Second
 	// 读写分开：读放宽到 5s——大 hash 的 HGETALL、稀疏键空间的 SCAN 在 2s 下会假性超时；
@@ -31,7 +33,7 @@ const (
 	redisWriteTimeout = 2 * time.Second
 	redisPoolTimeout  = 3 * time.Second
 	redisPoolSize     = 200
-	redisMaxIdleConns = 200
+	redisMaxIdleConns = 20
 	redisMaxRetries   = 3
 	redisMaxRedirects = 3
 	redisConnMaxIdle  = 30 * time.Minute
@@ -88,11 +90,10 @@ func RedisDeploymentOf(s *CoreDataSource) string {
 }
 
 func (s *CoreDataSource) detectRedisMode() string {
-	client, err := s.ConnectRedis()
+	client, err := s.RedisClient(0)
 	if err != nil {
 		return ""
 	}
-	defer func() { _ = client.Close() }()
 
 	// ConnectRedisWith 已经做过一次判定：命中「cluster_enabled 且槽位地址与配置一致」
 	// 时才返回集群客户端。这里先看客户端类型，避免重复判断口径不一致。
@@ -165,13 +166,8 @@ func IsRedisCluster(c RedisConn) bool {
 	return ok
 }
 
-// ConnectRedis 按数据源配置建立客户端（口令列先解密再建连）。
-// Redis 不经 gorm，调用方负责 Close。
-func (s *CoreDataSource) ConnectRedis() (RedisConn, error) {
-	return s.ConnectRedisWith(enc.Decrypt(C.General.SecretKey, s.Password))
-}
-
 // ConnectRedisWith 用明文口令建连并 Ping 探活，同时自动识别部署形态：
+// （显式探活/检测场景用，调用方负责 Close；业务读写走 RedisClient 复用连接）
 //   - 单机 / Proxy 集群（Twemproxy、Codis、云厂商代理）：对客户端就一个普通入口，用 Client；
 //   - Redis Cluster：CLUSTER INFO 返回 cluster_enabled:1，改用 ClusterClient（自带 MOVED/ASK 重定向）。
 //
@@ -214,15 +210,131 @@ func slotsMatchHost(slots []redis.ClusterSlot, host string) bool {
 	return false
 }
 
-// ConnectRedisDB 建连并选中指定逻辑库（工单/查询页按 dbN 指定目标库时用）。
+// redisClientPool 进程级客户端缓存，键为「数据源 × 逻辑库」。
+//
+// go-redis 的 Client 本身就是连接池，但先前每个请求都新建即弃：一次「查看键详情」
+// 要付三次握手（探活客户端、换库客户端、真正执行命令各一条新连接）。
+// 客户端按数据源与库常驻后，握手只发生在首次访问与配置变更时。
+//
+// 不设淘汰：条目数 = 数据源 × 库，量级几十；配置变更按指纹换新，
+// 数据源删除由 DropRedisClients 回收。条目失控时再上 LRU。
+type redisClientPool struct {
+	mu      sync.Mutex
+	entries map[redisClientKey]redisPoolEntry
+	dial    func(s *CoreDataSource, password string, db int) (RedisConn, error)
+}
+
+type redisClientKey struct {
+	// owner 优先用 sourceId：配置变更时才能替换同一条目；
+	// 没有 sourceId 的场景（如数据源检测）退回地址，避免彼此覆盖。
+	owner string
+	db    int
+}
+
+type redisPoolEntry struct {
+	sig    string
+	client RedisConn
+}
+
+var redisClients = &redisClientPool{
+	entries: map[redisClientKey]redisPoolEntry{},
+	dial:    (*CoreDataSource).connectRedisDBWith,
+}
+
+// RedisClient 返回该数据源在 db 库上的进程级共享客户端，调用方不要 Close。
+// 地址/账号/口令/库任一变化都会换新客户端，旧客户端随即关闭。
+func (s *CoreDataSource) RedisClient(db int) (RedisConn, error) {
+	if s == nil {
+		return nil, fmt.Errorf("数据源为空")
+	}
+	return redisClients.get(s, db)
+}
+
+func (p *redisClientPool) get(s *CoreDataSource, db int) (RedisConn, error) {
+	password := enc.Decrypt(C.General.SecretKey, s.Password)
+	key := redisClientKey{owner: s.SourceId, db: db}
+	if key.owner == "" {
+		key.owner = net.JoinHostPort(s.IP, strconv.Itoa(s.Port))
+	}
+	sig := redisClientSignature(s, password, db)
+
+	p.mu.Lock()
+	if e, ok := p.entries[key]; ok && e.sig == sig {
+		p.mu.Unlock()
+		return e.client, nil
+	}
+	p.mu.Unlock()
+
+	// 建连放在锁外：网络往返最长 15s，不能挡住其它数据源。
+	client, err := p.dial(s, password, db)
+	if err != nil {
+		return nil, err
+	}
+
+	p.mu.Lock()
+	var stale RedisConn
+	if e, ok := p.entries[key]; ok {
+		if e.sig == sig {
+			// 并发下另一个请求先建好了：用它的，关掉自己这份。
+			p.mu.Unlock()
+			_ = client.Close()
+			return e.client, nil
+		}
+		stale = e.client
+	}
+	p.entries[key] = redisPoolEntry{sig: sig, client: client}
+	p.mu.Unlock()
+	if stale != nil {
+		_ = stale.Close()
+	}
+	return client, nil
+}
+
+// drop 释放某数据源的全部客户端（数据源删除时调用）。
+func (p *redisClientPool) drop(sourceId string) {
+	var stale []RedisConn
+	p.mu.Lock()
+	for k, e := range p.entries {
+		if k.owner == sourceId {
+			delete(p.entries, k)
+			stale = append(stale, e.client)
+		}
+	}
+	p.mu.Unlock()
+	for _, c := range stale {
+		_ = c.Close()
+	}
+}
+
+// DropRedisClients 数据源被删除后回收其进程级客户端与部署形态缓存
+// （source_id 可能被新数据源复用，留着会把旧源的形态带过去）。
+// 编辑无需调用：地址与口令都进了指纹，下次访问自然换新。
+func DropRedisClients(sourceId string) {
+	if sourceId == "" {
+		return
+	}
+	redisClients.drop(sourceId)
+	redisModeCacheMu.Lock()
+	delete(redisModeCache, sourceId)
+	redisModeCacheMu.Unlock()
+}
+
+// redisClientSignature 连接参数指纹：任一变化都必须换客户端，
+// 否则改了口令还会拿着旧连接继续跑。口令只留哈希，不额外复制明文。
+func redisClientSignature(s *CoreDataSource, password string, db int) string {
+	sum := sha256.Sum256([]byte(password))
+	return fmt.Sprintf("%s|%d|%s|%x|%d", s.IP, s.Port, s.Username, sum, db)
+}
+
+// connectRedisDBWith 新建客户端并选中指定逻辑库（连接池建连用，调用方负责 Close）。
 // go-redis 是在连接建立时按 Options.DB 发 SELECT 的，所以换库要另建客户端，
 // 不能在一个客户端上手动 SELECT（连接池里各连接的库会不一致）。
 // 集群模式只有 db0，选其它库直接报错。
-func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
+func (s *CoreDataSource) connectRedisDBWith(password string, db int) (RedisConn, error) {
 	if db <= 0 {
-		return s.ConnectRedis()
+		return s.ConnectRedisWith(password)
 	}
-	probe, err := s.ConnectRedis()
+	probe, err := s.ConnectRedisWith(password)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +344,7 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 	}
 	_ = probe.Close()
 
-	client := redis.NewClient(redisUniversalOptions(s, enc.Decrypt(C.General.SecretKey, s.Password), db).Simple())
+	client := redis.NewClient(redisUniversalOptions(s, password, db).Simple())
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -246,11 +358,10 @@ func (s *CoreDataSource) ConnectRedisDB(db int) (RedisConn, error) {
 // 集群只有 db0；单机/代理以 CONFIG GET databases 为准（实例配了多少就列多少，空库也要能选），
 // 托管 Redis 常禁用 CONFIG，读不到时退回 INFO keyspace / 默认 16 个。
 func (s *CoreDataSource) RedisDatabases() ([]string, error) {
-	client, err := s.ConnectRedis()
+	client, err := s.RedisClient(0)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = client.Close() }()
 
 	if IsRedisCluster(client) {
 		return []string{"db0"}, nil
@@ -312,11 +423,10 @@ func (s *CoreDataSource) RedisScanKeys(db int, pattern string, limit int) ([]str
 	if limit <= 0 || limit > RedisScanLimit {
 		limit = RedisScanLimit
 	}
-	client, err := s.ConnectRedisDB(db)
+	client, err := s.RedisClient(db)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = client.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
 	defer cancel()

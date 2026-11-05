@@ -62,11 +62,10 @@ func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]int
 // 所以把「看这个键」翻译成一条按类型选择的命令；执行仍走查询页 WS
 // （只读白名单 + 查询侧规则审核 + 审计落库），不另开结果通道。
 func RedisKeyDetail(u *model.CoreDataSource, db int, key string) (map[string]interface{}, error) {
-	client, err := u.ConnectRedisDB(db)
+	client, err := u.RedisClient(db)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = client.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), redisCommandTimeout)
 	defer cancel()
@@ -124,27 +123,9 @@ func redisPreviewSQL(typ, key string) string {
 // 权限校验、申请校验、查询侧审核、审计落库、消息格式都与 SQL 版保持一致，
 // 只有「执行」这步换成 Redis 命令，且按目标逻辑库建连。
 //
-// 客户端按库缓存：go-redis 是在建连时发 SELECT 的，换库必须换客户端，
-// 但同一个库在一条 WS 会话里复用即可，不必每次命令都新建连接池。
+// 客户端按库复用走进程级连接池（model.RedisClient）：go-redis 在建连时发 SELECT，
+// 换库必须换客户端，但同一数据源×库在整个进程内只需一个客户端。
 func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSource, user string) {
-	clients := map[int]model.RedisConn{}
-	defer func() {
-		for _, cl := range clients {
-			_ = cl.Close()
-		}
-	}()
-	getClient := func(db int) (model.RedisConn, error) {
-		if cl, ok := clients[db]; ok {
-			return cl, nil
-		}
-		cl, err := u.ConnectRedisDB(db)
-		if err != nil {
-			return nil, err
-		}
-		clients[db] = cl
-		return cl, nil
-	}
-
 	var b []byte
 	for {
 		if err := websocket.Message.Receive(ws, &b); err != nil {
@@ -175,7 +156,7 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			continue
 		}
 		clock := time.Now()
-		result, err := runRedisCommand(getClient, msg.Ref.Schema, msg.Ref.Sql, u.InsulateWordList, u.AllowDiagCommands)
+		result, err := runRedisCommand(u.RedisClient, msg.Ref.Schema, msg.Ref.Sql, u.InsulateWordList, u.AllowDiagCommands)
 		if err != nil {
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()}))
 			continue

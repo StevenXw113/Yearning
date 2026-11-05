@@ -45,6 +45,10 @@ func TestRedisOptionsFollowsCloudDefaults(t *testing.T) {
 	if opt.PoolTimeout != 3*time.Second || opt.PoolSize != 200 || opt.MaxRetries != 3 {
 		t.Errorf("连接池参数不符合推荐值: %+v", opt)
 	}
+	// 客户端进程级复用后空闲连接会一直留着，上限不能再放到 200
+	if opt.MaxIdleConns != 20 {
+		t.Errorf("MaxIdleConns 应收敛到 20, got %d", opt.MaxIdleConns)
+	}
 	if opt.Username != "app" || opt.Password != "pwd" {
 		t.Errorf("ACL 用户名/口令未透传: %+v", opt)
 	}
@@ -52,6 +56,68 @@ func TestRedisOptionsFollowsCloudDefaults(t *testing.T) {
 	cluster := RedisClusterOptions(s, "pwd")
 	if cluster.MaxRedirects != 3 || cluster.PoolSize != 200 || cluster.ConnMaxIdleTime != 30*time.Minute {
 		t.Errorf("集群参数不符合推荐值: %+v", cluster)
+	}
+}
+
+// 进程级客户端池：同一数据源×库只建一次；配置变更换新；删除数据源后释放。
+// dial 用不实际建连的 redis.NewClient（命令才会拨号），测试不需要真实实例。
+func TestRedisClientPoolReuseAndInvalidate(t *testing.T) {
+	dials := 0
+	p := &redisClientPool{
+		entries: map[redisClientKey]redisPoolEntry{},
+		dial: func(*CoreDataSource, string, int) (RedisConn, error) {
+			dials++
+			return redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"}), nil
+		},
+	}
+	s := &CoreDataSource{SourceId: "s1", IP: "10.0.0.1", Port: 6379}
+
+	first, err := p.get(s, 0)
+	if err != nil || first == nil {
+		t.Fatalf("首次取客户端失败: %v", err)
+	}
+	again, err := p.get(s, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dials != 1 {
+		t.Errorf("同一数据源×库不应重复建连，dials=%d", dials)
+	}
+	if first != again {
+		t.Error("同一数据源×库应返回同一客户端")
+	}
+
+	if _, err := p.get(s, 3); err != nil {
+		t.Fatal(err)
+	}
+	if dials != 2 {
+		t.Errorf("换库必须换客户端，dials=%d", dials)
+	}
+
+	// 地址变更：同一条目换新客户端，旧的不再被复用
+	moved := &CoreDataSource{SourceId: "s1", IP: "10.0.0.2", Port: 6379}
+	movedClient, err := p.get(moved, 0)
+	if err != nil || movedClient == first {
+		t.Fatalf("配置变更后应换新客户端: client=%v err=%v", movedClient, err)
+	}
+	if len(p.entries) != 2 {
+		t.Errorf("条目数应为 数据源×库 = 2, got %d", len(p.entries))
+	}
+
+	p.drop("s1")
+	if len(p.entries) != 0 {
+		t.Errorf("删除数据源后条目应清空, got %d", len(p.entries))
+	}
+}
+
+// 口令变化必须体现在指纹里，否则改密后还会复用旧连接。
+func TestRedisClientSignatureTracksCredentials(t *testing.T) {
+	base := &CoreDataSource{IP: "10.0.0.1", Port: 6379, Username: "app"}
+	if redisClientSignature(base, "p1", 0) == redisClientSignature(base, "p2", 0) {
+		t.Error("口令不同应产生不同指纹")
+	}
+	if redisClientSignature(base, "p1", 0) == redisClientSignature(base, "p1", 1) {
+		t.Error("库不同应产生不同指纹")
 	}
 }
 

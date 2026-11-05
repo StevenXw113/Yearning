@@ -68,6 +68,8 @@ func SuperDeleteSource(c yee.Context) (err error) {
 	}
 
 	tx.Commit()
+	// 数据源已删除：释放它留在进程里的 Redis 客户端，别让连接跟着白占
+	model.DropRedisClients(sourceId)
 	permission.InvalidateAll()
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_DATA_IS_DELETE)))
 }
