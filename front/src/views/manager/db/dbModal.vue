@@ -36,6 +36,14 @@
               v-model:value="dbForm.password"
             ></a-input-password>
           </a-form-item>
+          <!-- Redis：诊断命令（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量）默认不放行，
+               它们能看到实例配置或其它业务的执行信息 -->
+          <a-form-item
+            v-if="dbForm.db_type === 3"
+            :label="$t('db.allow.diag')"
+          >
+            <a-switch v-model:checked="dbForm.allow_diag_commands" />
+          </a-form-item>
           <a-form-item :label="$t('db.kind')">
             <a-switch
               v-model:checked="checked"
@@ -188,6 +196,7 @@
     exclude_db_list: '',
     insulate_word_list: '',
     rule_id: 0,
+    allow_diag_commands: false,
   } as Source);
 
   const schemaList = ref<string[]>([]);

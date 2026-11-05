@@ -16,6 +16,8 @@ import (
 	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 
+	"engine/api"
+
 	"github.com/cookieY/yee"
 	"github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
@@ -173,7 +175,7 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 			continue
 		}
 		clock := time.Now()
-		result, err := runRedisCommand(getClient, msg.Ref.Schema, msg.Ref.Sql, u.InsulateWordList)
+		result, err := runRedisCommand(getClient, msg.Ref.Schema, msg.Ref.Sql, u.InsulateWordList, u.AllowDiagCommands)
 		if err != nil {
 			_ = websocket.Message.Send(ws, factory.ToMsg(queryResults{Error: err.Error()}))
 			continue
@@ -193,7 +195,7 @@ func socketRedisResults(c yee.Context, ws *websocket.Conn, u model.CoreDataSourc
 //
 // 命令是**一行文本**（`GET user:1`、`SCAN 0 MATCH user:* COUNT 100`），
 // 与 Mongo 的 JSON 命令不同，所以先用 rediscmd 切词再交给驱动。
-func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, command, insulateWordList string) (*Query, error) {
+func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, command, insulateWordList string, allowDiag bool) (*Query, error) {
 	// 查询页硬保底：只读命令白名单。不走规则集——能在这里执行写命令，
 	// 等于绕过整个工单审批链路。
 	kind, args, err := rediscmd.Validate(command)
@@ -202,6 +204,11 @@ func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, comma
 	}
 	if kind != rediscmd.KindQuery {
 		return nil, errors.New("查询页只能执行只读命令（GET / SCAN / HGETALL / LRANGE 等），变更请到工单申请页提交")
+	}
+	// 执行授权：只读命令也分档。诊断类（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量）
+	// 能看到配置或其它业务信息，默认关闭，按数据源开关放行。
+	if ok, reason := (api.RedisPolicy{AllowDiag: allowDiag}).QueryAllowed(args); !ok {
+		return nil, errors.New(reason)
 	}
 	db, err := model.RedisParseDB(schema)
 	if err != nil {

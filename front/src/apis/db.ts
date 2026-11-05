@@ -22,6 +22,8 @@ export interface Source {
   id?: number;
   // MongoDB 认证库（authSource），空 = 默认 admin；账号建在业务库上时必填
   auth_database: string;
+  // Redis：查询页是否允许诊断命令（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量），默认 false
+  allow_diag_commands?: boolean;
 }
 
 // 数据源类型：value 对应后端 db_type，port 为该类型的默认端口

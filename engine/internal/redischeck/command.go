@@ -22,7 +22,7 @@ const (
 // 两处语义必须一致：主程序那份是**执行底线**（不受配置影响），
 // 这份是**可按规则集开关**的审核，改任何一边都要同步另一边。
 var (
-	// 只读命令白名单已收敛到 engine/api（主程序查询页共用一份），见 api.RedisReadCommands。
+	// 只读命令白名单已收敛到 engine/api（主程序查询页共用一份），见 api.RedisSemantics。
 
 	// writeCommands 改数据的命令（分类用；安全校验不依赖它）
 	writeCommands = map[string]struct{}{

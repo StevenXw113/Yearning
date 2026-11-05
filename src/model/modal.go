@@ -165,6 +165,10 @@ type CoreDataSource struct {
 	// 账号建在业务库上的部署必须显式配置，否则认证失败。列由 AutoMigrate 自动添加。
 	AuthDatabase string `gorm:"type:varchar(64);not null;default ''" json:"auth_database"`
 	RuleId       int    `gorm:"type:int(100);not null;default 0" json:"rule_id"`
+	// AllowDiagCommands Redis 数据源：查询页是否允许诊断命令
+	// （SLOWLOG / LATENCY / DUMP / COMMAND / INFO 全量）。默认关闭——
+	// 这些命令能看到实例配置或其它业务的执行信息。列由 AutoMigrate 自动添加。
+	AllowDiagCommands bool `gorm:"type:tinyint(2);not null;default 0" json:"allow_diag_commands"`
 }
 
 type CoreGrained struct {

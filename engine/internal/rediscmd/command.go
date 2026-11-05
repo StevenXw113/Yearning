@@ -55,7 +55,7 @@ var scriptCommands = map[string]string{
 	"FCALL":    "禁止 FCALL（调用服务端函数）",
 }
 
-// 只读命令白名单已收敛到 engine/api（与主程序查询页共用一份），见 api.RedisReadCommands。
+// 只读命令白名单已收敛到 engine/api（与主程序查询页共用一份），见 api.RedisSemantics。
 
 // Split 按 redis-cli 的参数规则把一行命令切成参数。
 //
