@@ -64,7 +64,8 @@ func TestRedisOptionsFollowsCloudDefaults(t *testing.T) {
 func TestRedisClientPoolReuseAndInvalidate(t *testing.T) {
 	dials := 0
 	p := &redisClientPool{
-		entries: map[redisClientKey]redisPoolEntry{},
+		entries: map[redisClientKey]*redisPoolEntry{},
+		retired: map[*redisPoolEntry]struct{}{},
 		dial: func(*CoreDataSource, string, int) (RedisConn, error) {
 			dials++
 			return redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"}), nil
@@ -72,11 +73,13 @@ func TestRedisClientPoolReuseAndInvalidate(t *testing.T) {
 	}
 	s := &CoreDataSource{SourceId: "s1", IP: "10.0.0.1", Port: 6379}
 
-	first, err := p.get(s, 0)
+	first, releaseFirst, err := p.acquire(s, 0)
 	if err != nil || first == nil {
 		t.Fatalf("首次取客户端失败: %v", err)
 	}
-	again, err := p.get(s, 0)
+	releaseFirst()
+
+	again, releaseAgain, err := p.acquire(s, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,27 +89,42 @@ func TestRedisClientPoolReuseAndInvalidate(t *testing.T) {
 	if first != again {
 		t.Error("同一数据源×库应返回同一客户端")
 	}
+	releaseAgain()
 
-	if _, err := p.get(s, 3); err != nil {
+	_, releaseDB3, err := p.acquire(s, 3)
+	if err != nil {
 		t.Fatal(err)
 	}
+	releaseDB3()
 	if dials != 2 {
 		t.Errorf("换库必须换客户端，dials=%d", dials)
 	}
 
-	// 地址变更：同一条目换新客户端，旧的不再被复用
+	// 配置变更：旧客户端退役，但仍有借用者时不能提前关闭
+	held, releaseHeld, err := p.acquire(s, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	moved := &CoreDataSource{SourceId: "s1", IP: "10.0.0.2", Port: 6379}
-	movedClient, err := p.get(moved, 0)
-	if err != nil || movedClient == first {
+	movedClient, releaseMoved, err := p.acquire(moved, 0)
+	if err != nil || movedClient == held {
 		t.Fatalf("配置变更后应换新客户端: client=%v err=%v", movedClient, err)
 	}
 	if len(p.entries) != 2 {
 		t.Errorf("条目数应为 数据源×库 = 2, got %d", len(p.entries))
 	}
+	if len(p.retired) != 1 {
+		t.Errorf("旧客户端应退役等待归还, retired=%d", len(p.retired))
+	}
+	releaseHeld()
+	if len(p.retired) != 0 {
+		t.Errorf("最后一个借用者归还后应关闭退役客户端, retired=%d", len(p.retired))
+	}
+	releaseMoved()
 
 	p.drop("s1")
-	if len(p.entries) != 0 {
-		t.Errorf("删除数据源后条目应清空, got %d", len(p.entries))
+	if len(p.entries) != 0 || len(p.retired) != 0 {
+		t.Errorf("删除数据源后应清空, entries=%d retired=%d", len(p.entries), len(p.retired))
 	}
 }
 
@@ -133,5 +151,19 @@ func TestRedisClusterEnabled(t *testing.T) {
 	// 非集群实例对 CLUSTER INFO 直接报错，调用方拿不到字符串，这里只守解析
 	if RedisClusterEnabled("") {
 		t.Fatal("空串不应判定为集群")
+	}
+}
+
+// 手动指定形态优先于自动探测：云代理上 CLUSTER INFO 判不准时靠它兜底
+func TestRedisDeploymentManualOverride(t *testing.T) {
+	s := &CoreDataSource{SourceId: "x", RedisMode: " PROXY "}
+	if got := s.RedisDeployment(); got != RedisModeProxy {
+		t.Errorf("手动指定应优先，got %q", got)
+	}
+	if NormalizeRedisMode("cluster") != RedisModeCluster {
+		t.Error("cluster 应归一化")
+	}
+	if NormalizeRedisMode("auto") != "" || NormalizeRedisMode("") != "" || NormalizeRedisMode("bogus") != "" {
+		t.Error("auto/空/非法值都应返回空串（走自动探测）")
 	}
 }

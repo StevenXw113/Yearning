@@ -33,7 +33,7 @@
             <a-menu v-if="meta === 'Table'">
               <a-menu-item key="1" @click="showTableData(treeKey)">
                 {{
-                  dbType === 3 ? $t('query.show.key') : $t('query.show.table')
+                  dbType === DBType.Redis ? $t('query.show.key') : $t('query.show.table')
                 }}</a-menu-item
               >
               <!-- Redis 的「结构」就是类型/TTL/大小，已在查看数据时一并给出 -->
@@ -53,6 +53,7 @@
 </template>
 
 <script lang="ts" setup>
+  import { DBType } from '@/apis/db';
   import { onMounted, ref, watch } from 'vue';
   import { queryRedisKey, querySchemaList, queryTable } from '@/apis/query';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
@@ -142,7 +143,7 @@
   const dbType = ref(0);
 
   const showTableData = async (key: string) => {
-    if (dbType.value === 3) {
+    if (dbType.value === DBType.Redis) {
       // Redis 没有表，也没有「一条命令看所有类型」的读法（GET 对 hash 会 WRONGTYPE）：
       // 先问后端这个键是什么类型，再执行对应的那条只读命令
       const { data } = await queryRedisKey(
@@ -170,9 +171,9 @@
       source_id: commonStore.queryInfo.source_id,
       schema: schema.value,
       sql:
-        dbType.value === 2
+        dbType.value === DBType.MongoDB
           ? JSON.stringify({ find: key, limit: 20 })
-          : dbType.value === 1
+          : dbType.value === DBType.PostgreSQL
             ? // PostgreSQL：双引号保留标识符大小写，依赖 SET search_path 落到当前 schema
               `SELECT * FROM "${key}"`
             : `select * from ${key}`,
@@ -221,9 +222,9 @@
       source_id: commonStore.queryInfo.source_id,
       schema: schema.value,
       sql:
-        dbType.value === 2
+        dbType.value === DBType.MongoDB
           ? JSON.stringify({ listIndexes: key })
-          : dbType.value === 1
+          : dbType.value === DBType.PostgreSQL
             ? // PostgreSQL：没有 SHOW COLUMNS，用 information_schema.columns
               `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema.value}' AND table_name = '${key}' ORDER BY ordinal_position`
             : `SHOW COLUMNS FROM ${key}`,

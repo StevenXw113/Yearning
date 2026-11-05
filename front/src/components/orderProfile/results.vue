@@ -35,6 +35,7 @@
 </template>
 
 <script lang="ts" setup>
+  import { DBType } from '@/apis/db';
   import {
     getOrderResult,
     getOrderRollSQLS,
@@ -153,7 +154,7 @@
     wrapper.delay = 'none';
     // MongoDB 一张工单只承载一条命令：回滚语句可能有多条（如 createIndexes 每个索引一条），
     // 逐条提交；用 \n 拼成一条会被提交时的硬保底当成非法 JSON 拒掉。
-    if (dbType.value === 2) {
+    if (dbType.value === DBType.MongoDB) {
       for (const sql of statements) {
         if (sql === '') continue;
         await userPostOrder(Object.assign({}, wrapper, { sql }) as OrderItem);

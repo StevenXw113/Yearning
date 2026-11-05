@@ -3,6 +3,9 @@ export default {
   'db.allow.diag': 'Allow diagnostic commands',
   'db.allow.diag.tips':
     'Redis only: allow SLOWLOG / LATENCY / DUMP / COMMAND and full INFO from the query page. These expose instance configuration or other tenants\' executions, off by default',
+  'db.redis.mode': 'Deployment mode',
+  'db.redis.mode.tips':
+    'Auto-detection relies on CLUSTER INFO and may misjudge cloud proxies as standalone; pick manually when unsure',
   'db.kind': 'Mode',
   'db.addr': 'Addr',
   'db.principal': 'Principal',

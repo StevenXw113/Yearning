@@ -24,7 +24,18 @@ export interface Source {
   auth_database: string;
   // Redis：查询页是否允许诊断命令（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量），默认 false
   allow_diag_commands?: boolean;
+  // Redis 部署形态：空/auto = 自动探测；standalone/cluster/proxy 手动指定
+  redis_mode?: string;
 }
+
+// 数据源类型取值（与后端 db_type 对齐）：模板与脚本里不要再写魔法数
+export const DBType = {
+  MySQL: 0,
+  PostgreSQL: 1,
+  MongoDB: 2,
+  Redis: 3,
+  Doris: 4,
+} as const;
 
 // 数据源类型：value 对应后端 db_type，port 为该类型的默认端口
 export const DB_TYPES = [

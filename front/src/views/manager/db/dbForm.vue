@@ -66,7 +66,7 @@
       <a-input-password v-model:value="dbForm.password"></a-input-password>
     </a-form-item>
     <a-form-item
-      v-if="dbForm.db_type === 2"
+      v-if="dbForm.db_type === DBType.MongoDB"
       :label="$t('db.authDatabase')"
       name="auth_database"
     >
@@ -155,7 +155,7 @@
 
 <script lang="ts" setup>
   import { ref, computed, reactive, onMounted } from 'vue';
-  import { DB_TYPES, dbTypePort, Source, createSource as cs } from '@/apis/db';
+  import { DB_TYPES, dbTypePort, Source, createSource as cs, DBType } from '@/apis/db';
   import { getCustomRulesList, type CustomRule } from '@/apis/rules';
   import { useCommonStore } from '@/store';
   import { RuleObject } from 'ant-design-vue/es/form';

@@ -87,7 +87,7 @@
           <!-- 工单级事务模式：开启后本工单 DML 强制走事务（整体提交/回滚），
                优先级高于规则集配置。仅 SQL 类数据源的 DML 工单可选 -->
           <a-form-item
-            v-if="orderItems.type === 1 && (dbType === 0 || dbType === 1)"
+            v-if="orderItems.type === 1 && (dbType === DBType.MySQL || dbType === DBType.PostgreSQL)"
             :label="$t('order.tx')"
           >
             <a-tooltip :title="$t('order.tx.tips')" placement="right">
@@ -148,14 +148,14 @@
           <a-tab-pane :key="1" :tab="$t('order.apply.tab.sql')" force-render>
             <a-spin :spinning="spin" :delay="100">
               <a-alert
-                v-if="dbType === 2"
+                v-if="dbType === DBType.MongoDB"
                 type="info"
                 show-icon
                 style="margin-bottom: 8px"
                 :message="$t('order.apply.mongo.tips')"
               ></a-alert>
               <a-alert
-                v-else-if="dbType === 3"
+                v-else-if="dbType === DBType.Redis"
                 type="info"
                 show-icon
                 style="margin-bottom: 8px"
@@ -226,6 +226,7 @@
 </template>
 
 <script lang="ts" setup>
+  import { DBType } from '@/apis/db';
   import Editor from '@/components/editor/editor.vue';
   import JunoMixin from '@/mixins/juno';
   import { onMounted, reactive, ref, onUnmounted, watch } from 'vue';
@@ -395,7 +396,7 @@
 
   const fetchTable = async (schema: string) => {
     // Redis 没有表：目标库下面直接是键，拉表列表/字段补全都没有意义
-    if (dbType.value === 3) {
+    if (dbType.value === DBType.Redis) {
       return;
     }
     const { data } = await queryTableList(orderItems.source_id, schema);
@@ -543,9 +544,9 @@
         wrapper.tx_mode = txMode.value;
         // 命令式数据源：工单的「表」字段用命令里的集合名 / 键名，
         // 便于详情页与审计日志辨识（Redis 取的是键名，不是真实的表）
-        if (dbType.value === 2 && !wrapper.table) {
+        if (dbType.value === DBType.MongoDB && !wrapper.table) {
           wrapper.table = mongoCollection(wrapper.sql || '');
-        } else if (dbType.value === 3 && !wrapper.table) {
+        } else if (dbType.value === DBType.Redis && !wrapper.table) {
           wrapper.table = redisKey(wrapper.sql || '');
         }
         orderProfileArch.timeline.forEach((item) => {

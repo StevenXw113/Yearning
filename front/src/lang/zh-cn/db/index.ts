@@ -3,6 +3,9 @@ export default {
   'db.allow.diag': '允许诊断命令',
   'db.allow.diag.tips':
     'Redis 专用：允许查询页执行 SLOWLOG / LATENCY / DUMP / COMMAND / INFO 全量。这些命令能看到实例配置或其它业务的执行信息，默认关闭',
+  'db.redis.mode': '部署形态',
+  'db.redis.mode.tips':
+    '自动探测依赖 CLUSTER INFO，云厂商代理可能被误判成单机；判不准时手动指定（cluster / proxy）',
   'db.kind': '连接模式',
   'db.addr': '地址',
   'db.principal': '负责人',

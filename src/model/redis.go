@@ -62,10 +62,27 @@ var (
 	redisModeCacheMu sync.Mutex
 )
 
+// NormalizeRedisMode 归一化手动配置的部署形态；空串或 auto 表示交给自动探测。
+func NormalizeRedisMode(m string) string {
+	switch strings.ToLower(strings.TrimSpace(m)) {
+	case RedisModeStandalone:
+		return RedisModeStandalone
+	case RedisModeCluster:
+		return RedisModeCluster
+	case RedisModeProxy:
+		return RedisModeProxy
+	}
+	return ""
+}
+
 // RedisDeployment 返回部署形态（standalone / cluster / proxy），探测失败返回空串表示未知。
-// 判定口径与 ConnectRedisWith 一致：cluster_enabled:1 且槽位地址与配置地址同主机才算直连集群；
-// 代理同样报 cluster_enabled:1，但槽位是实例内网地址。
+//
+// 数据源上手动指定了形态就以它为准：自动探测依赖 CLUSTER INFO，部分云代理返回的信息
+// 不足以区分集群与代理（会被判成 standalone），那样 Cluster/Proxy 规则就永远不触发。
 func (s *CoreDataSource) RedisDeployment() string {
+	if m := NormalizeRedisMode(s.RedisMode); m != "" {
+		return m
+	}
 	key := s.SourceId
 	redisModeCacheMu.Lock()
 	if e, ok := redisModeCache[key]; ok && time.Now().Before(e.expireAt) {
@@ -90,28 +107,34 @@ func RedisDeploymentOf(s *CoreDataSource) string {
 }
 
 func (s *CoreDataSource) detectRedisMode() string {
-	client, err := s.RedisClient(0)
+	mode := ""
+	err := s.WithRedisClient(0, func(client RedisConn) error {
+		// ConnectRedisWith 已经做过一次判定：命中「cluster_enabled 且槽位地址与配置一致」
+		// 时才返回集群客户端。这里先看客户端类型，避免重复判断口径不一致。
+		if IsRedisCluster(client) {
+			mode = RedisModeCluster
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
+		defer cancel()
+		info, ierr := client.ClusterInfo(ctx).Result()
+		if ierr != nil {
+			// 不支持 CLUSTER 命令：普通单机
+			mode = RedisModeStandalone
+			return nil
+		}
+		if RedisClusterEnabled(info) {
+			// 自称集群但给的是普通客户端 = 代理转发（槽位是实例内网地址）
+			mode = RedisModeProxy
+			return nil
+		}
+		mode = RedisModeStandalone
+		return nil
+	})
 	if err != nil {
 		return ""
 	}
-
-	// ConnectRedisWith 已经做过一次判定：命中「cluster_enabled 且槽位地址与配置一致」
-	// 时才返回集群客户端。这里先看客户端类型，避免重复判断口径不一致。
-	if IsRedisCluster(client) {
-		return RedisModeCluster
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
-	defer cancel()
-	info, ierr := client.ClusterInfo(ctx).Result()
-	if ierr != nil {
-		// 不支持 CLUSTER 命令：普通单机
-		return RedisModeStandalone
-	}
-	if RedisClusterEnabled(info) {
-		// 自称集群但给的是普通客户端 = 代理转发（槽位是实例内网地址）
-		return RedisModeProxy
-	}
-	return RedisModeStandalone
+	return mode
 }
 
 // RedisScanLimit 列键名时单次抽样的上限。
@@ -167,7 +190,7 @@ func IsRedisCluster(c RedisConn) bool {
 }
 
 // ConnectRedisWith 用明文口令建连并 Ping 探活，同时自动识别部署形态：
-// （显式探活/检测场景用，调用方负责 Close；业务读写走 RedisClient 复用连接）
+// （显式探活/检测场景用，调用方负责 Close；业务读写走 WithRedisClient 借用连接）
 //   - 单机 / Proxy 集群（Twemproxy、Codis、云厂商代理）：对客户端就一个普通入口，用 Client；
 //   - Redis Cluster：CLUSTER INFO 返回 cluster_enabled:1，改用 ClusterClient（自带 MOVED/ASK 重定向）。
 //
@@ -216,11 +239,16 @@ func slotsMatchHost(slots []redis.ClusterSlot, host string) bool {
 // 要付三次握手（探活客户端、换库客户端、真正执行命令各一条新连接）。
 // 客户端按数据源与库常驻后，握手只发生在首次访问与配置变更时。
 //
+// 借用带引用计数：WithRedisClient 借出、fn 返回归还。数据源被编辑/删除时
+// 旧客户端只是「退役」，等在途借用全部归还后才真正 Close——正在执行的命令
+// 不会被管理操作打断。
+//
 // 不设淘汰：条目数 = 数据源 × 库，量级几十；配置变更按指纹换新，
 // 数据源删除由 DropRedisClients 回收。条目失控时再上 LRU。
 type redisClientPool struct {
 	mu      sync.Mutex
-	entries map[redisClientKey]redisPoolEntry
+	entries map[redisClientKey]*redisPoolEntry
+	retired map[*redisPoolEntry]struct{}
 	dial    func(s *CoreDataSource, password string, db int) (RedisConn, error)
 }
 
@@ -232,25 +260,34 @@ type redisClientKey struct {
 }
 
 type redisPoolEntry struct {
-	sig    string
-	client RedisConn
+	sig     string
+	client  RedisConn
+	refs    int
+	retired bool
 }
 
 var redisClients = &redisClientPool{
-	entries: map[redisClientKey]redisPoolEntry{},
+	entries: map[redisClientKey]*redisPoolEntry{},
+	retired: map[*redisPoolEntry]struct{}{},
 	dial:    (*CoreDataSource).connectRedisDBWith,
 }
 
-// RedisClient 返回该数据源在 db 库上的进程级共享客户端，调用方不要 Close。
-// 地址/账号/口令/库任一变化都会换新客户端，旧客户端随即关闭。
-func (s *CoreDataSource) RedisClient(db int) (RedisConn, error) {
+// WithRedisClient 借出该数据源在 db 库上的进程级共享客户端，fn 返回后自动归还。
+// fn 执行期间即使数据源被编辑或删除，连接也不会被提前关闭；
+// 客户端只在 fn 内有效，不要保存到闭包外使用。
+func (s *CoreDataSource) WithRedisClient(db int, fn func(RedisConn) error) error {
 	if s == nil {
-		return nil, fmt.Errorf("数据源为空")
+		return fmt.Errorf("数据源为空")
 	}
-	return redisClients.get(s, db)
+	client, release, err := redisClients.acquire(s, db)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return fn(client)
 }
 
-func (p *redisClientPool) get(s *CoreDataSource, db int) (RedisConn, error) {
+func (p *redisClientPool) acquire(s *CoreDataSource, db int) (RedisConn, func(), error) {
 	password := enc.Decrypt(C.General.SecretKey, s.Password)
 	key := redisClientKey{owner: s.SourceId, db: db}
 	if key.owner == "" {
@@ -260,44 +297,82 @@ func (p *redisClientPool) get(s *CoreDataSource, db int) (RedisConn, error) {
 
 	p.mu.Lock()
 	if e, ok := p.entries[key]; ok && e.sig == sig {
+		e.refs++
 		p.mu.Unlock()
-		return e.client, nil
+		return e.client, p.releaser(e), nil
 	}
 	p.mu.Unlock()
 
 	// 建连放在锁外：网络往返最长 15s，不能挡住其它数据源。
 	client, err := p.dial(s, password, db)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	p.mu.Lock()
-	var stale RedisConn
+	var closeNow RedisConn
 	if e, ok := p.entries[key]; ok {
 		if e.sig == sig {
 			// 并发下另一个请求先建好了：用它的，关掉自己这份。
+			e.refs++
 			p.mu.Unlock()
 			_ = client.Close()
-			return e.client, nil
+			return e.client, p.releaser(e), nil
 		}
-		stale = e.client
+		delete(p.entries, key)
+		closeNow = p.retireLocked(e)
 	}
-	p.entries[key] = redisPoolEntry{sig: sig, client: client}
+	e := &redisPoolEntry{sig: sig, client: client, refs: 1}
+	p.entries[key] = e
 	p.mu.Unlock()
-	if stale != nil {
-		_ = stale.Close()
+	if closeNow != nil {
+		_ = closeNow.Close()
 	}
-	return client, nil
+	return client, p.releaser(e), nil
 }
 
-// drop 释放某数据源的全部客户端（数据源删除时调用）。
+// retireLocked 让旧客户端退役：仍有借用者的等归还，无人借用则立即返回待关闭。
+func (p *redisClientPool) retireLocked(e *redisPoolEntry) RedisConn {
+	e.retired = true
+	p.retired[e] = struct{}{}
+	if e.refs > 0 {
+		return nil
+	}
+	delete(p.retired, e)
+	return e.client
+}
+
+// releaser 归还一次借用；退役客户端在最后一个借用者归还时关闭。
+// once 兜住重复归还，计数不会被减成负数。
+func (p *redisClientPool) releaser(e *redisPoolEntry) func() {
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			p.mu.Lock()
+			e.refs--
+			var closeNow RedisConn
+			if e.retired && e.refs <= 0 {
+				delete(p.retired, e)
+				closeNow = e.client
+			}
+			p.mu.Unlock()
+			if closeNow != nil {
+				_ = closeNow.Close()
+			}
+		})
+	}
+}
+
+// drop 让某数据源的全部客户端退役（数据源删除时调用）。
 func (p *redisClientPool) drop(sourceId string) {
 	var stale []RedisConn
 	p.mu.Lock()
 	for k, e := range p.entries {
 		if k.owner == sourceId {
 			delete(p.entries, k)
-			stale = append(stale, e.client)
+			if c := p.retireLocked(e); c != nil {
+				stale = append(stale, c)
+			}
 		}
 	}
 	p.mu.Unlock()
@@ -358,36 +433,37 @@ func (s *CoreDataSource) connectRedisDBWith(password string, db int) (RedisConn,
 // 集群只有 db0；单机/代理以 CONFIG GET databases 为准（实例配了多少就列多少，空库也要能选），
 // 托管 Redis 常禁用 CONFIG，读不到时退回 INFO keyspace / 默认 16 个。
 func (s *CoreDataSource) RedisDatabases() ([]string, error) {
-	client, err := s.RedisClient(0)
-	if err != nil {
-		return nil, err
-	}
+	var out []string
+	err := s.WithRedisClient(0, func(client RedisConn) error {
+		if IsRedisCluster(client) {
+			out = []string{"db0"}
+			return nil
+		}
 
-	if IsRedisCluster(client) {
-		return []string{"db0"}, nil
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
-	defer cancel()
-
-	n := RedisDefaultDatabases
-	if m, cerr := client.ConfigGet(ctx, "databases").Result(); cerr == nil {
-		if raw, ok := m["databases"]; ok {
-			if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 {
-				n = parsed
+		n := RedisDefaultDatabases
+		if m, cerr := client.ConfigGet(ctx, "databases").Result(); cerr == nil {
+			if raw, ok := m["databases"]; ok {
+				if parsed, perr := strconv.Atoi(raw); perr == nil && parsed > 0 {
+					n = parsed
+				}
+			}
+		} else if info, ierr := client.Info(ctx, "keyspace").Result(); ierr == nil {
+			// CONFIG 被禁用时只能看 keyspace：此时列出有键的库，好过给 16 个空库
+			if dbs := keyspaceDatabases(info); len(dbs) > 0 {
+				out = dbs
+				return nil
 			}
 		}
-	} else if info, ierr := client.Info(ctx, "keyspace").Result(); ierr == nil {
-		// CONFIG 被禁用时只能看 keyspace：此时列出有键的库，好过给 16 个空库
-		if dbs := keyspaceDatabases(info); len(dbs) > 0 {
-			return dbs, nil
+		out = make([]string, 0, n)
+		for i := 0; i < n; i++ {
+			out = append(out, "db"+strconv.Itoa(i))
 		}
-	}
-	out := make([]string, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, "db"+strconv.Itoa(i))
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }
 
 // keyspaceDatabases 解析 INFO keyspace 里的库名（db0:keys=3,expires=0,avg_ttl=0），按库号排序
@@ -423,34 +499,33 @@ func (s *CoreDataSource) RedisScanKeys(db int, pattern string, limit int) ([]str
 	if limit <= 0 || limit > RedisScanLimit {
 		limit = RedisScanLimit
 	}
-	client, err := s.RedisClient(db)
+	var keys []string
+	err := s.WithRedisClient(db, func(client RedisConn) error {
+		ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
+		defer cancel()
+
+		var cursor uint64
+		// COUNT 只是「每轮工作量提示」，给大一点能显著减少稀疏键空间下的往返次数；
+		// 同时限制轮数：命中率极低时不该一直扫到 ctx 超时才返回。
+		const (
+			scanCount = 1000
+			maxRounds = 20
+		)
+		for round := 0; len(keys) < limit && round < maxRounds; round++ {
+			batch, next, serr := client.Scan(ctx, cursor, pattern, scanCount).Result()
+			if serr != nil {
+				return serr
+			}
+			keys = append(keys, batch...)
+			cursor = next
+			if cursor == 0 {
+				break
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
-	defer cancel()
-
-	var (
-		cursor uint64
-		keys   []string
-	)
-	// COUNT 只是「每轮工作量提示」，给大一点能显著减少稀疏键空间下的往返次数；
-	// 同时限制轮数：命中率极低时不该一直扫到 ctx 超时才返回。
-	const (
-		scanCount = 1000
-		maxRounds = 20
-	)
-	for round := 0; len(keys) < limit && round < maxRounds; round++ {
-		batch, next, serr := client.Scan(ctx, cursor, pattern, scanCount).Result()
-		if serr != nil {
-			return nil, serr
-		}
-		keys = append(keys, batch...)
-		cursor = next
-		if cursor == 0 {
-			break
-		}
 	}
 	if len(keys) > limit {
 		keys = keys[:limit]

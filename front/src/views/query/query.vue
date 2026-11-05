@@ -60,11 +60,11 @@
               <!-- Redis 没有表：这个页签在 Redis 下展示的是「键数据」，标题与空态都跟着换 -->
               <a-tab-pane
                 key="table"
-                :tab="dbType === 3 ? $t('query.keytab') : $t('query.table')"
+                :tab="dbType === DBType.Redis ? $t('query.keytab') : $t('query.table')"
                 force-render
               >
                 <a-alert
-                  v-if="dbType === 3 && !tableShown"
+                  v-if="dbType === DBType.Redis && !tableShown"
                   type="info"
                   show-icon
                   style="margin-bottom: 8px"
@@ -84,6 +84,7 @@
 </template>
 
 <script lang="ts" setup>
+  import { DBType } from '@/apis/db';
   import { wsHeartbeat } from '@/socket';
   import History from './history.vue';
   import Tree from './tree.vue';

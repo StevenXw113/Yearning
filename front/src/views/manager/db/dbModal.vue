@@ -39,12 +39,27 @@
           <!-- Redis：诊断命令（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量）默认不放行，
                它们能看到实例配置或其它业务的执行信息 -->
           <a-form-item
-            v-if="dbForm.db_type === 3"
+            v-if="dbForm.db_type === DBType.Redis"
             :label="$t('db.allow.diag')"
           >
             <a-switch v-model:checked="dbForm.allow_diag_commands" />
             <div style="color: #8c8c8c; font-size: 12px; margin-top: 4px">
               {{ $t('db.allow.diag.tips') }}
+            </div>
+          </a-form-item>
+          <!-- Redis 部署形态：自动探测靠 CLUSTER INFO，部分云代理判不准，允许手动指定 -->
+          <a-form-item
+            v-if="dbForm.db_type === DBType.Redis"
+            :label="$t('db.redis.mode')"
+          >
+            <a-select v-model:value="dbForm.redis_mode" style="width: 100%">
+              <a-select-option value="">自动探测</a-select-option>
+              <a-select-option value="standalone">standalone</a-select-option>
+              <a-select-option value="cluster">cluster</a-select-option>
+              <a-select-option value="proxy">proxy</a-select-option>
+            </a-select>
+            <div style="color: #8c8c8c; font-size: 12px; margin-top: 4px">
+              {{ $t('db.redis.mode.tips') }}
             </div>
           </a-form-item>
           <a-form-item :label="$t('db.kind')">
@@ -155,7 +170,7 @@
   import CommonMixins from '@/mixins/common';
   import { ref, computed } from 'vue';
   import { useCommonStore } from '@/store';
-  import { createSource, dbTypeLabel, Source } from '@/apis/db';
+  import { createSource, dbTypeLabel, Source, DBType } from '@/apis/db';
   import { querySchemaList } from '@/apis/source';
   import { CustomRule } from '@/apis/rules';
 
@@ -200,6 +215,7 @@
     insulate_word_list: '',
     rule_id: 0,
     allow_diag_commands: false,
+    redis_mode: '',
   } as Source);
 
   const schemaList = ref<string[]>([]);

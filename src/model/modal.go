@@ -100,14 +100,14 @@ type CoreSqlOrder struct {
 	Username string `gorm:"type:varchar(50);not null;index:query_idx" json:"username"`
 	// 组合索引供每分钟 cron 的(status,delay)/(status,execute_time)扫描:
 	// 表上挂着 SQL/Text/OSCInfo 三个 longtext,没索引时每次都是全表聚类扫描。
-	Status      uint   `gorm:"type:tinyint(2);not null;index:idx_order_status_delay,priority:1;index:idx_order_status_exectime,priority:1" json:"status"`
-	Type        int    `gorm:"type:tinyint(2);not null" json:"type"` // 1 dml  0 ddl
-	Backup      uint   `gorm:"type:tinyint(2);not null" json:"backup"`
-	IDC         string `gorm:"type:varchar(50);not null" json:"idc"`
-	Source      string `gorm:"type:varchar(50);not null" json:"source"`
-	SourceId    string `gorm:"type:varchar(200);not null;index:source_idx"  json:"source_id"`
-	DataBase    string `gorm:"type:varchar(50);not null" json:"data_base"`
-	Table       string `gorm:"type:varchar(50);not null" json:"table"`
+	Status   uint   `gorm:"type:tinyint(2);not null;index:idx_order_status_delay,priority:1;index:idx_order_status_exectime,priority:1" json:"status"`
+	Type     int    `gorm:"type:tinyint(2);not null" json:"type"` // 1 dml  0 ddl
+	Backup   uint   `gorm:"type:tinyint(2);not null" json:"backup"`
+	IDC      string `gorm:"type:varchar(50);not null" json:"idc"`
+	Source   string `gorm:"type:varchar(50);not null" json:"source"`
+	SourceId string `gorm:"type:varchar(200);not null;index:source_idx"  json:"source_id"`
+	DataBase string `gorm:"type:varchar(50);not null" json:"data_base"`
+	Table    string `gorm:"type:varchar(50);not null" json:"table"`
 	// date_idx 供首页 banner 的「近 N 天」统计走范围扫（format: 2006-01-02 15:04）
 	Date        string `gorm:"type:varchar(50);not null;index:date_idx" json:"date"`
 	SQL         string `gorm:"type:longtext;not null" json:"sql"`
@@ -169,6 +169,9 @@ type CoreDataSource struct {
 	// （SLOWLOG / LATENCY / DUMP / COMMAND / INFO 全量）。默认关闭——
 	// 这些命令能看到实例配置或其它业务的执行信息。列由 AutoMigrate 自动添加。
 	AllowDiagCommands bool `gorm:"type:tinyint(2);not null;default 0" json:"allow_diag_commands"`
+	// RedisMode Redis 部署形态（standalone / cluster / proxy），空 = 自动探测。
+	// 自动探测依赖 CLUSTER INFO，部分云代理判不准，可用这里手动指定。
+	RedisMode string `gorm:"type:varchar(20);not null;default ''" json:"redis_mode"`
 }
 
 type CoreGrained struct {
