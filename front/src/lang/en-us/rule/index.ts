@@ -232,6 +232,24 @@ export default {
   RedisForbidSubscription:
     'Forbid SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE and other long-lived subscriptions',
   RedisStreamStateChange: 'Warn on consumer-group changes, acknowledgements and claims',
+  RedisTransactionIntegrity:
+    'Block MULTI/EXEC: single-command entry cannot guarantee every command in the transaction is reviewed',
+  RedisClusterDbZero:
+    'Native Cluster only supports db0; block other logical DBs',
+  RedisClusterCrossSlot:
+    'In Cluster, multi-key commands must hash to the same slot',
+  RedisClusterScanScope:
+    'In Cluster, SCAN only covers one node and cannot serve as a global scan',
+  RedisClusterTransactionSlot:
+    'Cluster transactions require all keys in one slot; block when unverifiable',
+  RedisClusterScriptSlot:
+    'Cluster scripts require all keys in one slot; block when key declaration is missing',
+  RedisProxyDbSupport:
+    'Proxy mode: block non-db0 logical DBs whose support is unverified',
+  RedisProxyCrossShard:
+    'Proxy mode: block multi-key commands whose sharding behaviour is unverified',
+  RedisProxyScanScope:
+    'Proxy mode: block scans when coverage and cursor semantics are unknown',
   DorisRequireDistribution:
     'Doris: require DISTRIBUTED BY when creating table (random bucketing is uncontrolled)',
   DorisBucketLimit: 'Doris: max BUCKETS per table (0 = unlimited)',

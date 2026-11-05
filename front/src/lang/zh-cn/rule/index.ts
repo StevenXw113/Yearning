@@ -184,6 +184,24 @@ export default {
   RedisForbidBlockingCommand: '普通命令入口禁止列表阻塞、Stream 阻塞等等待型操作；专项场景另行配置',
   RedisForbidSubscription: '禁止 SUBSCRIBE、PSUBSCRIBE、SSUBSCRIBE 等持续订阅操作',
   RedisStreamStateChange: '消费组变更、消息确认、认领等操作会改变消费状态，执行时提示',
+  RedisTransactionIntegrity:
+    '拦截 MULTI/EXEC 事务：单命令入口无法保证事务内命令全部受审',
+  RedisClusterDbZero:
+    '原生 Cluster 仅支持 db0，选择其它逻辑库时拦截',
+  RedisClusterCrossSlot:
+    'Cluster 中多键命令必须落在同一 slot，否则拦截',
+  RedisClusterScanScope:
+    'Cluster 下 SCAN 只覆盖单个节点，不能作为全局扫描依据',
+  RedisClusterTransactionSlot:
+    'Cluster 事务要求所有键在同一 slot，无法校验时拦截',
+  RedisClusterScriptSlot:
+    'Cluster 脚本要求所有键在同一 slot，无法确认键声明时拦截',
+  RedisProxyDbSupport:
+    '代理模式下未验证支持非 db0 逻辑库时拦截',
+  RedisProxyCrossShard:
+    '代理模式多键命令分片行为未验证时拦截',
+  RedisProxyScanScope:
+    '代理模式扫描覆盖范围未知时拦截',
   DorisRequireDistribution:
     'Doris：建表必须指定 DISTRIBUTED BY（否则默认随机分桶，不可控）',
   DorisBucketLimit: 'Doris：建表 BUCKETS 数量上限（0 不限）',

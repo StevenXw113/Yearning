@@ -45,8 +45,13 @@
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 
-## Redis 侧 · internal/redischeck（53 条）
+## Redis 侧 · internal/redischeck（62 条）
 
+- `RedisClusterCrossSlot` — 开关：`RedisClusterCrossSlot`；Cluster 中多键命令必须落在同一 slot，否则拦截
+- `RedisClusterDbZero` — 开关：`RedisClusterDbZero`；原生 Cluster 仅允许 DB 0；选择其它 DB 时拦截
+- `RedisClusterScanScope` — 开关：`RedisClusterScanScope`；Cluster 下 SCAN 只覆盖单个节点，不能当作全局遍历
+- `RedisClusterScriptSlot` — 开关：`RedisClusterScriptSlot`；Cluster 脚本/函数必须显式声明同 slot 的键；未验证时拦截
+- `RedisClusterTransactionSlot` — 开关：`RedisClusterTransactionSlot`；Cluster 事务要求所有键同一 slot；单命令入口无法保证，拦截
 - `RedisCommandSyntax` — 开关：`RedisCommandSyntax`；检查命令、子命令、参数数量及选项组合；语法非法或参数不完整时拦截
 - `RedisCopyOverwrite` — 开关：`RedisCopyOverwrite`；COPY 使用 REPLACE 等覆盖行为时提示，并检查源键、目标键及目标 DB 权限
 - `RedisDbScope` — 开关：`RedisDbScope`；命令只能访问指定 DB 范围；超出授权范围时拦截；格式如 0-15
@@ -93,11 +98,15 @@
 - `RedisMinTtl` — 开关：`RedisMinTtl`；过期时间低于业务最小值时提示；最小值按业务配置，0 表示不检查
 - `RedisNonIdempotentWrite` — 开关：`RedisNonIdempotentWrite`；INCR、DECR、计数增量、列表弹出等重复执行会改变结果的操作，提示重复执行风险
 - `RedisProtectedKeyDelete` — 开关：`RedisProtectedKeyDelete`；禁止删除匹配保护规则的锁、幂等键、核心状态及其他关键业务键；多个规则用逗号分隔
+- `RedisProxyCrossShard` — 开关：`RedisProxyCrossShard`；多键命令在 Proxy 上的分片与原子性未验证时拦截
+- `RedisProxyDbSupport` — 开关：`RedisProxyDbSupport`；Proxy 未验证支持非 db0 逻辑库时拦截
+- `RedisProxyScanScope` — 开关：`RedisProxyScanScope`；Proxy 下扫描覆盖范围未知，不能作为全局扫描或批量变更依据
 - `RedisRequireTtl` — 开关：`RedisRequireTtl`；缓存类键新建后必须有过期时间；明确登记为永久数据的业务键可豁免
 - `RedisScanMatchRequired` — 开关：`RedisScanMatchRequired`；SCAN 必须指定允许的业务匹配范围；MATCH 规则无法确认属于授权范围时拦截
 - `RedisSensitiveKeyAccess` — 开关：`RedisSensitiveKeyAccess`；访问凭据、Token、个人信息等敏感业务键时提示；敏感范围由业务配置
 - `RedisStoreOperation` — 开关：`RedisStoreOperation`；集合计算或排序结果写入目标键时，检查输入规模、目标覆盖及所有源键和目标键权限
 - `RedisStreamStateChange` — 开关：`RedisStreamStateChange`；消费组变更、消息确认、认领等操作会改变消费状态，执行时提示
+- `RedisTransactionIntegrity` — 开关：`RedisTransactionIntegrity`；MULTI/EXEC 必须组成完整审核单元；单命令入口无法保证，直接拦截
 - `RedisTtlLossOnOverwrite` — 开关：`RedisTtlLossOnOverwrite`；覆盖写入可能清除原 TTL，且未明确指定过期策略或保留 TTL 时提示
 - `RedisUnknownCommand` — 开关：`RedisUnknownCommand`；禁止尚未登记语义的命令、模块命令及厂商扩展命令
 

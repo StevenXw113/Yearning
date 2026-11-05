@@ -20,6 +20,9 @@ type DataSource struct {
 	// AuthDb MongoDB 认证库(连接串 authSource)。空 = 默认 admin;
 	// 账号建在业务库上的部署(authSource=业务库名)必须显式指定,否则连不上。
 	AuthDb string `json:"auth_db"`
+	// RedisMode Redis 部署形态:standalone / cluster / proxy。
+	// 空 = 未知(探测失败或尚未探测):Cluster/Proxy 相关规则此时不生效,避免误拦。
+	RedisMode string `json:"redis_mode"`
 }
 
 // AuditRole 审核规则,与 Yearning engine.AuditRole 对齐。
@@ -186,6 +189,16 @@ type AuditRole struct {
 	RedisForbidBlockingCommand  bool `json:"redis_forbid_blocking_command"`
 	RedisForbidSubscription     bool `json:"redis_forbid_subscription"`
 	RedisStreamStateChange      bool `json:"redis_stream_state_change"`
+	RedisTransactionIntegrity   bool `json:"redis_transaction_integrity"`
+	// --- Cluster / Proxy 拓扑(依据部署形态生效) ---
+	RedisClusterDbZero          bool `json:"redis_cluster_db_zero"`
+	RedisClusterCrossSlot       bool `json:"redis_cluster_cross_slot"`
+	RedisClusterScanScope       bool `json:"redis_cluster_scan_scope"`
+	RedisClusterTransactionSlot bool `json:"redis_cluster_transaction_slot"`
+	RedisClusterScriptSlot      bool `json:"redis_cluster_script_slot"`
+	RedisProxyDbSupport         bool `json:"redis_proxy_db_support"`
+	RedisProxyCrossShard        bool `json:"redis_proxy_cross_shard"`
+	RedisProxyScanScope         bool `json:"redis_proxy_scan_scope"`
 
 	// ------- Doris 建表审核规则(internal/dorischeck,自研)-------
 	// Doris 兼容 MySQL 协议与查询/DML 语法,但建表 DDL 是自有语法

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"Yearning-go/src/lib/enc"
@@ -38,6 +39,79 @@ const (
 
 // RedisDefaultDatabases Redis 默认的逻辑库数量（redis.conf 的 databases，默认 16）
 const RedisDefaultDatabases = 16
+
+// Redis 部署形态：审核期判定 Cluster/Proxy 规则用；空串表示探测失败（未知）。
+const (
+	RedisModeStandalone = "standalone"
+	RedisModeCluster    = "cluster"
+	RedisModeProxy      = "proxy"
+)
+
+// redisModeTTL 部署形态缓存时长：形态基本不变，避免每次检测/查询都重跑 CLUSTER INFO。
+const redisModeTTL = 10 * time.Minute
+
+type redisModeEntry struct {
+	mode     string
+	expireAt time.Time
+}
+
+var (
+	redisModeCache   = map[string]redisModeEntry{}
+	redisModeCacheMu sync.Mutex
+)
+
+// RedisDeployment 返回部署形态（standalone / cluster / proxy），探测失败返回空串表示未知。
+// 判定口径与 ConnectRedisWith 一致：cluster_enabled:1 且槽位地址与配置地址同主机才算直连集群；
+// 代理同样报 cluster_enabled:1，但槽位是实例内网地址。
+func (s *CoreDataSource) RedisDeployment() string {
+	key := s.SourceId
+	redisModeCacheMu.Lock()
+	if e, ok := redisModeCache[key]; ok && time.Now().Before(e.expireAt) {
+		redisModeCacheMu.Unlock()
+		return e.mode
+	}
+	redisModeCacheMu.Unlock()
+
+	mode := s.detectRedisMode()
+	redisModeCacheMu.Lock()
+	redisModeCache[key] = redisModeEntry{mode: mode, expireAt: time.Now().Add(redisModeTTL)}
+	redisModeCacheMu.Unlock()
+	return mode
+}
+
+// RedisDeploymentOf 取部署形态，非 Redis 数据源直接返回空串（不做无谓探测）。
+func RedisDeploymentOf(s *CoreDataSource) string {
+	if s == nil || s.DBType != DBTypeRedis {
+		return ""
+	}
+	return s.RedisDeployment()
+}
+
+func (s *CoreDataSource) detectRedisMode() string {
+	client, err := s.ConnectRedis()
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = client.Close() }()
+
+	// ConnectRedisWith 已经做过一次判定：命中「cluster_enabled 且槽位地址与配置一致」
+	// 时才返回集群客户端。这里先看客户端类型，避免重复判断口径不一致。
+	if IsRedisCluster(client) {
+		return RedisModeCluster
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), RedisTimeout)
+	defer cancel()
+	info, ierr := client.ClusterInfo(ctx).Result()
+	if ierr != nil {
+		// 不支持 CLUSTER 命令：普通单机
+		return RedisModeStandalone
+	}
+	if RedisClusterEnabled(info) {
+		// 自称集群但给的是普通客户端 = 代理转发（槽位是实例内网地址）
+		return RedisModeProxy
+	}
+	return RedisModeStandalone
+}
 
 // RedisScanLimit 列键名时单次抽样的上限。
 // 查询页只需展示一批键名，取够就停，避免在大实例上长时间游标遍历。

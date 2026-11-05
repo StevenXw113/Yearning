@@ -133,7 +133,7 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:    command,
 		Schema: schema,
-		Source: &api.DataSource{Kind: calls.DataSourceKind(source.DBType)},
+		Source: &api.DataSource{Kind: calls.DataSourceKind(source.DBType), RedisMode: model.RedisDeploymentOf(source)},
 		Lang:   model.C.General.Lang,
 		Rule:   engine.AuditRoleToAPI(rule),
 		Mode:   engine.CheckModeQuery,

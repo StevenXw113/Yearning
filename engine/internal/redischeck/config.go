@@ -110,12 +110,29 @@ type Config struct {
 	ForbidBlockingCommand  bool
 	ForbidSubscription     bool
 	StreamStateChange      bool
+	TransactionIntegrity   bool
+
+	// ---- Cluster / Proxy 拓扑 ----
+	// 这些开关只在对应部署形态下生效（见 Deployment），形态未知时一律不触发。
+	ClusterDbZero          bool
+	ClusterCrossSlot       bool
+	ClusterScanScope       bool
+	ClusterTransactionSlot bool
+	ClusterScriptSlot      bool
+	ProxyDbSupport         bool
+	ProxyCrossShard        bool
+	ProxyScanScope         bool
 
 	// Levels 规则级别：key 为规则名，value 为 error / warn / observe。
 	// 没配（或配了非法值）时取规则自带的 DefaultLevel。
 	Levels map[string]string
 	// Mode 审核模式：ModeWrite（空值同此）/ ModeQuery
 	Mode Mode
+	// Deployment 部署形态（standalone / cluster / proxy），由调用方探测后传入。
+	// 空表示未知：Cluster/Proxy 规则此时不生效——未知既不当违规也不当安全。
+	Deployment string
+	// Schema 本次命令的目标逻辑库（dbN），供 ClusterDbZero / ProxyDbSupport 判定。
+	Schema string
 }
 
 // ConfigFromAPI 从规则集构造 Config。

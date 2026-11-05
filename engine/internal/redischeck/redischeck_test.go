@@ -606,3 +606,71 @@ func TestRedisDbScopeInvalidConfig(t *testing.T) {
 		}
 	}
 }
+
+// Cluster / Proxy 规则只在对应部署形态下生效，形态未知时一律不触发
+func TestRedisTopologyRules(t *testing.T) {
+	hit := func(cfg Config, line string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		return len(findings) > 0
+	}
+
+	// 形态未知：开关全开也不拦（未知不等于违规）
+	unknown := Config{ClusterDbZero: true, ClusterCrossSlot: true, ProxyCrossShard: true, ProxyDbSupport: true, Mode: ModeQuery}
+	if hit(unknown, "MGET a b") {
+		t.Error("部署形态未知时不应触发拓扑规则")
+	}
+
+	// Cluster：跨 slot 拦截、同 slot 放行
+	cluster := Config{Deployment: "cluster", ClusterCrossSlot: true, Mode: ModeQuery}
+	other := ""
+	for i := 0; i < 500; i++ {
+		k := "k" + itoa(i)
+		if redisSlot(k) != redisSlot("k0") {
+			other = k
+			break
+		}
+	}
+	if other == "" {
+		t.Fatal("没找到不同 slot 的键，测试数据有问题")
+	}
+	if !hit(cluster, "MGET k0 "+other) {
+		t.Error("Cluster 跨 slot 的多键命令应被拦截")
+	}
+	if hit(cluster, "MGET {t}a {t}b") {
+		t.Error("相同 hash tag 的多键命令不应被拦截")
+	}
+
+	// Cluster：非 db0 拦截
+	dbScope := Config{Deployment: "cluster", ClusterDbZero: true, Schema: "db3", Mode: ModeQuery}
+	if !hit(dbScope, "GET k") {
+		t.Error("Cluster 下 db3 应被拦截")
+	}
+	dbScope.Schema = "db0"
+	if hit(dbScope, "GET k") {
+		t.Error("Cluster 下 db0 不应被拦截")
+	}
+
+	// Proxy：多键与 SCAN 拦截，单键放行
+	proxy := Config{Deployment: "proxy", ProxyCrossShard: true, ProxyScanScope: true, ProxyDbSupport: true, Mode: ModeQuery}
+	if !hit(proxy, "MGET a b") {
+		t.Error("Proxy 下多键命令应被拦截")
+	}
+	if !hit(proxy, "SCAN 0 MATCH app:*") {
+		t.Error("Proxy 下 SCAN 应被拦截")
+	}
+	if hit(proxy, "GET a") {
+		t.Error("Proxy 下单键读不应被拦截")
+	}
+
+	// 事务完整性：与部署形态无关，开关打开即拦
+	trans := Config{TransactionIntegrity: true, Mode: ModeWrite}
+	if !hit(trans, "MULTI") || !hit(trans, "EXEC") {
+		t.Error("事务控制命令应被拦截")
+	}
+	if hit(trans, "SET k v EX 60") {
+		t.Error("普通写命令不应被事务规则拦截")
+	}
+}
