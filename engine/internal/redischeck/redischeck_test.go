@@ -548,3 +548,61 @@ func TestRedisScanMatchRequiredScope(t *testing.T) {
 		}
 	}
 }
+
+// 单值大小只看「值」，不能把键名算进去（MSET 长键短值不应误报）
+func TestRedisMaxValueSizeIgnoresKeys(t *testing.T) {
+	cfg := Config{MaxValueSize: 8, Mode: ModeWrite}
+	blocked := func(line string) bool {
+		_, findings, err := Check(line, cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		for _, f := range findings {
+			if f.Rule == "RedisMaxValueSize" {
+				return true
+			}
+		}
+		return false
+	}
+	if blocked("MSET verylongkeyname short") {
+		t.Error("MSET 的键名长于值上限时不应命中")
+	}
+	if !blocked("MSET k verylongvalue123") {
+		t.Error("值超过上限时应命中")
+	}
+	if !blocked("SET k verylongvalue123") {
+		t.Error("SET 的值超过上限时应命中")
+	}
+	if blocked("SET verylongkeyname v") {
+		t.Error("SET 的键名不应被当成值")
+	}
+}
+
+// DB 范围配置非法时必须拦截，不能静默放行
+func TestRedisDbScopeInvalidConfig(t *testing.T) {
+	cfg := Config{DbScope: "abc", Mode: ModeWrite}
+	_, findings, err := Check("SELECT 3", cfg)
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	found := false
+	for _, f := range findings {
+		if f.Rule == "RedisDbScope" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("DbScope 配置非法时应拦截")
+	}
+
+	ok := Config{DbScope: "0-15", Mode: ModeWrite}
+	_, findings, err = Check("SELECT 3", ok)
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	for _, f := range findings {
+		if f.Rule == "RedisDbScope" {
+			t.Errorf("合法范围内不应拦截: %s", f.Message)
+		}
+	}
+}

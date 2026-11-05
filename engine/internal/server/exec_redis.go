@@ -19,8 +19,10 @@ const redisTimeout = 15 * time.Second
 
 // 连接参数与主程序 src/model/redis.go 一致（云厂商文档推荐值）。
 const (
-	redisDialTimeout  = 2 * time.Second
-	redisIOTimeout    = 2 * time.Second
+	redisDialTimeout = 2 * time.Second
+	// 读放大到 5s（大 key 读取），写保持 2s，与主程序 src/model/redis.go 一致
+	redisReadTimeout  = 5 * time.Second
+	redisWriteTimeout = 2 * time.Second
 	redisPoolTimeout  = 3 * time.Second
 	redisPoolSize     = 200
 	redisMaxIdleConns = 200
@@ -38,8 +40,8 @@ func redisUniversalOptions(ds *api.DataSource, db int) *redis.UniversalOptions {
 		Password:        ds.Password,
 		DB:              db,
 		DialTimeout:     redisDialTimeout,
-		ReadTimeout:     redisIOTimeout,
-		WriteTimeout:    redisIOTimeout,
+		ReadTimeout:     redisReadTimeout,
+		WriteTimeout:    redisWriteTimeout,
 		PoolTimeout:     redisPoolTimeout,
 		PoolSize:        redisPoolSize,
 		MaxIdleConns:    redisMaxIdleConns,

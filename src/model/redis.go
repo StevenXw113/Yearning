@@ -22,10 +22,12 @@ const RedisTimeout = 15 * time.Second
 
 // 连接参数取云厂商文档推荐值（腾讯云 Redis 连接示例 / 华为云 DCS 客户端建议）。
 // 不设 MinIdleConns：客户端按会话/工单建、用完即关，预建空闲连接只会堆在服务端。
-// ponytail: 读写 2s 是文档值，大 key 假性超时就把 redisIOTimeout 调大。
 const (
-	redisDialTimeout  = 2 * time.Second
-	redisIOTimeout    = 2 * time.Second
+	redisDialTimeout = 2 * time.Second
+	// 读写分开：读放宽到 5s——大 hash 的 HGETALL、稀疏键空间的 SCAN 在 2s 下会假性超时；
+	// 写命令都是单键操作，保持文档建议的 2s。
+	redisReadTimeout  = 5 * time.Second
+	redisWriteTimeout = 2 * time.Second
 	redisPoolTimeout  = 3 * time.Second
 	redisPoolSize     = 200
 	redisMaxIdleConns = 200
@@ -56,8 +58,8 @@ func redisUniversalOptions(s *CoreDataSource, password string, db int) *redis.Un
 		Password:        password,
 		DB:              db,
 		DialTimeout:     redisDialTimeout,
-		ReadTimeout:     redisIOTimeout,
-		WriteTimeout:    redisIOTimeout,
+		ReadTimeout:     redisReadTimeout,
+		WriteTimeout:    redisWriteTimeout,
 		PoolTimeout:     redisPoolTimeout,
 		PoolSize:        redisPoolSize,
 		MaxIdleConns:    redisMaxIdleConns,
@@ -249,8 +251,14 @@ func (s *CoreDataSource) RedisScanKeys(db int, pattern string, limit int) ([]str
 		cursor uint64
 		keys   []string
 	)
-	for len(keys) < limit {
-		batch, next, serr := client.Scan(ctx, cursor, pattern, int64(limit)).Result()
+	// COUNT 只是「每轮工作量提示」，给大一点能显著减少稀疏键空间下的往返次数；
+	// 同时限制轮数：命中率极低时不该一直扫到 ctx 超时才返回。
+	const (
+		scanCount = 1000
+		maxRounds = 20
+	)
+	for round := 0; len(keys) < limit && round < maxRounds; round++ {
+		batch, next, serr := client.Scan(ctx, cursor, pattern, scanCount).Result()
 		if serr != nil {
 			return nil, serr
 		}
@@ -267,15 +275,20 @@ func (s *CoreDataSource) RedisScanKeys(db int, pattern string, limit int) ([]str
 	return keys, nil
 }
 
-// RedisParseDB 把查询页传来的库名（dbN）解析成库号，非法值返回 0。
+// RedisParseDB 把查询页传来的库名（dbN）解析成库号。
+// 空名表示默认 db0；非法值报错——静默回落 db0 会让命令跑到错误的库上。
 // 库名只作为选择器使用，不参与任何命令拼接。
-func RedisParseDB(name string) int {
-	if len(name) < 3 || name[:2] != "db" {
-		return 0
+func RedisParseDB(name string) (int, error) {
+	s := strings.TrimSpace(name)
+	if s == "" {
+		return 0, nil
 	}
-	n, err := strconv.Atoi(name[2:])
+	if len(s) < 3 || !strings.EqualFold(s[:2], "db") {
+		return 0, fmt.Errorf("非法逻辑库名 %q，应形如 db0", name)
+	}
+	n, err := strconv.Atoi(s[2:])
 	if err != nil || n < 0 {
-		return 0
+		return 0, fmt.Errorf("非法逻辑库名 %q，应形如 db0", name)
 	}
-	return n
+	return n, nil
 }

@@ -201,7 +201,11 @@ func FetchRedisKeyDetail(c yee.Context) (err error) {
 	if u.SourceId == "" || u.DBType != model.DBTypeRedis {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 	}
-	detail, derr := RedisKeyDetail(&u, model.RedisParseDB(c.QueryParam("schema")), key)
+	db, derr := model.RedisParseDB(c.QueryParam("schema"))
+	if derr != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(derr))
+	}
+	detail, derr := RedisKeyDetail(&u, db, key)
 	if derr != nil {
 		c.Logger().Error(derr.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(derr))

@@ -38,7 +38,8 @@ func TestKeyspaceDatabases(t *testing.T) {
 func TestRedisOptionsFollowsCloudDefaults(t *testing.T) {
 	s := &CoreDataSource{IP: "127.0.0.1", Port: 6379, Username: "app"}
 	opt := RedisOptions(s, "pwd")
-	if opt.DialTimeout != 2*time.Second || opt.ReadTimeout != 2*time.Second || opt.WriteTimeout != 2*time.Second {
+	// 读放宽到 5s（大 key 的 HGETALL、稀疏 SCAN 在 2s 下会假性超时），写保持 2s
+	if opt.DialTimeout != 2*time.Second || opt.ReadTimeout != 5*time.Second || opt.WriteTimeout != 2*time.Second {
 		t.Errorf("超时不符合推荐值: dial=%v read=%v write=%v", opt.DialTimeout, opt.ReadTimeout, opt.WriteTimeout)
 	}
 	if opt.PoolTimeout != 3*time.Second || opt.PoolSize != 200 || opt.MaxRetries != 3 {

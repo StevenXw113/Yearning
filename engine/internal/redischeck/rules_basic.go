@@ -119,7 +119,8 @@ func init() {
 		hit: func(cfg Config, cmd *Command) string {
 			lo, hi, ok := parseDbScope(cfg.DbScope)
 			if !ok {
-				return ""
+				// 配置非法不能静默放行：范围无法确认时按「未授权」处理
+				return "DB 范围配置 " + cfg.DbScope + " 无法解析（应形如 0-15），请修正后再执行"
 			}
 			var bad []string
 			for _, db := range dbArgs(cmd) {

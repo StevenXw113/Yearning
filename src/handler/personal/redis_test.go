@@ -168,12 +168,22 @@ func TestRunRedisCommandRejectsWrites(t *testing.T) {
 }
 
 func TestRedisParseDBForQuerySchema(t *testing.T) {
-	// 库名从 WS 传来，解析成整数后参与建连（不是拼进命令），
-	// 所以非法值只会落到 db0，不存在注入面
-	cases := map[string]int{"db0": 0, "db15": 15, "db3": 3, "xx": 0, "": 0, "db-1": 0}
+	// 库名从 WS 传来，解析成整数后参与建连（不是拼进命令），不存在注入面；
+	// 但非法值必须报错——静默回落 db0 会让命令跑到错误的库上。
+	cases := map[string]int{"db0": 0, "db15": 15, "db3": 3, "DB3": 3, "": 0}
 	for in, want := range cases {
-		if got := model.RedisParseDB(in); got != want {
+		got, err := model.RedisParseDB(in)
+		if err != nil {
+			t.Errorf("RedisParseDB(%q) 不应报错: %v", in, err)
+			continue
+		}
+		if got != want {
 			t.Errorf("RedisParseDB(%q) = %d, want %d", in, got, want)
+		}
+	}
+	for _, bad := range []string{"xx", "db-1", "dbx", "db1x"} {
+		if _, err := model.RedisParseDB(bad); err == nil {
+			t.Errorf("RedisParseDB(%q) 应报错", bad)
 		}
 	}
 }

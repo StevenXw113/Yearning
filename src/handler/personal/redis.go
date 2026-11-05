@@ -43,7 +43,11 @@ func FetchRedisDatabaseInfo(u *model.CoreDataSource) ([]map[string]interface{}, 
 // 键空间可能上百万，SCAN 全量遍历既慢也没意义。前端把它当「表名」用
 // （选中后生成 GET / TYPE / TTL 这类命令，工单的 table 字段存的也是键名）。
 func FetchRedisKeyInfo(u *model.CoreDataSource, schema string) ([]map[string]interface{}, error) {
-	keys, err := u.RedisScanKeys(model.RedisParseDB(schema), "", model.RedisScanLimit)
+	db, err := model.RedisParseDB(schema)
+	if err != nil {
+		return nil, err
+	}
+	keys, err := u.RedisScanKeys(db, "", model.RedisScanLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +203,11 @@ func runRedisCommand(getClient func(int) (model.RedisConn, error), schema, comma
 	if kind != rediscmd.KindQuery {
 		return nil, errors.New("查询页只能执行只读命令（GET / SCAN / HGETALL / LRANGE 等），变更请到工单申请页提交")
 	}
-	client, err := getClient(model.RedisParseDB(schema))
+	db, err := model.RedisParseDB(schema)
+	if err != nil {
+		return nil, err
+	}
+	client, err := getClient(db)
 	if err != nil {
 		return nil, err
 	}

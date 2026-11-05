@@ -8,16 +8,16 @@ func init() {
 		cat: CategoryPerformance, modes: writeOnly, level: LevelError,
 		enabled: func(c Config) bool { return c.MaxValueSize > 0 },
 		hit: func(cfg Config, cmd *Command) string {
-			longest := ""
-			for _, a := range cmd.ArgsFrom(2) {
-				if len(a) > len(longest) {
-					longest = a
+			longest := 0
+			for _, a := range valueArgs(cmd) {
+				if len(a) > longest {
+					longest = len(a)
 				}
 			}
-			if len(longest) <= cfg.MaxValueSize {
+			if longest <= cfg.MaxValueSize {
 				return ""
 			}
-			return "单个值 " + itoa(len(longest)) + " 字节，超过上限 " + itoa(cfg.MaxValueSize) + " 字节"
+			return "单个值 " + itoa(longest) + " 字节，超过上限 " + itoa(cfg.MaxValueSize) + " 字节"
 		},
 	})
 
@@ -178,4 +178,45 @@ func offsetWriteSize(cmd *Command) (int64, bool) {
 		return off/8 + 1, true
 	}
 	return 0, false
+}
+
+// valueArgs 取命令里的「值」参数：键名不算，否则 MSET 这类命令会把键长当成值长。
+// 键值成对的命令按位置取；单值命令取固定位置；其余命令用「排除键名」兜底。
+func valueArgs(cmd *Command) []string {
+	switch cmd.Name {
+	case "MSET", "MSETNX":
+		var out []string
+		for i := 2; i < cmd.ArgCount(); i += 2 {
+			out = append(out, cmd.Arg(i))
+		}
+		return out
+	case "HSET", "HMSET", "HSETNX":
+		var out []string
+		for i := 3; i < cmd.ArgCount(); i += 2 {
+			out = append(out, cmd.Arg(i))
+		}
+		return out
+	case "SET", "SETNX", "GETSET":
+		if cmd.ArgCount() > 2 {
+			return []string{cmd.Arg(2)}
+		}
+		return nil
+	case "SETEX", "PSETEX", "SETRANGE":
+		if cmd.ArgCount() > 3 {
+			return []string{cmd.Arg(3)}
+		}
+		return nil
+	}
+	keys := make(map[string]struct{}, len(cmd.Keys))
+	for _, k := range cmd.Keys {
+		keys[k] = struct{}{}
+	}
+	out := make([]string, 0, cmd.ArgCount())
+	for _, a := range cmd.ArgsFrom(1) {
+		if _, isKey := keys[a]; isKey {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
 }

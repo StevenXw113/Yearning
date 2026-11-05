@@ -19,7 +19,11 @@ func (redisEngine) ListDatabases(_ context.Context, src *model.CoreDataSource) (
 
 func (redisEngine) ListCollections(_ context.Context, src *model.CoreDataSource, db string) ([]string, error) {
 	// Redis 的「表」就是键；按默认 pattern 抽样（上限由 model.RedisScanLimit 兜底）。
-	return src.RedisScanKeys(model.RedisParseDB(db), "", 0)
+	no, err := model.RedisParseDB(db)
+	if err != nil {
+		return nil, err
+	}
+	return src.RedisScanKeys(no, "", 0)
 }
 
 func (redisEngine) DescribeTable(_ context.Context, _ *model.CoreDataSource, _, _ string) ([]Field, error) {
