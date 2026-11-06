@@ -42,14 +42,19 @@ func TestRedisCommandTablesSingleSource(t *testing.T) {
 	}
 }
 
-// TestRedisSplitSingleSource 切词实现也只留 api 一份（此前三个包各抄一遍，改一边就会漂移）。
+// TestRedisSplitSingleSource 切词与抓镜像辅助实现也只留 api 一份
+// （此前三个包各抄一遍，改一边就会漂移）。
 func TestRedisSplitSingleSource(t *testing.T) {
 	root := moduleRoot(t)
 	files := append(
 		goFiles(t, root, "internal/bytebase"),
 		goFiles(t, filepath.Join(root, "..", "src", "lib", "rediscmd"), "")...,
 	)
-	sig := "func Split(line string) ([]string, error) {"
+	cases := []struct{ sig, call string }{
+		{"func Split(line string) ([]string, error) {", "api.SplitRedisCommand"},
+		{"func AffectedKeys(args []string) []string {", "api.RedisAffectedKeys"},
+		{"func Quote(s string) string {", "api.QuoteRedisArg"},
+	}
 	for _, f := range files {
 		if strings.HasPrefix(f, filepath.Join(root, "api")) {
 			continue
@@ -58,15 +63,22 @@ func TestRedisSplitSingleSource(t *testing.T) {
 		if err != nil {
 			t.Fatalf("读 %s 失败: %v", f, err)
 		}
-		src := string(raw)
-		i := strings.Index(src, sig)
-		if i < 0 {
-			continue
-		}
-		body := src[i : strings.Index(src[i:], "\n}")+i]
-		if !strings.Contains(body, "api.SplitRedisCommand") {
-			rel, _ := filepath.Rel(root, f)
-			t.Errorf("%s 里又写了一份切词实现：应只调用 api.SplitRedisCommand", rel)
+		// 统一成 LF 再截取函数体：仓库检出是 CRLF，"\n}" 在 CRLF 下匹配不到
+		src := strings.ReplaceAll(string(raw), "\r\n", "\n")
+		for _, c := range cases {
+			i := strings.Index(src, c.sig)
+			if i < 0 {
+				continue
+			}
+			end := strings.Index(src[i:], "\n}")
+			if end < 0 {
+				continue
+			}
+			body := src[i : i+end]
+			if !strings.Contains(body, c.call) {
+				rel, _ := filepath.Rel(root, f)
+				t.Errorf("%s 里又写了一份 %q 的实现：应只调用 %s", rel, c.sig, c.call)
+			}
 		}
 	}
 }

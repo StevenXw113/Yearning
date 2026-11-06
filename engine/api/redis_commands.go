@@ -264,3 +264,131 @@ func SplitRedisCommand(line string) ([]string, error) {
 	flush()
 	return args, nil
 }
+
+// ---- 执行侧共用：受影响键、参数引号与回滚命令拼接 ----
+// redisKeyAllArgs 这些命令的全部参数都是键
+var redisKeyAllArgs = map[string]struct{}{
+	"DEL": {}, "UNLINK": {}, "TOUCH": {}, "MGET": {}, "PFMERGE": {}, "WATCH": {},
+}
+
+// redisKeyFrom2 这些命令从第 2 个参数起都是键（第 1 个是操作符）
+// 例：BITOP AND dest src1 src2
+var redisKeyFrom2 = map[string]struct{}{
+	"BITOP": {},
+}
+
+// redisKeyPair 前两个参数都是键：源与目标（目标会被覆盖，必须一起抓）
+var redisKeyPair = map[string]struct{}{
+	"RENAME": {}, "RENAMENX": {}, "COPY": {},
+	"SMOVE": {}, "LMOVE": {}, "BLMOVE": {}, "RPOPLPUSH": {}, "BRPOPLPUSH": {},
+}
+
+// RedisAffectedKeys 返回一条命令**可能改动**的键，用于抓前镜像。
+//
+// 只关心写路径：纯读命令返回空。刻意不做完整性妥协——
+// 少抓一个键就意味着回滚时那个键回不去，所以宁可多抓（例如 RENAME 的源与目标都抓）。
+func RedisAffectedKeys(args []string) []string {
+	if len(args) < 2 {
+		return nil
+	}
+	name := redisCommandName(args)
+
+	switch name {
+	case "MSET", "MSETNX":
+		// 键值成对：1,3,5…
+		var out []string
+		for i := 1; i < len(args); i += 2 {
+			out = append(out, args[i])
+		}
+		return dedupKeys(out)
+	case "GETDEL", "GETEX", "GETSET":
+		// 读的同时会删键（GETEX 去掉 TTL 也算改动）
+		return dedupKeys(args[1:2])
+	}
+
+	if _, ok := redisKeyAllArgs[name]; ok {
+		return dedupKeys(args[1:])
+	}
+	if _, ok := redisKeyFrom2[name]; ok {
+		return dedupKeys(args[2:])
+	}
+	if _, ok := redisKeyPair[name]; ok {
+		if len(args) > 2 {
+			return dedupKeys(args[1:3])
+		}
+		return dedupKeys(args[1:])
+	}
+	// 其余写命令的约定：第一个参数是键
+	if RedisIsWriteCommand(name) {
+		return dedupKeys(args[1:2])
+	}
+	return nil
+}
+
+// dedup 去重且保持出现顺序（去重后回滚命令里不会重复处理同一个键）
+func dedupKeys(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+// Quote 把命令参数按 redis-cli 的规则加引号。
+//
+// 它与 Split 是互逆的：Rollback 生成的回滚命令必须能被 Split 原样解析回来，
+// 否则键名里有空格/引号时回滚就会打偏。只在必要时加引号，保持可读。
+func QuoteRedisArg(s string) string {
+	if s != "" && !strings.ContainsAny(s, " \t\r\n\"'\\") {
+		return s
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '"', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(s[i])
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteByte(s[i])
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// QuoteRedisArgs 批量加引号并用空格连接
+func QuoteRedisArgs(items []string) string {
+	parts := make([]string, 0, len(items))
+	for _, s := range items {
+		parts = append(parts, QuoteRedisArg(s))
+	}
+	return strings.Join(parts, " ")
+}
+
+// RedisCommandText 把参数拼回一行命令（用于把命令写进工单明细）
+func RedisCommandText(args []string) string {
+	return QuoteRedisArgs(args)
+}
+
+// redisCommandName 取命令名（首参数大写）
+func redisCommandName(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return strings.ToUpper(args[0])
+}
