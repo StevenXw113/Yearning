@@ -132,10 +132,8 @@ func commandKeys(args []string) (src, dst []string, ok bool) {
 		}
 		return nil, nil, false
 	}
-	if _, ok := writeCommands[name]; ok {
-		return args[1:2], nil, true
-	}
-	if api.RedisIsReadCommand(name) {
+	// 变更与只读都遵循「首参数是键」的约定
+	if api.RedisSemantics(name) != api.ScopeAdmin {
 		return args[1:2], nil, true
 	}
 	return nil, nil, false

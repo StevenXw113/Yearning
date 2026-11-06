@@ -8,7 +8,8 @@ func TestRedisSemantics(t *testing.T) {
 		"GET": ScopeData, "hgetall": ScopeData, "SCAN": ScopeData,
 		"TYPE": ScopeMeta, "TTL": ScopeMeta, "DBSIZE": ScopeMeta,
 		"SLOWLOG": ScopeDiag, "DUMP": ScopeDiag, "INFO": ScopeDiag, "COMMAND": ScopeDiag,
-		"SET": ScopeAdmin, "FLUSHALL": ScopeAdmin, "CONFIG": ScopeAdmin,
+		"SET": ScopeWrite, "HSET": ScopeWrite, "BLPOP": ScopeWrite,
+		"FLUSHALL": ScopeAdmin, "CONFIG": ScopeAdmin,
 		"JSON.SET": ScopeAdmin, // 未登记的模块命令按管理类处理（fail-closed）
 	}
 	for name, want := range cases {

@@ -2,7 +2,6 @@ package redischeck
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -24,22 +23,7 @@ const (
 var (
 	// 只读命令白名单已收敛到 engine/api（主程序查询页共用一份），见 api.RedisSemantics。
 
-	// writeCommands 改数据的命令（分类用；安全校验不依赖它）
-	writeCommands = map[string]struct{}{
-		"SET": {}, "SETEX": {}, "PSETEX": {}, "SETNX": {}, "MSET": {}, "MSETNX": {}, "APPEND": {}, "SETRANGE": {},
-		"INCR": {}, "DECR": {}, "INCRBY": {}, "DECRBY": {}, "INCRBYFLOAT": {}, "GETSET": {}, "GETDEL": {}, "GETEX": {},
-		"DEL": {}, "UNLINK": {}, "EXPIRE": {}, "PEXPIRE": {}, "EXPIREAT": {}, "PEXPIREAT": {}, "PERSIST": {},
-		"RENAME": {}, "RENAMENX": {}, "MOVE": {}, "COPY": {}, "RESTORE": {},
-		"HSET": {}, "HSETNX": {}, "HMSET": {}, "HDEL": {}, "HINCRBY": {}, "HINCRBYFLOAT": {},
-		"LPUSH": {}, "RPUSH": {}, "LPUSHX": {}, "RPUSHX": {}, "LPOP": {}, "RPOP": {}, "LSET": {}, "LINSERT": {},
-		"LREM": {}, "LTRIM": {}, "RPOPLPUSH": {}, "LMOVE": {}, "LMPOP": {},
-		"SADD": {}, "SREM": {}, "SPOP": {}, "SMOVE": {}, "SINTERSTORE": {}, "SUNIONSTORE": {}, "SDIFFSTORE": {},
-		"ZADD": {}, "ZREM": {}, "ZINCRBY": {}, "ZREMRANGEBYRANK": {}, "ZREMRANGEBYSCORE": {}, "ZREMRANGEBYLEX": {},
-		"ZPOPMIN": {}, "ZPOPMAX": {}, "ZMPOP": {}, "ZUNIONSTORE": {}, "ZINTERSTORE": {}, "ZDIFFSTORE": {}, "ZRANGESTORE": {},
-		"SETBIT": {}, "BITOP": {}, "BITFIELD": {}, "PFADD": {}, "PFMERGE": {},
-		"XADD": {}, "XDEL": {}, "XTRIM": {}, "XACK": {}, "XGROUP": {}, "XCLAIM": {}, "XAUTOCLAIM": {}, "XSETID": {},
-		"GEOADD": {}, "GEORADIUS": {}, "GEORADIUSBYMEMBER": {}, "GEOSEARCHSTORE": {},
-	}
+	// 只读与变更命令的名单都在 engine/api（见 RedisSemantics），这里不再维护第二份。
 
 	// dangerousCommands 影响面是整个实例的命令（RedisForbidDangerous）
 	dangerousCommands = map[string]string{
@@ -170,10 +154,7 @@ var managementTables = []map[string]string{
 // knownCommand 命令是否已登记语义（用于 RedisUnknownCommand）。
 // 未登记的命令一律按「语义未知」处理：模块命令（JSON.SET 之类）与厂商扩展都落在这里。
 func knownCommand(name string) bool {
-	if api.RedisIsReadCommand(name) {
-		return true
-	}
-	if _, ok := writeCommands[name]; ok {
+	if api.RedisSemantics(name) != api.ScopeAdmin {
 		return true
 	}
 	for _, t := range managementTables {
@@ -228,80 +209,17 @@ func Parse(line string) (*Command, error) {
 	}, nil
 }
 
-// Split 按 redis-cli 的参数规则切词：空白分隔，双引号内解析 \n \xHH 等转义，
-// 单引号内只识别 \' 与 \\。与主程序 src/lib/rediscmd.Split 的实现保持一致。
 func Split(line string) ([]string, error) {
-	var (
-		args  []string
-		cur   strings.Builder
-		quote byte
-		has   bool
-	)
-	flush := func() {
-		if has {
-			args = append(args, cur.String())
-			cur.Reset()
-			has = false
-		}
-	}
-	for i := 0; i < len(line); i++ {
-		c := line[i]
-		switch {
-		case quote == 0 && (c == ' ' || c == '\t' || c == '\r' || c == '\n'):
-			flush()
-		case quote == 0 && (c == '"' || c == '\''):
-			quote = c
-			has = true
-		case quote != 0 && c == quote:
-			quote = 0
-		case quote == '"' && c == '\\' && i+1 < len(line):
-			i++
-			switch line[i] {
-			case 'n':
-				cur.WriteByte('\n')
-			case 'r':
-				cur.WriteByte('\r')
-			case 't':
-				cur.WriteByte('\t')
-			case 'b':
-				cur.WriteByte('\b')
-			case 'a':
-				cur.WriteByte('\a')
-			case 'x':
-				if i+2 < len(line) {
-					var v int
-					if _, err := fmt.Sscanf(line[i+1:i+3], "%02x", &v); err == nil {
-						cur.WriteByte(byte(v))
-						i += 2
-						break
-					}
-				}
-				cur.WriteByte('x')
-			default:
-				cur.WriteByte(line[i])
-			}
-		case quote == '\'' && c == '\\' && i+1 < len(line) && (line[i+1] == '\'' || line[i+1] == '\\'):
-			i++
-			cur.WriteByte(line[i])
-		default:
-			cur.WriteByte(c)
-			has = true
-		}
-	}
-	if quote != 0 {
-		return nil, errors.New("命令里的引号没有闭合")
-	}
-	flush()
-	return args, nil
+	return api.SplitRedisCommand(line)
 }
 
 // classify 分类：危险/管理/脚本/主从/事务等都按结构变更处理，
 // 否则它们会落进「不是变更命令」那条分支——既拦不住也说不清理由。
 func classify(name string) int {
-	if _, ok := writeCommands[name]; ok {
+	switch api.RedisSemantics(name) {
+	case api.ScopeWrite:
 		return KindDML
-	}
-	if api.RedisIsReadCommand(name) {
+	case api.ScopeData, api.ScopeMeta, api.ScopeDiag:
 		return KindQuery
 	}
 	// 未知命令按变更处理：宁可走审批，也别把写命令当查询放行

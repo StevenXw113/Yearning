@@ -10,7 +10,6 @@ package rediscmd
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"engine/api"
@@ -57,74 +56,8 @@ var scriptCommands = map[string]string{
 
 // 只读命令白名单已收敛到 engine/api（与主程序查询页共用一份），见 api.RedisSemantics。
 
-// Split 按 redis-cli 的参数规则把一行命令切成参数。
-//
-// 规则：参数以空白分隔；双引号内的内容原样保留并解析 \n \r \t \b \a \xHH 等转义；
-// 单引号内只识别 \' 与 \\（与 redis-cli 一致，其余反斜杠原样保留）。
 func Split(line string) ([]string, error) {
-	var (
-		args  []string
-		cur   strings.Builder
-		quote byte // 0 = 不在引号内
-		has   bool // 当前参数是否已开始（用于区分空参数 "" 与无参数）
-	)
-	flush := func() {
-		if has {
-			args = append(args, cur.String())
-			cur.Reset()
-			has = false
-		}
-	}
-	for i := 0; i < len(line); i++ {
-		c := line[i]
-		switch {
-		case quote == 0 && (c == ' ' || c == '\t' || c == '\r' || c == '\n'):
-			flush()
-		case quote == 0 && (c == '"' || c == '\''):
-			quote = c
-			has = true
-		case quote != 0 && c == quote:
-			quote = 0
-		case quote == '"' && c == '\\' && i+1 < len(line):
-			i++
-			switch line[i] {
-			case 'n':
-				cur.WriteByte('\n')
-			case 'r':
-				cur.WriteByte('\r')
-			case 't':
-				cur.WriteByte('\t')
-			case 'b':
-				cur.WriteByte('\b')
-			case 'a':
-				cur.WriteByte('\a')
-			case 'x':
-				// \xHH：读两位十六进制，非法则按字面保留
-				if i+2 < len(line) {
-					var v int
-					if _, err := fmt.Sscanf(line[i+1:i+3], "%02x", &v); err == nil {
-						cur.WriteByte(byte(v))
-						i += 2
-						break
-					}
-				}
-				cur.WriteByte('x')
-			default:
-				cur.WriteByte(line[i])
-			}
-		case quote == '\'' && c == '\\' && i+1 < len(line) && (line[i+1] == '\'' || line[i+1] == '\\'):
-			i++
-			cur.WriteByte(line[i])
-		default:
-			cur.WriteByte(c)
-			has = true
-		}
-	}
-	if quote != 0 {
-		return nil, errors.New("命令里的引号没有闭合")
-	}
-	flush()
-	return args, nil
+	return api.SplitRedisCommand(line)
 }
 
 // CommandName 取命令名（首参数，大写）。Redis 命令名大小写不敏感，
@@ -183,22 +116,7 @@ func Validate(line string) (int, []string, error) {
 	return Classify(name), args, nil
 }
 
-// isWriteCommand 判断是否明确的写命令。
-// 只为分类用（区分 DML 与 DDL），安全校验不依赖它。
+// isWriteCommand 是否改数据：名单在 engine/api（分类与抓前镜像共用一份）。
 func isWriteCommand(name string) bool {
-	switch name {
-	case "SET", "SETEX", "PSETEX", "SETNX", "MSET", "MSETNX", "APPEND", "SETRANGE", "INCR", "DECR", "INCRBY", "DECRBY", "INCRBYFLOAT",
-		"GETSET", "GETDEL", "GETEX",
-		"DEL", "UNLINK", "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT", "PERSIST", "RENAME", "RENAMENX", "MOVE", "COPY", "RESTORE",
-		"HSET", "HSETNX", "HMSET", "HDEL", "HINCRBY", "HINCRBYFLOAT",
-		"LPUSH", "RPUSH", "LPUSHX", "RPUSHX", "LPOP", "RPOP", "LSET", "LINSERT", "LREM", "LTRIM", "RPOPLPUSH", "LMOVE", "BLPOP", "BRPOP", "BLMOVE",
-		"SADD", "SREM", "SPOP", "SMOVE", "SINTERSTORE", "SUNIONSTORE", "SDIFFSTORE",
-		"ZADD", "ZREM", "ZINCRBY", "ZREMRANGEBYRANK", "ZREMRANGEBYSCORE", "ZREMRANGEBYLEX", "ZPOPMIN", "ZPOPMAX",
-		"ZUNIONSTORE", "ZINTERSTORE", "ZDIFFSTORE", "ZRANGESTORE",
-		"SETBIT", "BITOP", "BITFIELD", "PFADD", "PFMERGE",
-		"XADD", "XDEL", "XTRIM", "XACK", "XGROUP", "XCLAIM", "XSETID",
-		"GEOADD", "GEORADIUS", "GEORADIUSBYMEMBER", "GEOSEARCHSTORE":
-		return true
-	}
-	return false
+	return api.RedisIsWriteCommand(name)
 }
