@@ -231,7 +231,8 @@ SQL 解析 / 审核 / 执行引擎**源码在本仓库 `engine/`**（独立 Go m
 | `/v1/query` | 查询语句预检、拆条、LIMIT 注入、敏感列识别 |
 | `/v1/exec` | 工单执行 |
 | `/v1/merge-alter-tables` | 合并多条 ALTER |
-| `/v1/stop-delay` | 停止定时执行 |
+
+> 定时执行的停止由主程序 cron 负责，引擎不提供 `/v1/stop-delay`（已整体拆除）。
 
 ### 8.1 编译并启动引擎
 
