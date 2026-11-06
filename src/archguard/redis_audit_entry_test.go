@@ -25,13 +25,19 @@ func TestRedisAuditFactsAtEveryCheckEntry(t *testing.T) {
 			return rerr
 		}
 		src := string(raw)
-		if !strings.Contains(src, "&api.CheckRequest{") {
-			return nil
+		rel, _ := filepath.Rel(root, path)
+		if strings.Contains(src, "&api.CheckRequest{") {
+			entries++
+			if !strings.Contains(src, "calls.RedisAudit(") {
+				t.Errorf("%s 构造了 CheckRequest 却没走 calls.RedisAudit：Redis 规则会静默失效", rel)
+			}
 		}
-		entries++
-		if !strings.Contains(src, "calls.RedisAudit(") {
-			rel, _ := filepath.Rel(root, path)
-			t.Errorf("%s 构造了 CheckRequest 却没走 calls.RedisAudit：Redis 规则会静默失效", rel)
+		// 执行入口同理：Exec 的 Source 缺事实，引擎侧按形态/生产/版本判定的规则全失效
+		if strings.Contains(src, "&api.ExecRequest{") {
+			entries++
+			if !strings.Contains(src, "calls.FillRedisFacts(") {
+				t.Errorf("%s 构造了 ExecRequest 却没走 calls.FillRedisFacts", rel)
+			}
 		}
 		return nil
 	})

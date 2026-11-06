@@ -43,12 +43,13 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	}
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
 
-	// MongoDB 不走引擎 Exec（引擎只处理 SQL 语义），复用工单执行链路：
+	// MongoDB / Redis 不走下面那段内联 Exec，复用工单执行链路：
 	// 硬保底、执行前规则复检、前镜像、执行明细与回滚语句都在 audit.ExecuteWorkOrder 里，
-	// 与「审批后执行」完全同构，避免在自动任务里再维护一份执行逻辑。
+	// 与「审批后执行」完全同构，避免在自动任务里再维护一份执行逻辑
+	// （Redis 尤其不能绕：执行前复核要带运行时事实，内联路径给不出来）。
 	// 行数上限取规则集的 MongoMaxAffectRows（自动任务自己的 Affectrow 只对 SQL 生效）。
-	if source.DBType == model.DBTypeMongoDB {
-		// Mongo 工单不走 OSC，忽略 oscAsync 返回值
+	if source.DBType == model.DBTypeMongoDB || source.DBType == model.DBTypeRedis {
+		// 命令式引擎不走 OSC，忽略 oscAsync 返回值
 		if _, err := audit.ExecuteWorkOrder(order, autoTaskActor); err != nil {
 			logger.DefaultLogger.Error(err)
 			return
@@ -79,20 +80,22 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	src := &api.DataSource{
+		Ip:       source.IP,
+		Port:     int32(source.Port),
+		Username: source.Username,
+		Password: p,
+		Ca:       source.CAFile,
+		Cert:     source.Cert,
+		Key:      source.KeyFile,
+		Kind:     calls.DataSourceKind(source.DBType),
+		AuthDb:   source.AuthDatabase,
+	}
+	calls.FillRedisFacts(src, &source)
 	rep, err := client.Exec(ctx, &api.ExecRequest{
-		Order: calls.OrderToAPI(order),
-		Rules: engine.AuditRoleToAPI(rule),
-		Source: &api.DataSource{
-			Ip:       source.IP,
-			Port:     int32(source.Port),
-			Username: source.Username,
-			Password: p,
-			Ca:       source.CAFile,
-			Cert:     source.Cert,
-			Key:      source.KeyFile,
-			Kind:     calls.DataSourceKind(source.DBType),
-			AuthDb:   source.AuthDatabase,
-		},
+		Order:         calls.OrderToAPI(order),
+		Rules:         engine.AuditRoleToAPI(rule),
+		Source:        src,
 		MaxAffectRows: uint32(autoTask.Affectrow),
 	})
 	if err != nil {

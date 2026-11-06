@@ -198,23 +198,29 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	if err != nil {
 		return false, err
 	}
+	src := &api.DataSource{
+		Ip:       source.IP,
+		Port:     int32(source.Port),
+		Username: source.Username,
+		Password: p,
+		Ca:       source.CAFile,
+		Cert:     source.Cert,
+		Key:      source.KeyFile,
+		Kind:     calls.DataSourceKind(source.DBType),
+		AuthDb:   source.AuthDatabase,
+	}
+	calls.FillRedisFacts(src, &source)
+	// Redis 执行前复核：审批到执行之间规则可能被收紧，带齐运行时事实再跑一遍
+	if err := recheckRedisOrder(order, &source, p, rule); err != nil {
+		return false, err
+	}
 	start := time.Now()
 	ctx, cancel := execContext()
 	defer cancel()
 	rep, err := client.Exec(ctx, &api.ExecRequest{
-		Order: calls.OrderToAPI(order),
-		Rules: engine.AuditRoleToAPI(rule),
-		Source: &api.DataSource{
-			Ip:       source.IP,
-			Port:     int32(source.Port),
-			Username: source.Username,
-			Password: p,
-			Ca:       source.CAFile,
-			Cert:     source.Cert,
-			Key:      source.KeyFile,
-			Kind:     calls.DataSourceKind(source.DBType),
-			AuthDb:   source.AuthDatabase,
-		},
+		Order:  calls.OrderToAPI(order),
+		Rules:  engine.AuditRoleToAPI(rule),
+		Source: src,
 	})
 	if rep == nil {
 		return false, calls.CombineReplyErr(rep, err)

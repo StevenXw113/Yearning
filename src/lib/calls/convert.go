@@ -58,6 +58,17 @@ func OrderToAPI(o *model.CoreSqlOrder) *api.Order {
 	}
 }
 
+// FillRedisFacts 填 Redis 运行时事实（部署形态/生产标记/版本）；非 Redis 空操作。
+// 执行入口用这个：它不需要键状态快照，也不该为执行多探一次键。
+func FillRedisFacts(ds *api.DataSource, s *model.CoreDataSource) {
+	if ds == nil || s == nil || s.DBType != model.DBTypeRedis {
+		return
+	}
+	ds.RedisMode = model.RedisDeploymentOf(s)
+	ds.IsProduction = s.IsProduction
+	ds.RedisVersion = model.RedisVersionOf(s)
+}
+
 // RedisAudit 填齐 Redis 审核需要的运行时事实，并返回键状态快照。
 //
 // 四件事必须一起给，缺一个就有规则静默失效：部署形态（拓扑 13 条）、
@@ -68,9 +79,7 @@ func RedisAudit(ds *api.DataSource, s *model.CoreDataSource, sql, schema string)
 	if ds == nil || s == nil || s.DBType != model.DBTypeRedis {
 		return nil
 	}
-	ds.RedisMode = model.RedisDeploymentOf(s)
-	ds.IsProduction = s.IsProduction
-	ds.RedisVersion = model.RedisVersionOf(s)
+	FillRedisFacts(ds, s)
 
 	db, err := model.RedisParseDB(schema)
 	if err != nil {
