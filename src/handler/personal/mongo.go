@@ -14,7 +14,6 @@ import (
 	"Yearning-go/src/lib/calls"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/mongodb"
-	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 
 	"engine/api"
@@ -131,14 +130,9 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), querySideCheckTimeout)
 	defer cancel()
-	// Redis 键状态快照：探测失败返回 nil，规则按未知处理
-	var keySnapshot map[string]api.KeyState
-	if source.DBType == model.DBTypeRedis {
-		db, _ := model.RedisParseDB(schema)
-		keySnapshot = rediscmd.KeySnapshot(source, db, command)
-	}
 	src := &api.DataSource{Kind: calls.DataSourceKind(source.DBType)}
-	calls.FillRedisFacts(src, source)
+	// 部署形态/生产标记/版本/键状态快照一次给齐；探测失败按未知处理
+	keySnapshot := calls.RedisAudit(src, source, command, schema)
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:          command,
 		Schema:       schema,

@@ -24,7 +24,6 @@ import (
 	"Yearning-go/src/lib/enc"
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/permission"
-	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
@@ -306,12 +305,6 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	// Redis 键状态快照：探测失败返回 nil，规则按未知处理（只提示不拦）
-	var keySnapshot map[string]api.KeyState
-	if s.DBType == model.DBTypeRedis {
-		db, _ := model.RedisParseDB(u.Database)
-		keySnapshot = rediscmd.KeySnapshot(&s, db, u.SQL)
-	}
 	src := &api.DataSource{
 		Ip:       s.IP,
 		Port:     int32(s.Port),
@@ -323,7 +316,8 @@ func FetchSQLTest(c yee.Context) (err error) {
 		Kind:     calls.DataSourceKind(s.DBType),
 		AuthDb:   s.AuthDatabase,
 	}
-	calls.FillRedisFacts(src, &s)
+	// 部署形态/生产标记/版本/键状态快照一次给齐；探测失败按未知处理（只提示不拦）
+	keySnapshot := calls.RedisAudit(src, &s, u.SQL, u.Database)
 	rep, err := client.Check(ctx, &api.CheckRequest{
 		Sql:          u.SQL,
 		Schema:       u.Database,

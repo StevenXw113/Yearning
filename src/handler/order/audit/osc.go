@@ -127,14 +127,16 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 		Kind:     calls.DataSourceKind(source.DBType),
 		AuthDb:   source.AuthDatabase,
 	}
-	calls.FillRedisFacts(src, source)
+	// 部署形态/生产标记/版本/键状态快照一次给齐；MySQL 源这里返回 nil
+	keySnapshot := calls.RedisAudit(src, source, order.SQL, order.DataBase)
 	rep, err := client.Check(ctx, &api.CheckRequest{
-		Sql:    order.SQL,
-		Schema: order.DataBase,
-		Source: src,
-		Lang:   model.C.General.Lang,
-		Rule:   engine.AuditRoleToAPI(rule),
-		Mode:   engine.CheckModeWrite,
+		Sql:         order.SQL,
+		Schema:      order.DataBase,
+		KeySnapshot: keySnapshot,
+		Source:      src,
+		Lang:        model.C.General.Lang,
+		Rule:        engine.AuditRoleToAPI(rule),
+		Mode:        engine.CheckModeWrite,
 	})
 	if err != nil || rep == nil || !rep.Ok {
 		return false, fmt.Sprintf("引擎审核失败: %v", calls.CombineReplyErr(rep, err))

@@ -1,6 +1,7 @@
 package calls
 
 import (
+	"Yearning-go/src/lib/rediscmd"
 	"Yearning-go/src/model"
 
 	"engine/api"
@@ -57,13 +58,23 @@ func OrderToAPI(o *model.CoreSqlOrder) *api.Order {
 	}
 }
 
-// FillRedisFacts 填 Redis 运行时事实（部署形态/生产标记/版本）；非 Redis 空操作。
-// 三处 Check 入口共用，漏传会让拓扑与键状态规则静默失效。
-func FillRedisFacts(ds *api.DataSource, s *model.CoreDataSource) {
+// RedisAudit 填齐 Redis 审核需要的运行时事实，并返回键状态快照。
+//
+// 四件事必须一起给，缺一个就有规则静默失效：部署形态（拓扑 13 条）、
+// 生产标记（ProductionWrite）、实例版本（CommandCompatibility）、
+// 键快照（TypeMismatch / OverwriteExisting / RequireTtl 等）。
+// 非 Redis 数据源一律空操作：ds 不动、快照返回 nil。
+func RedisAudit(ds *api.DataSource, s *model.CoreDataSource, sql, schema string) map[string]api.KeyState {
 	if ds == nil || s == nil || s.DBType != model.DBTypeRedis {
-		return
+		return nil
 	}
 	ds.RedisMode = model.RedisDeploymentOf(s)
 	ds.IsProduction = s.IsProduction
 	ds.RedisVersion = model.RedisVersionOf(s)
+
+	db, err := model.RedisParseDB(schema)
+	if err != nil {
+		db = 0 // 库名非法时按 db0 探测：审核仍要看键状态，库名合法性由 DbScope 规则判
+	}
+	return rediscmd.KeySnapshot(s, db, sql)
 }

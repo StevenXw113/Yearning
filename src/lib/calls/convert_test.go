@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"Yearning-go/src/model"
+
+	"engine/api"
 )
 
 // TestDataSourceKind 四值映射决定引擎按哪种方言审核：映射错了不会报错，
@@ -30,5 +32,20 @@ func TestDataSourceKind(t *testing.T) {
 	if model.DBTypePostgreSQL != 1 || model.DBTypeMongoDB != 2 || model.DBTypeRedis != 3 || model.DBTypeDoris != 4 {
 		t.Fatalf("数据源类型常量漂移: postgresql=%d mongo=%d redis=%d doris=%d",
 			model.DBTypePostgreSQL, model.DBTypeMongoDB, model.DBTypeRedis, model.DBTypeDoris)
+	}
+}
+
+// 非 Redis 数据源必须原样放过：不能因为"顺手"去连一次库做快照
+func TestRedisAuditSkipsNonRedis(t *testing.T) {
+	ds := &api.DataSource{}
+	s := &model.CoreDataSource{DBType: 0} // MySQL
+	if snap := RedisAudit(ds, s, "alter table t add c int", "demo"); snap != nil {
+		t.Errorf("非 Redis 源应返回 nil 快照，实际 %v", snap)
+	}
+	if ds.RedisMode != "" || ds.RedisVersion != "" || ds.IsProduction {
+		t.Errorf("非 Redis 源不应写运行时事实: %+v", ds)
+	}
+	if snap := RedisAudit(nil, nil, "", ""); snap != nil {
+		t.Error("nil 入参应安全返回 nil")
 	}
 }
