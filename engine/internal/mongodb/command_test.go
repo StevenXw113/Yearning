@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -112,6 +113,27 @@ func TestRollbackGeneration(t *testing.T) {
 	}
 }
 
+// findAndModify 与 update 同样要能回滚：filtersOf 取 query 字段（不是 update 的 q），
+// Execute 复用 updateRollback。这里验证前半段——条件提取与回滚生成。
+func TestFindAndModifyRollback(t *testing.T) {
+	f := filtersOf(cmd(`{"findAndModify":"users","query":{"_id":1},"update":{"$set":{"age":31}}}`))
+	if len(f) != 1 {
+		t.Fatalf("findAndModify 的 filter 应取 query 字段, got %v", f)
+	}
+	if id, ok := lookup(f[0], "_id"); !ok || fmt.Sprint(id) != "1" {
+		t.Fatalf("filter 内容不对, got %v", f[0])
+	}
+	before := []bson.M{{"_id": 1, "name": "alice", "age": 30}}
+	out := updateRollback("users", before)
+	if len(out) != 1 || !strings.Contains(out[0], `"upsert":true`) {
+		t.Fatalf("findAndModify 应复用 update 的回滚语义, got %v", out)
+	}
+	// 无 query 时不应产出 filter——这种命令由 Validate 的空 filter 规则拦截
+	if f := filtersOf(cmd(`{"findAndModify":"users","update":{"$set":{"a":1}}}`)); len(f) != 0 {
+		t.Errorf("无 query 时不应产出 filter, got %v", f)
+	}
+}
+
 func TestAffected(t *testing.T) {
 	if got := affected("update", bson.M{"n": 3, "nModified": 2}); got != 3 {
 		t.Errorf("affected(update) = %d, want 3", got)
@@ -198,6 +220,26 @@ func TestExecuteRollbackIntegration(t *testing.T) {
 	}
 	if err := c.FindOne(ctx, bson.M{"_id": 3}).Err(); err == nil {
 		t.Error("回滚后插入的文档应被删除")
+	}
+
+	// 4) findAndModify：原子改一条再回滚，应恢复原值（曾经漏了这条，回滚为空）
+	out, err = Execute(ctx, client, dbName, cmd(`{"findAndModify":"yearning_it_tmp","query":{"_id":1},"update":{"$set":{"age":88}}}`), 0)
+	if err != nil {
+		t.Fatalf("findAndModify 执行失败: %v", err)
+	}
+	if out.Affected != 1 || len(out.Rollback) != 1 {
+		t.Fatalf("findAndModify 应产出回滚语句, got %+v", out)
+	}
+	_ = c.FindOne(ctx, bson.M{"_id": 1}).Decode(&after)
+	if after["age"] != int32(88) {
+		t.Fatalf("findAndModify 未生效: %v", after["age"])
+	}
+	if err := rollbackAll(ctx, client, dbName, out.Rollback); err != nil {
+		t.Fatalf("findAndModify 回滚失败: %v", err)
+	}
+	_ = c.FindOne(ctx, bson.M{"_id": 1}).Decode(&after)
+	if after["age"] != int32(30) {
+		t.Errorf("findAndModify 回滚后应恢复为 30, got %v", after["age"])
 	}
 }
 

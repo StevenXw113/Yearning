@@ -53,7 +53,8 @@ func Execute(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 	out.Affected = affected(name, raw)
 
 	switch name {
-	case "update":
+	case "update", "findandmodify":
+		// findAndModify 与 update 同样是「把命中文档改回原值」的回滚语义
 		out.Rollback = updateRollback(pre.coll, pre.docs)
 	case "delete":
 		out.Rollback = deleteRollback(pre.coll, pre.docs)
@@ -91,7 +92,12 @@ func capture(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 	coll := client.Database(db).Collection(pre.coll)
 
 	switch CommandName(cmd) {
-	case "update", "delete":
+	case "update", "delete", "findandmodify":
+		// findAndModify 的 filter 在 query 字段（见 filtersOf），它会按 query 抓前镜像。
+		// 注意：findAndModify 默认只改一条文档，这里会把命中的全部文档都留下前镜像——
+		// 回滚时把未改动的文档按原值 replace 一遍是幂等的（工单串行执行、回滚紧随其后），
+		// 换来的好处是不必复刻它的 sort/limit 选中逻辑。
+
 		seen := map[string]struct{}{}
 		for _, f := range filtersOf(cmd) {
 			cur, err := coll.Find(ctx, f, options.Find().SetLimit(MaxSnapshot+1))
