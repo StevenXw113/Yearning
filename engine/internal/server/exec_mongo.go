@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"engine/api"
@@ -75,6 +77,12 @@ func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.Exec
 	if _, err := mongodb.Validate(cmd); err != nil {
 		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
+	// 执行前复检规则集：审批到执行之间规则可能被收紧，只跑硬保底会把新规则跳过。
+	// error 级中止执行，warn 级随执行明细一起记下（与申请页检测同一入口、同一规则集）。
+	warns, recheckErr := recheckMongoRules(req)
+	if recheckErr != nil {
+		return &api.ExecReply{Ok: false, Error: recheckErr.Error()}, nil
+	}
 	maxAffectRows := 0
 	if req.Rules != nil {
 		maxAffectRows = int(req.Rules.MongoMaxAffectRows)
@@ -96,8 +104,45 @@ func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.Exec
 	}
 
 	rec := &api.Record{Sql: req.Order.Sql, Status: "已执行", AffectRows: uint32(out.Affected)}
-	if out.Warning != "" {
-		rec.Error = out.Warning
-	}
+	notes := append(warns, out.Warning)
+	rec.Error = strings.Join(nonEmpty(notes), "；")
 	return &api.ExecReply{Ok: true, Records: []*api.Record{rec}, Rollback: out.Rollback}, nil
+}
+
+// recheckMongoRules 执行前按当前规则集复检；返回 warning 级说明，error 级直接报错。
+func recheckMongoRules(req *api.ExecRequest) ([]string, error) {
+	rep := checkMongo(&api.CheckRequest{
+		Sql:    req.Order.Sql,
+		Schema: req.Order.DataBase,
+		Source: req.Source,
+		Rule:   req.Rules,
+		Mode:   "write",
+	})
+	if rep == nil || !rep.Ok {
+		msg := "引擎未返回复核结果"
+		if rep != nil {
+			msg = rep.Error
+		}
+		return nil, errors.New("执行前复核失败: " + msg)
+	}
+	var warns []string
+	for _, r := range rep.Records {
+		if r.Level == 1 {
+			return nil, errors.New("执行前复核发现阻断级问题: " + r.Error)
+		}
+		if r.Error != "" {
+			warns = append(warns, r.Error)
+		}
+	}
+	return warns, nil
+}
+
+func nonEmpty(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if strings.TrimSpace(s) != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
