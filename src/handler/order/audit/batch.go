@@ -49,8 +49,13 @@ func BatchExecute(c yee.Context) (err error) {
 			results = append(results, r)
 			continue
 		}
+		if !dbaApprovalSatisfied(o) {
+			r.Msg = "已跳过（MongoDB 高危命令尚未完成 DBA 特批）"
+			results = append(results, r)
+			continue
+		}
 		// 抢占失败=其他会话正在执行或状态已变化，跳过该条继续（并非 SQL 失败）
-		if !claimExecution(o.WorkId, model.OrderStatusWaiting) {
+		if !claimExecution(o, model.OrderStatusWaiting) {
 			r.Msg = "已跳过（并发执行或状态已变化）"
 			results = append(results, r)
 			continue

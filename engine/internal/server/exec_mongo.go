@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -11,9 +10,9 @@ import (
 	"time"
 
 	"engine/api"
-	"engine/internal/mongodb"
+	mongoe "engine/mongo"
+	"engine/ruleset"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -47,7 +46,6 @@ func connectMongo(ds *api.DataSource) (*mongo.Client, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), mongoTimeout)
 	defer cancel()
-	// v2 起 Connect 不再收 ctx:连接建立的时限由客户端选项控制(下方已设)
 	client, err := mongo.Connect(options.Client().
 		ApplyURI(mongoURI(ds.Username, ds.Password, ds.Ip, ds.Port, ds.AuthDb)).
 		SetConnectTimeout(mongoTimeout).
@@ -55,7 +53,6 @@ func connectMongo(ds *api.DataSource) (*mongo.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 连接是懒建立的，Ping 一次才能把「地址/口令不对」在入口处暴露出来
 	if err := client.Ping(ctx, nil); err != nil {
 		_ = client.Disconnect(context.Background())
 		return nil, err
@@ -63,29 +60,35 @@ func connectMongo(ds *api.DataSource) (*mongo.Client, error) {
 	return client, nil
 }
 
-// execMongo 执行 MongoDB 变更工单：硬保底 → 连接 → 前镜像 → 执行 → 回滚。
-//
-// 与 SQL 引擎不同，Mongo 的执行由引擎独立完成（前镜像抓取与回滚都在 internal/mongodb 里），
-// 结果映射回 ExecReply，与 SQL 同一形状——主程序侧的落库逻辑（Records/Rollback）
-// 因此不需要知道数据源类型。
-func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
-	var cmd bson.D
-	if err := bson.UnmarshalExtJSON([]byte(req.Order.Sql), false, &cmd); err != nil {
-		return &api.ExecReply{Ok: false, Error: "工单内容不是合法的 MongoDB 命令 JSON：" + err.Error()}, nil
+// mongoExecDefinition resolves the effective v2 rule set. RuleSet wins; Rules is
+// converted through the compatibility layer for old callers.
+func mongoExecDefinition(req *api.ExecRequest) (ruleset.Definition, error) {
+	if req == nil || req.Order == nil {
+		return ruleset.Definition{}, fmt.Errorf("MongoDB 工单为空")
 	}
-	// 执行前再过一遍硬保底（与提交时同一套）：提交到审批之间工单内容可能被改过
-	if _, err := mongodb.Validate(cmd); err != nil {
+	if len(req.RuleSet) > 0 {
+		def, err := ruleset.Decode(req.RuleSet)
+		if err != nil {
+			return def, err
+		}
+		ruleset.EnforceMongoDBAApprovalRules(&def)
+		return def, ruleset.ValidateMongoDefinition(def)
+	}
+	def := ruleset.MongoDefinitionFromAPI(req.Rules)
+	ruleset.EnforceMongoDBAApprovalRules(&def)
+	return def, ruleset.ValidateMongoDefinition(def)
+}
+
+// execMongo 执行 MongoDB 变更工单：规则集校验 → DBA 特批 → 规则复检 → 连接 → 执行。
+// 所有不满足条件的情况都发生在 connectMongo 之前。
+func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.ExecReply, error) {
+	def, err := mongoExecDefinition(req)
+	if err != nil {
 		return &api.ExecReply{Ok: false, Error: err.Error()}, nil
 	}
-	// 执行前复检规则集：审批到执行之间规则可能被收紧，只跑硬保底会把新规则跳过。
-	// error 级中止执行，warn 级随执行明细一起记下（与申请页检测同一入口、同一规则集）。
-	warns, recheckErr := recheckMongoRules(req)
+	warns, recheckErr := recheckMongoRules(req, def)
 	if recheckErr != nil {
 		return &api.ExecReply{Ok: false, Error: recheckErr.Error()}, nil
-	}
-	maxAffectRows := 0
-	if req.Rules != nil {
-		maxAffectRows = int(req.Rules.MongoMaxAffectRows)
 	}
 
 	client, err := connectMongo(req.Source)
@@ -94,13 +97,20 @@ func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.Exec
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
 
-	// 注意（回归点）：createIndexes 的实时构建进度此前由主程序写 osc_info，
-	// 引擎没有主程序的元数据库，这里不再挂 WatchIndexBuild 进度回传；
-	// 索引构建完成与否仍由执行结果体现。见 design.md 语义核对第 4 条。
-	out, err := mongodb.Execute(ctx, client, req.Order.DataBase, cmd, maxAffectRows)
-	if err != nil {
-		return &api.ExecReply{Ok: false, Error: err.Error(),
-			Records: []*api.Record{{Sql: req.Order.Sql, Status: "执行失败", Level: 1, Error: err.Error()}}}, nil
+	engine := mongoe.New(client)
+	out, err := engine.ExecuteDefinition(ctx, mongoe.Order{
+		Command:  req.Order.Sql,
+		Database: req.Order.DataBase,
+	}, def, req.DBAApproval)
+	if err != nil || !out.Ok {
+		msg := "执行失败"
+		if out.Error != nil {
+			msg = out.Error.Error()
+		} else if err != nil {
+			msg = err.Error()
+		}
+		return &api.ExecReply{Ok: false, Error: msg,
+			Records: []*api.Record{{Sql: req.Order.Sql, Status: "执行失败", Level: 1, Error: msg}}}, nil
 	}
 
 	rec := &api.Record{Sql: req.Order.Sql, Status: "已执行", AffectRows: uint32(out.Affected)}
@@ -109,29 +119,33 @@ func (e *Engine) execMongo(ctx context.Context, req *api.ExecRequest) (*api.Exec
 	return &api.ExecReply{Ok: true, Records: []*api.Record{rec}, Rollback: out.Rollback}, nil
 }
 
-// recheckMongoRules 执行前按当前规则集复检；返回 warning 级说明，error 级直接报错。
-func recheckMongoRules(req *api.ExecRequest) ([]string, error) {
-	rep := checkMongo(&api.CheckRequest{
-		Sql:    req.Order.Sql,
-		Schema: req.Order.DataBase,
-		Source: req.Source,
-		Rule:   req.Rules,
-		Mode:   "write",
-	})
-	if rep == nil || !rep.Ok {
-		msg := "引擎未返回复核结果"
-		if rep != nil {
-			msg = rep.Error
+// recheckMongoRules 执行前按当前规则集复检。有效 DBA 特批只放行硬底线，
+// 不豁免普通 error 级规则；warning 级说明随执行明细返回。
+func recheckMongoRules(req *api.ExecRequest, def ruleset.Definition) ([]string, error) {
+	ruleset.EnforceMongoDBAApprovalRules(&def)
+	engine := mongoe.New(nil)
+	decision, err := engine.AuditDefinitionWithApproval(nil, mongoe.Input{
+		Command:  req.Order.Sql,
+		Database: req.Order.DataBase,
+		Mode:     mongoe.ModeWrite,
+	}, def, req.DBAApproval)
+	if err != nil {
+		return nil, fmt.Errorf("执行前复核失败: %w", err)
+	}
+	if decision.Error != nil {
+		return nil, fmt.Errorf("执行前复核失败: %w", decision.Error)
+	}
+	blocked := mongoe.Blocked(decision.Findings)
+	if blocked != nil {
+		if blocked.RequiresDBAApproval {
+			return nil, fmt.Errorf("执行前复核发现 DBA 特批未完成: %s", decision.DBAApprovalMessage)
 		}
-		return nil, errors.New("执行前复核失败: " + msg)
+		return nil, fmt.Errorf("执行前复核发现阻断级问题: %s", mongoe.Messages(decision.Findings))
 	}
 	var warns []string
-	for _, r := range rep.Records {
-		if r.Level == 1 {
-			return nil, errors.New("执行前复核发现阻断级问题: " + r.Error)
-		}
-		if r.Error != "" {
-			warns = append(warns, r.Error)
+	for _, finding := range decision.Findings {
+		if finding.Message != "" {
+			warns = append(warns, finding.Message)
 		}
 	}
 	return warns, nil

@@ -135,6 +135,12 @@ type CoreSqlOrder struct {
 	//（引擎按规则集 DmlTransaction 开事务，此处按工单覆写，优先级高于规则集）。
 	// MySQL 的 DDL 语句隐式提交、无法纳入事务，引擎仅对 DML 工单开事务。
 	TxMode uint `gorm:"type:tinyint(2);not null;default 0" json:"tx_mode"`
+	// MongoDB 高危命令（dropCollection / renameCollection / 账号权限）的 DBA 特批闭环。
+	RequiresDBAApproval bool   `gorm:"type:tinyint(2);not null;default 0" json:"requires_dba_approval"`
+	DBAApprovalStatus   string `gorm:"type:varchar(20);not null;default 'none'" json:"dba_approval_status"`
+	DBAApprover         string `gorm:"type:varchar(50);not null;default ''" json:"dba_approver"`
+	DBAApprovalReason   string `gorm:"type:longtext" json:"dba_approval_reason"`
+	DBAApprovalTime     string `gorm:"type:varchar(30);not null;default ''" json:"dba_approval_time"`
 }
 
 type CoreRollback struct {
@@ -175,6 +181,9 @@ type CoreDataSource struct {
 	// IsProduction 是否生产数据源：审核侧对生产写入给出「补影响面/回滚」提示。
 	// 列由 AutoMigrate 自动添加。
 	IsProduction bool `gorm:"type:tinyint(2);not null;default 0" json:"is_production"`
+	// EnvironmentTag 环境标签（production / pre-production / test 等）。
+	// 生产强制审核按标签批量启用；空标签时兼容 IsProduction。
+	EnvironmentTag string `gorm:"type:varchar(32);not null;default ''" json:"environment_tag"`
 }
 
 type CoreGrained struct {
@@ -262,6 +271,10 @@ type CoreRules struct {
 	ID        uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
 	Desc      string `gorm:"type:longtext;not null" json:"desc"`
 	AuditRole JSON   `gorm:"type:json;" json:"audit_role"`
+	// Definition 是 v2 规则集。当前仅 MongoDB 使用；AuditRole 继续作为旧调用方兼容层。
+	Definition JSON   `gorm:"type:json;" json:"definition"`
+	Dialect    string `gorm:"type:varchar(32);not null;default ''" json:"dialect"`
+	Scope      string `gorm:"type:varchar(32);not null;default ''" json:"scope"`
 }
 
 // CoreCustomRule 用户自定义审核规则：对提交的 SQL 文本做正则匹配，命中即按级别拦截/提示。

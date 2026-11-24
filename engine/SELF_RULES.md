@@ -22,7 +22,7 @@
 - `forbid-drop` — 开关：`DDLEnableDropDatabase`、`DDLEnableDropTable`；禁止 DROP DATABASE / DROP TABLE（受「允许删除数据库/表」两个开关控制）
 - `forbid-truncate` — 开关：`DDLForbidTruncate`；禁止 TRUNCATE（不可回滚，如需清空数据请改用 DELETE 并走审批）
 
-## MongoDB 侧 · internal/mongocheck（20 条）
+## MongoDB 侧 · internal/mongocheck（22 条）
 
 - `MongoCollectionPrefix` — 开关：`MongoCollectionPrefix`；集合名需以参数为前缀（空 = 不生效）
 - `MongoForbidAdminCommand` — 开关：`MongoForbidAdminCommand`；禁止 createUser / dropUser / grantRolesToUser / createRole 等账号与权限管理命令
@@ -32,7 +32,9 @@
 - `MongoForbidDropCollection` — 开关：`MongoForbidDropCollection`；禁止 drop / renameCollection 集合
 - `MongoForbidEmptyFilter` — 开关：`MongoForbidEmptyFilter`；禁止无 filter 的 update / delete / findAndModify（否则作用于整个集合）
 - `MongoForbidImmutableId` — 开关：`MongoForbidImmutableId`；禁止修改 _id（不可变字段：$set / $unset / $rename / 替换文档）
+- `MongoForbidMultiWrite` — 开关：`MongoForbidMultiWrite`；禁止单个子句更新或删除多条文档（update 的 multi: true / delete 的 limit: 0）
 - `MongoForbidSystemCollection` — 开关：`MongoForbidSystemCollection`；禁止对 system.* 集合（system.users / system.profile / system.js / system.views）做变更
+- `MongoForbidUpsert` — 开关：`MongoForbidUpsert`；禁止 update / findAndModify 的 upsert: true（未命中时会插入文档）
 - `MongoForbidWhere` — 开关：`MongoForbidWhere`；禁止 $where（把脚本推到服务端执行）
 - `MongoIndexKeyLimit` — 开关：`MongoIndexKeyLimit`；createIndexes 单索引键数不超过参数上限（0 = 不限）
 - `MongoIndexNameSpec` — 开关：`MongoIndexNameSpec`；索引名需匹配参数里的正则（空 = 不生效）
@@ -41,7 +43,7 @@
 - `MongoNegationOperator` — 开关：`MongoNegationOperator`；禁止 $ne / $nin / $not / $nor（选择性差，通常全集合扫描）
 - `MongoOrClause` — 开关：`MongoOrClause`；禁止 $or（各分支需分别走索引，容易退化为全集合扫描）
 - `MongoQueryForbidLookup` — 开关：`MongoQueryForbidLookup`；查询禁用 $lookup / $graphLookup（关联查询代价高，且难以走索引）
-- `MongoQueryForbidNoFilter` — 开关：`MongoQueryForbidNoFilter`；查询条件不能为空：find 需要 filter，aggregate 需要 $match（避免全集合扫描）
+- `MongoQueryForbidNoFilter` — 开关：`MongoQueryForbidNoFilter`；查询条件不能为空：find 需要 filter，aggregate 的首个阶段需要非空 $match（提示检查扫描范围）
 - `MongoQueryForbidNoLimit` — 开关：`MongoQueryForbidNoLimit`；find 带 sort 时必须带 limit（否则服务端要对全部命中排序）
 - `MongoRegexUnanchored` — 开关：`MongoRegexUnanchored`；禁止未以 ^ 锚定的 $regex（无法使用索引，退化为全集合扫描）
 

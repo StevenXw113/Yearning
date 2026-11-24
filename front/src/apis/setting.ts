@@ -29,6 +29,8 @@ export interface Other {
   close_ai: string;
   proxy: string;
   domain: string;
+  // 命中这些环境标签的数据源进入生产强制审核（默认 production / pre-production）
+  production_audit_tags: string[];
 }
 
 export interface AI {

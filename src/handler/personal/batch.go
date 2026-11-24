@@ -62,12 +62,13 @@ func BatchOrderPost(c yee.Context) (err error) {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf(i18n.DefaultLang.Load(i18n.ER_USER_NO_PERMISSION), user, item.SourceId)))
 		}
 		// 命令式数据源（MongoDB / Redis）整批预检时就做硬保底校验，定位到第几条明细
+		var src model.CoreDataSource
 		if req.Type == vars.DML || req.Type == vars.DDL {
-			var src model.CoreDataSource
 			model.DB().Model(model.CoreDataSource{}).Where("source_id =?", item.SourceId).First(&src)
 			if err := dbengine.For(src.DBType).ValidateChange(&src, item.SQL); err != nil {
 				return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
 			}
+
 		}
 		order := &model.CoreSqlOrder{
 			Type:     req.Type,
@@ -80,6 +81,12 @@ func BatchOrderPost(c yee.Context) (err error) {
 			Table:    item.Table,
 			File:     item.File,
 			SQL:      item.SQL,
+		}
+
+		if req.Type == vars.DML || req.Type == vars.DDL {
+			if err := markMongoDBAApproval(order, src.DBType); err != nil {
+				return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(fmt.Errorf("第 %d 条明细: %v", i+1, err)))
+			}
 		}
 		step, werr := wrapperPostOrderInfo(order, c)
 		if werr != nil {

@@ -68,6 +68,8 @@ type AuditRole struct {
 	MongoForbidSystemCollection bool `json:"MongoForbidSystemCollection"`
 	MongoForbidAdminCommand     bool `json:"MongoForbidAdminCommand"`
 	MongoForbidImmutableID      bool `json:"MongoForbidImmutableId"`
+	MongoForbidUpsert           bool `json:"MongoForbidUpsert"`
+	MongoForbidMultiWrite       bool `json:"MongoForbidMultiWrite"`
 	// 结构类：命名规范与索引形态（默认只提示，convertToCapped 默认拦截）
 	MongoForbidCappedConvert  bool   `json:"MongoForbidCappedConvert"`
 	MongoForbidCollMod        bool   `json:"MongoForbidCollMod"`
@@ -185,15 +187,18 @@ type AuditRole struct {
 }
 
 type Record struct {
-	SQL              string   `json:"sql"`
-	AffectRows       uint     `json:"affect_rows"`
-	Status           string   `json:"status"`
-	Error            string   `json:"error"`
-	Level            uint8    `json:"level"`
-	ExecTime         string   `json:"exec_time"`
-	Table            string   `json:"table"`
-	Schema           string   `json:"schema"`
-	IsOSC            bool     `json:"is_osc"`
-	InsulateWordList []string `json:"insulate_word_list"`
-	RollBack         string   `json:"rollback"`
+	SQL                 string   `json:"sql"`
+	AffectRows          uint     `json:"affect_rows"`
+	Status              string   `json:"status"`
+	Error               string   `json:"error"`
+	Level               uint8    `json:"level"`
+	ExecTime            string   `json:"exec_time"`
+	Table               string   `json:"table"`
+	Schema              string   `json:"schema"`
+	IsOSC               bool     `json:"is_osc"`
+	InsulateWordList    []string `json:"insulate_word_list"`
+	RollBack            string   `json:"rollback"`
+	RuleID              string   `json:"rule_id,omitempty"`
+	RuleIDs             []string `json:"rule_ids,omitempty"`
+	RequiresDBAApproval bool     `json:"requires_dba_approval,omitempty"`
 }

@@ -5,14 +5,29 @@
       :ghost="false"
     >
       <template #extra>
+        <a-button
+          v-if="canReviewDBA"
+          key="dba"
+          type="primary"
+          danger
+          ghost
+          @click="turnDBA"
+        >
+          {{ $t('order.dba.review') }}
+        </a-button>
         <template
           v-if="
             route.params.tp === 'audit' && isCurrent > -1 && order.status === 2
           "
         >
-          <a-button key="2" type="primary" danger ghost @click="r.turnState()">{{
-            $t('order.reject')
-          }}</a-button>
+          <a-button
+            key="2"
+            type="primary"
+            danger
+            ghost
+            @click="r.turnState()"
+            >{{ $t('order.reject') }}</a-button
+          >
           <a-popconfirm
             :title="$t('order.agree.tips')"
             :open="condition"
@@ -107,6 +122,32 @@
                 :content="order.text"
               >
               </a-typography-paragraph>
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="order.requires_dba_approval"
+              :label="$t('order.dba.status')"
+            >
+              <a-tag :color="dbaStatusMeta(order.dba_approval_status).color">
+                {{ $t(dbaStatusMeta(order.dba_approval_status).textKey) }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="order.requires_dba_approval && order.dba_approver"
+              :label="$t('order.dba.approver')"
+            >
+              {{ order.dba_approver }}
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="order.requires_dba_approval && order.dba_approval_time"
+              :label="$t('order.dba.time')"
+            >
+              {{ order.dba_approval_time }}
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="order.requires_dba_approval && order.dba_approval_reason"
+              :label="$t('order.dba.reason')"
+            >
+              {{ order.dba_approval_reason }}
             </a-descriptions-item>
           </a-descriptions>
         </a-col>
@@ -223,6 +264,12 @@
     :work-id="order.work_id"
     @close="() => emit('close')"
   ></RetryModal>
+
+  <DBAModal
+    ref="dba"
+    :work-id="order.work_id"
+    @close="() => emit('close')"
+  ></DBAModal>
 </template>
 
 <script lang="ts" setup>
@@ -230,6 +277,7 @@
   import RejectModal from './rejectModal.vue';
   import MarkModal from './markModal.vue';
   import RetryModal from './retryModal.vue';
+  import DBAModal from './dbaModal.vue';
   import Comment from './comment.vue';
   import Results from './results.vue';
   import Step from '@/components/steps/steps.vue';
@@ -239,6 +287,11 @@
   import { computed, reactive, ref, onMounted } from 'vue';
   import { tableRef } from '@/components/table';
   import FetchMixins from '@/mixins/fetch';
+  import {
+    canReviewDBAApproval,
+    dbaStatusMeta,
+    type DBAApprovalStatus,
+  } from '@/lib/dba';
   import { checkSchema, StateUsage } from '@/lib';
   import {
     changeOrderStateUndo,
@@ -293,6 +346,13 @@
   const route = useRoute();
 
   const order = computed(() => orderStore.order);
+
+  const canReviewDBA = computed(() =>
+    canReviewDBAApproval(String(route.params.tp || ''), {
+      ...order.value,
+      dba_approval_status: order.value.dba_approval_status as DBAApprovalStatus,
+    }),
+  );
 
   const { fetchProfileSQL, orderProfileArch } = FetchMixins();
 
@@ -378,6 +438,13 @@
 
   const turnMark = () => {
     m.value?.turnState();
+  };
+
+  // DBA 特批弹窗（动作 + 必填理由），提交逻辑在 dbaModal 内
+  const dba = ref();
+
+  const turnDBA = () => {
+    dba.value?.turnState();
   };
 
   const fetchState = async () => {

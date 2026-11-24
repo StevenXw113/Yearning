@@ -18,12 +18,17 @@ import (
 	"Yearning-go/src/model"
 	crand "crypto/rand"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/cookieY/yee/logger"
 	"github.com/vmihailenco/msgpack/v5"
 	"math"
 	"slices"
 	"strconv"
 	"time"
+
+	"engine/ruleset"
+	"gorm.io/gorm"
 )
 
 // RemoveString 从给定字符串切片中删除所有与指定字符串匹配的元素。
@@ -142,4 +147,54 @@ func CheckDataSourceRule(ruleId int) (*engine.AuditRole, error) {
 		return &rule, nil
 	}
 	return model.GloRole.Load(), nil
+}
+
+// CheckDataSourceRuleSet 返回数据源生效的规则。
+//
+// RuleId != 0 时只读该规则集：优先使用 v2 Definition，不回退、不合并全局规则。
+// MongoDB 的旧 AuditRole 会被转换为 v2 Definition；其他数据源继续返回旧 AuditRole。
+// RuleId == 0 保持存量兼容，回退全局规则。
+func CheckDataSourceRuleSet(source *model.CoreDataSource) (*ruleset.Definition, *engine.AuditRole, error) {
+	if source == nil {
+		return nil, nil, errors.New("数据源为空，无法读取规则集")
+	}
+	if source.RuleId == 0 {
+		return nil, model.GloRole.Load(), nil
+	}
+
+	var r model.CoreRules
+	err := model.DB().Model(model.CoreRules{}).Where("id = ?", source.RuleId).First(&r).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, fmt.Errorf("数据源规则集 #%d 不存在", source.RuleId)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("读取数据源规则集 #%d 失败: %w", source.RuleId, err)
+	}
+
+	if len(r.Definition) > 0 {
+		def, err := ruleset.Decode(r.Definition)
+		if err != nil {
+			return nil, nil, fmt.Errorf("解析数据源规则集 #%d 失败: %w", source.RuleId, err)
+		}
+		if source.DBType == model.DBTypeMongoDB {
+			if err := ruleset.ValidateMongoDefinition(def); err != nil {
+				return nil, nil, fmt.Errorf("数据源规则集 #%d 非法: %w", source.RuleId, err)
+			}
+			return &def, nil, nil
+		}
+		return nil, nil, fmt.Errorf("数据源类型 #%d 暂不支持 v2 规则集 #%d", source.DBType, source.RuleId)
+	}
+
+	var old engine.AuditRole
+	if err := r.AuditRole.UnmarshalToJSON(&old); err != nil {
+		return nil, nil, fmt.Errorf("解析数据源规则集 #%d 失败: %w", source.RuleId, err)
+	}
+	if source.DBType == model.DBTypeMongoDB {
+		def := ruleset.MongoDefinitionFromAPI(engine.AuditRoleToAPI(&old))
+		if err := ruleset.ValidateMongoDefinition(def); err != nil {
+			return nil, nil, fmt.Errorf("数据源规则集 #%d 非法: %w", source.RuleId, err)
+		}
+		return &def, &old, nil
+	}
+	return nil, &old, nil
 }

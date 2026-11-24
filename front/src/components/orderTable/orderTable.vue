@@ -35,6 +35,15 @@
           <template v-if="column.dataIndex === 'status'">
             <state-tags :state="text"></state-tags>
           </template>
+          <template v-if="column.dataIndex === 'dba_approval_status'">
+            <a-tag
+              v-if="shouldShowDBAStatus(record)"
+              :color="dbaStatusMeta(record.dba_approval_status).color"
+            >
+              {{ $t(dbaStatusMeta(record.dba_approval_status).textKey) }}
+            </a-tag>
+            <span v-else>—</span>
+          </template>
           <template v-if="column.dataIndex === 'action'">
             <a-space v-if="!record.isProject">
               <a-button type="primary" size="small" @click="profile(record)"
@@ -81,6 +90,7 @@
   import type { TableColumnsType } from 'ant-design-vue';
   import { useElementSize, useWebSocket } from '@vueuse/core';
   import { checkSchema } from '@/lib';
+  import { dbaStatusMeta, shouldShowDBAStatus } from '@/lib/dba';
   import Profile from '@/components/orderProfile/index.vue';
   import Delay from './delay.vue';
   import { ISource, querySourceList } from '@/apis/source';
@@ -140,6 +150,8 @@
           type: r.type,
           date: r.date,
           status: r.status,
+          requires_dba_approval: r.requires_dba_approval,
+          dba_approval_status: r.dba_approval_status,
           assigned: '',
           delay: '',
           children: [],
@@ -149,6 +161,8 @@
       }
       // 只要还有子工单待审，项目行整体显示为「审核中」
       if (r.status === OrderState.AUDIT) p.status = OrderState.AUDIT;
+      // 项目行只要包含一条 DBA 特批工单，就保留特批状态，避免折叠后丢失硬底线提示
+      if (r.requires_dba_approval) p.requires_dba_approval = true;
       p.children.push({ ...r, key: r.work_id });
     }
     projects.forEach(
@@ -212,6 +226,11 @@
       title: t('order.profile.auditor'),
       dataIndex: 'assigned',
       width: 120,
+    },
+    {
+      title: t('order.dba.status'),
+      dataIndex: 'dba_approval_status',
+      width: 110,
     },
     {
       title: t('common.table.state'),

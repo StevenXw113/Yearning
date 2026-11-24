@@ -53,17 +53,32 @@ func (e *Confirm) GetTPL() []flow.Tpl {
 // from 为允许抢占的起始状态（末级审批刚通过的 2、等待执行的 5）；
 // 并发触发/状态已变化时 UPDATE 命中 0 行，返回 false，调用方必须放弃执行——
 // 这是防止同一工单被重复执行（双击审批、人工执行与定时 cron 撞车）的唯一闸门。
-func claimExecution(workId string, from ...int) bool {
-	if workId == "" || len(from) == 0 {
+func claimExecution(order *model.CoreSqlOrder, from ...int) bool {
+	if order == nil || order.WorkId == "" || len(from) == 0 {
+		return false
+	}
+	if !dbaApprovalSatisfied(order) {
 		return false
 	}
 	res := model.DB().Model(&model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` IN ?", workId, from).
+		Where("work_id =? AND `status` IN ? AND (requires_dba_approval = false OR dba_approval_status = 'approved')", order.WorkId, from).
 		Updates(map[string]interface{}{
 			"status":       model.OrderStatusExecuting,
 			"execute_time": time.Now().Format("2006-01-02 15:04"),
 		})
 	return res.Error == nil && res.RowsAffected == 1
+}
+
+// ClaimExecution is the delayed scheduler's guarded 5→3 transition. The DBA guard is in
+// the UPDATE predicate so approval cannot race with a stale in-memory order snapshot.
+func ClaimExecution(order *model.CoreSqlOrder, from ...int) bool {
+	return claimExecution(order, from...)
+}
+
+// dbaApprovalSatisfied keeps the DBA approval invariant in one place. A required approval
+// is only satisfied by the explicit approved status.
+func dbaApprovalSatisfied(order *model.CoreSqlOrder) bool {
+	return order == nil || !order.RequiresDBAApproval || order.DBAApprovalStatus == "approved"
 }
 
 // FinalizeExecution 执行收尾：已抢占（status=3）的工单按结果置 1（完成）或 4（失败）。
@@ -84,7 +99,10 @@ func FinalizeExecution(workId string, execErr error) {
 // 返回 oscAsync=true 表示 gh-ost 已在后台启动（此时 err 必为 nil），调用方不得再动
 // 工单状态（收尾由 OSC 的后台 goroutine 完成），应向用户返回「已启动」类文案。
 func executeClaimedOrder(order *model.CoreSqlOrder, actor string, from ...int) (oscAsync bool, err error) {
-	if !claimExecution(order.WorkId, from...) {
+	if order != nil && !dbaApprovalSatisfied(order) {
+		return false, errors.New("MongoDB 高危命令尚未完成 DBA 特批")
+	}
+	if !claimExecution(order, from...) {
 		return false, errors.New(i18n.DefaultLang.Load(i18n.ER_ORDER_EXECUTING_CONFLICT))
 	}
 	oscAsync, err = ExecuteWorkOrder(order, actor)
@@ -169,12 +187,23 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 		return false, errors.New(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
 	}
 	model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&source)
+	// MongoDB 高危命令必须在任何规则集解析、引擎连接、命令执行前完成 DBA 特批。
+	if order.RequiresDBAApproval && order.DBAApprovalStatus != "approved" {
+		return false, errors.New("MongoDB 高危命令尚未完成 DBA 特批")
+	}
 	// 所有数据源统一走引擎 Exec：MongoDB / Redis 由引擎的 execCommand 分支执行
 	// （硬保底 → 连接 → 前镜像 → 命令执行），SQL 由引擎的拆分执行路径处理；
 	// 落库（core_sql_records / core_rollbacks / 流程明细）由本函数按 Records/Rollback 统一写。
-	rule, err := factory.CheckDataSourceRule(source.RuleId)
-	if err != nil || rule == nil {
+	ruleSet, rule, err := factory.CheckDataSourceRuleSet(&source)
+	if err != nil || (ruleSet == nil && rule == nil) {
 		return false, err
+	}
+	var ruleSetJSON []byte
+	if ruleSet != nil {
+		ruleSetJSON, err = json.Marshal(ruleSet)
+		if err != nil {
+			return false, err
+		}
 	}
 	// 工单勾选了事务模式 → 覆写规则的 DMLTransaction（见 withTxMode 的拷贝说明）
 	rule = withTxMode(rule, order.TxMode)
@@ -217,10 +246,20 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 	start := time.Now()
 	ctx, cancel := execContext()
 	defer cancel()
+	var dbaApproval *api.DBAApproval
+	if order.RequiresDBAApproval {
+		dbaApproval = &api.DBAApproval{
+			Approved: true,
+			Approver: order.DBAApprover,
+			Reason:   order.DBAApprovalReason,
+		}
+	}
 	rep, err := client.Exec(ctx, &api.ExecRequest{
-		Order:  calls.OrderToAPI(order),
-		Rules:  engine.AuditRoleToAPI(rule),
-		Source: src,
+		Order:       calls.OrderToAPI(order),
+		Rules:       engine.AuditRoleToAPI(rule),
+		RuleSet:     ruleSetJSON,
+		Source:      src,
+		DBAApproval: dbaApproval,
 	})
 	if rep == nil {
 		return false, calls.CombineReplyErr(rep, err)
@@ -457,10 +496,14 @@ func MarkOrderFinished(u *Confirm, user string) common.Resp {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_MARK_NO_TEXT))
 	}
 	var od model.CoreSqlOrder
-	model.DB().Model(model.CoreSqlOrder{}).Select("work_id, status, assigned").
+	model.DB().Model(model.CoreSqlOrder{}).
+		Select("work_id, status, assigned, requires_dba_approval, dba_approval_status").
 		Where("work_id =?", u.WorkId).First(&od)
 	if od.WorkId == "" {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ORDER_NOT_SEARCH))
+	}
+	if !dbaApprovalSatisfied(&od) {
+		return common.ERR_COMMON_TEXT_MESSAGE("MongoDB 高危命令尚未完成 DBA 特批")
 	}
 	if !permission.IsSuperUser(user) && !isAuditor(strings.Split(od.Assigned, ","), user) {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_MARK_PERMISSION))
@@ -472,7 +515,7 @@ func MarkOrderFinished(u *Confirm, user string) common.Resp {
 	}
 	// 状态迁移带原状态守卫，与撤销/执行等并发操作互斥
 	res := model.DB().Model(model.CoreSqlOrder{}).
-		Where("work_id =? AND `status` IN ?", u.WorkId, []int{model.OrderStatusAuditing, model.OrderStatusFailed, model.OrderStatusWaiting}).
+		Where("work_id =? AND `status` IN ? AND (requires_dba_approval = false OR dba_approval_status = 'approved')", u.WorkId, []int{model.OrderStatusAuditing, model.OrderStatusFailed, model.OrderStatusWaiting}).
 		Updates(map[string]interface{}{"status": model.OrderStatusFinished, "execute_time": time.Now().Format("2006-01-02 15:04")})
 	if res.Error != nil || res.RowsAffected != 1 {
 		return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_ORDER_NOT_MARKABLE))

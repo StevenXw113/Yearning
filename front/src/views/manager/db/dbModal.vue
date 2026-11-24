@@ -22,6 +22,14 @@
           <a-form-item :label="$t('common.table.db_type')">
             {{ dbTypeLabel(dbForm.db_type) }}
           </a-form-item>
+          <a-form-item :label="$t('db.environment.tag')">
+            <a-auto-complete
+              v-model:value="dbForm.environment_tag"
+              style="width: 100%"
+              :options="productionTagOptions"
+              :placeholder="$t('db.environment.tag.tips')"
+            />
+          </a-form-item>
           <a-form-item :label="$t('db.addr')" name="ip">
             <a-input v-model:value="dbForm.ip"></a-input>
           </a-form-item>
@@ -48,10 +56,7 @@
             </div>
           </a-form-item>
           <!-- 生产标记：审核侧对生产写入给出「补影响面/回滚」提示 -->
-          <a-form-item
-            v-if="dbForm.db_type === DBType.Redis"
-            :label="$t('db.is.production')"
-          >
+          <a-form-item :label="$t('db.is.production')">
             <a-switch v-model:checked="dbForm.is_production" />
           </a-form-item>
           <!-- Redis 部署形态：自动探测靠 CLUSTER INFO，部分云代理判不准，允许手动指定 -->
@@ -145,9 +150,12 @@
               <a-select-option :key="-1" :value="0">{{
                 $t('db.global')
               }}</a-select-option>
-              <a-select-option v-for="i in rules" :key="i.id" :value="i.id">{{
-                i.desc
-              }}</a-select-option>
+              <a-select-option
+                v-for="i in compatibleRules"
+                :key="i.id"
+                :value="i.id"
+                >{{ i.desc }}
+              </a-select-option>
             </a-select>
           </a-form-item>
           <a-form-item :label="$t('common.action')">
@@ -175,13 +183,14 @@
 <script lang="ts" setup>
   import { getFlowProfile, Steps } from '@/apis/flow';
   import CommonMixins from '@/mixins/common';
-  import { ref, computed } from 'vue';
+  import { ref, computed, onMounted } from 'vue';
   import { useCommonStore } from '@/store';
   import { createSource, dbTypeLabel, Source, DBType } from '@/apis/db';
   import { querySchemaList } from '@/apis/source';
-  import { CustomRule } from '@/apis/rules';
+  import { CustomRule, isRuleSetCompatibleWithDBType } from '@/apis/rules';
+  import { getSettingInfo } from '@/apis/setting';
 
-  defineProps<{
+  const props = defineProps<{
     rules: CustomRule[];
   }>();
 
@@ -208,6 +217,27 @@
 
   const principalList = computed(() => commonStore.principal);
 
+  const productionTags = ref<string[]>([]);
+
+  const productionTagOptions = computed(() =>
+    productionTags.value.map((tag) => ({ value: tag })),
+  );
+
+  const compatibleRules = computed(() =>
+    (props.rules || []).filter((item) =>
+      isRuleSetCompatibleWithDBType(item, dbForm.value.db_type),
+    ),
+  );
+
+  onMounted(async () => {
+    const { data } = await getSettingInfo();
+    productionTags.value = Array.isArray(
+      data.payload.other?.production_audit_tags,
+    )
+      ? data.payload.other.production_audit_tags
+      : ['production', 'pre-production'];
+  });
+
   let dbForm = ref({
     idc: '',
     source: '',
@@ -221,6 +251,7 @@
     exclude_db_list: '',
     insulate_word_list: '',
     rule_id: 0,
+    environment_tag: '',
     allow_diag_commands: false,
     redis_mode: '',
     is_production: false,

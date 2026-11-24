@@ -36,4 +36,7 @@ export default {
   'db.excluded.field': '脱敏字段',
   'db.edit.title': '数据源信息',
   'db.global': '默认审核规则',
+  'db.environment.tag': '环境标签',
+  'db.environment.tag.tips':
+    '如 production / pre-production；命中生产审核标签时查询需人工审核',
 };

@@ -101,6 +101,8 @@ type AuditRole struct {
 	MongoForbidAdminCommand     bool  `json:"mongo_forbid_admin_command"`
 	// MongoForbidImmutableId 禁止修改 _id(不可变字段:$set/$unset/$rename/替换文档)。
 	MongoForbidImmutableId bool `json:"mongo_forbid_immutable_id"`
+	MongoForbidUpsert      bool `json:"mongo_forbid_upsert"`
+	MongoForbidMultiWrite  bool `json:"mongo_forbid_multi_write"`
 
 	// ------- MongoDB 结构类规则(默认 warn,避免误报影响提交)-------
 	// MongoForbidCappedConvert:convertToCapped 会重建集合(不可逆),默认拦截。
@@ -266,6 +268,10 @@ type Record struct {
 	InsulateWordList []string `json:"insulate_word_list"`
 	// Rollback 该语句的回滚语句(执行前抓取前镜像生成,可能为空)。
 	Rollback string `json:"rollback"`
+	// RuleID / RuleIDs 稳定规则 ID(v2)。RuleID 为单命中主 ID，RuleIDs 汇总全部命中。
+	RuleID              string   `json:"rule_id,omitempty"`
+	RuleIDs             []string `json:"rule_ids,omitempty"`
+	RequiresDBAApproval bool     `json:"requires_dba_approval,omitempty"`
 }
 
 // KeyState 键状态快照（Redis）：由调用方探测后传入，引擎不连库。
@@ -277,11 +283,13 @@ type KeyState struct {
 }
 
 type CheckRequest struct {
-	Sql         string              `json:"sql"`
-	Schema      string              `json:"schema"`
-	Source      *DataSource         `json:"source"`
-	Lang        string              `json:"lang"`
-	Rule        *AuditRole          `json:"rule"`
+	Sql    string      `json:"sql"`
+	Schema string      `json:"schema"`
+	Source *DataSource `json:"source"`
+	Lang   string      `json:"lang"`
+	Rule   *AuditRole  `json:"rule"`
+	// RuleSet v2 规则集定义。非空时优先生效，Rule 仅作为旧调用方兼容字段。
+	RuleSet     []byte              `json:"rule_set,omitempty"`
 	KeySnapshot map[string]KeyState `json:"key_snapshot,omitempty"` // 缺键 = 未探测，规则不得判「不存在」
 	// CommandCount 本次提交包含的命令数（单命令入口为 1），供事务上限规则判定。
 	CommandCount int `json:"command_count,omitempty"`
@@ -290,6 +298,14 @@ type CheckRequest struct {
 	// 空值按 write 处理,保证旧调用方行为不变;不靠命令名自动推断模式——
 	// 申请页里填 find 必须报「不是变更命令」,而不是悄悄按查询规则放行。
 	Mode string `json:"mode"`
+}
+
+// DBAApproval MongoDB 高危命令特批凭据。Approved、Approver、Reason 缺一不可；
+// 引擎在连接 MongoDB 前校验，失败即阻断。
+type DBAApproval struct {
+	Approved bool   `json:"approved"`
+	Approver string `json:"approver"`
+	Reason   string `json:"reason"`
 }
 
 type CheckReply struct {
@@ -309,10 +325,14 @@ type MergeAlterTablesReply struct {
 }
 
 type ExecRequest struct {
-	Order         *Order      `json:"order"`
-	Rules         *AuditRole  `json:"rules"`
+	Order *Order     `json:"order"`
+	Rules *AuditRole `json:"rules"`
+	// RuleSet v2 规则集定义。非空时优先生效，Rules 仅作为旧调用方兼容字段。
+	RuleSet       []byte      `json:"rule_set,omitempty"`
 	Source        *DataSource `json:"source"`
 	MaxAffectRows uint32      `json:"max_affect_rows"`
+	// DBAApproval MongoDB 高危命令特批。缺失或不完整时在连接前阻断。
+	DBAApproval *DBAApproval `json:"dba_approval,omitempty"`
 }
 
 type ExecReply struct {

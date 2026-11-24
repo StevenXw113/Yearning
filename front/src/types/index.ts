@@ -48,6 +48,12 @@ export interface OrderTableData {
   source_id?: string;
   // 工单级事务模式（1=开启）：执行时强制 DML 走事务
   tx_mode?: number;
+  // MongoDB 高危命令的 DBA 特批流（drop/rename/账号权限）
+  requires_dba_approval?: boolean;
+  dba_approval_status?: 'none' | 'pending' | 'approved' | 'rejected';
+  dba_approver?: string;
+  dba_approval_reason?: string;
+  dba_approval_time?: string;
   sql?: string;
   file?: string;
   tables?: string[];
@@ -70,6 +76,12 @@ export interface OrderItem {
   backup: number;
   // 工单级事务模式（1=开启）：仅对 SQL 类数据源的 DML 生效，执行时强制走事务
   tx_mode?: number;
+  // MongoDB 高危命令的 DBA 特批流（drop/rename/账号权限）
+  requires_dba_approval?: boolean;
+  dba_approval_status?: 'none' | 'pending' | 'approved' | 'rejected';
+  dba_approver?: string;
+  dba_approval_reason?: string;
+  dba_approval_time?: string;
   sql?: string;
   // 上传 SQL 文件时记录的文件名，随工单保存便于追溯
   file?: string;

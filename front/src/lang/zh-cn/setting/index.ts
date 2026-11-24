@@ -68,4 +68,9 @@ export default {
   'setting.ai.mongo_sql_gen_prompt': 'MongoDB 生成提示词',
   'setting.ai.mongo_prompt.tips':
     '仅对 MongoDB 数据源生效。留空则使用内置的 MongoDB 模板（提示它关注空 filter、全集合扫描与索引）',
+  'setting.adv.production.tags': '生产强制审核标签',
+  'setting.adv.production.tags.tips': '输入生产 / 预发布等环境标签',
+  'setting.adv.production.tags.add': '添加生产标签',
+  'setting.adv.production.tags.help':
+    '数据源环境标签命中其中任意值时，查询侧强制进入人工审核；默认 production / pre-production。',
 };

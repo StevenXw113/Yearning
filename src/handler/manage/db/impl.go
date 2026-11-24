@@ -8,6 +8,12 @@ import (
 	"Yearning-go/src/model"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"engine/ruleset"
+	"gorm.io/gorm"
 )
 
 type CommonDBPost struct {
@@ -60,6 +66,10 @@ func ConnTest(u *model.CoreDataSource) error {
 }
 
 func SuperEditSource(source *model.CoreDataSource) common.Resp {
+	if err := validateDataSourceRuleBinding(source); err != nil {
+		return common.ERR_COMMON_MESSAGE(err)
+	}
+	source.EnvironmentTag = strings.TrimSpace(source.EnvironmentTag)
 	// 只有当提交值无法解密（说明是明文新口令）时才重新加密写回，
 	// 避免把已经是密文的值二次加密。加密失败必须中止，否则口令会被清空。
 	if source.Password != "" && enc.Decrypt(model.C.General.SecretKey, source.Password) == "" {
@@ -88,6 +98,7 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 		"allow_diag_commands": source.AllowDiagCommands,
 		"redis_mode":          source.RedisMode,
 		"is_production":       source.IsProduction,
+		"environment_tag":     source.EnvironmentTag,
 	})
 	// 地址/口令/形态可能都变了：丢掉旧客户端与部署形态缓存，下次访问重新建连探测
 	// （非 Redis 数据源是空操作）
@@ -115,6 +126,10 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 }
 
 func SuperCreateSource(source *model.CoreDataSource) common.Resp {
+	if err := validateDataSourceRuleBinding(source); err != nil {
+		return common.ERR_COMMON_MESSAGE(err)
+	}
+	source.EnvironmentTag = strings.TrimSpace(source.EnvironmentTag)
 	// 空口令(如无认证 MongoDB / 默认 root 的 Doris)存空串,不落密文:
 	// 否则解密回空明文会撞上「解密失败」的判定,数据源在引擎链路上不可用。
 	pwd := ""
@@ -178,4 +193,85 @@ func appendIfMissing(list []string, v string) []string {
 		}
 	}
 	return append(list, v)
+}
+
+// dataSourceDialect 返回数据源类型对应的规则集方言。
+func dataSourceDialect(dbType int) ruleset.Dialect {
+	switch dbType {
+	case model.DBTypeMongoDB:
+		return ruleset.DialectMongoDB
+	case model.DBTypeRedis:
+		return ruleset.DialectRedis
+	case model.DBTypeDoris:
+		return ruleset.DialectDoris
+	case model.DBTypePostgreSQL:
+		return ruleset.DialectPostgres
+	default:
+		return ruleset.DialectMySQL
+	}
+}
+
+// validateDataSourceRuleBinding 校验数据源只能绑定本方言规则集。
+// 空方言且无 Definition 的旧规则集保持兼容；v2 MongoDB 规则集必须声明 mongodb。
+func validateDataSourceRuleBinding(source *model.CoreDataSource) error {
+	if source == nil || source.RuleId == 0 {
+		return nil
+	}
+	var rule model.CoreRules
+	err := model.DB().Model(model.CoreRules{}).Where("id = ?", source.RuleId).First(&rule).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("规则集 #%d 不存在", source.RuleId)
+	}
+	if err != nil {
+		return fmt.Errorf("读取规则集 #%d 失败: %w", source.RuleId, err)
+	}
+	return validateRuleSetBinding(source, &rule)
+}
+
+func validateRuleSetBinding(source *model.CoreDataSource, rule *model.CoreRules) error {
+	if source == nil || rule == nil || source.RuleId == 0 {
+		return nil
+	}
+	expected := dataSourceDialect(source.DBType)
+	if rule.Dialect != "" && rule.Dialect != string(expected) {
+		return fmt.Errorf("%s 数据源不能绑定 %s 规则集", expected, rule.Dialect)
+	}
+	inferred, err := factory.InferLegacyRuleDialect(rule)
+	if err != nil {
+		return err
+	}
+	if len(rule.Definition) > 0 {
+		if expected != ruleset.DialectMongoDB {
+			return errors.New("仅 MongoDB 支持 v2 规则集")
+		}
+		def, err := ruleset.Decode(rule.Definition)
+		if err != nil {
+			return fmt.Errorf("MongoDB v2 规则集 Definition 非法: %w", err)
+		}
+		if err := ruleset.ValidateMongoDefinition(def); err != nil {
+			return fmt.Errorf("MongoDB v2 规则集非法: %w", err)
+		}
+		return nil
+	}
+
+	if !legacyRuleDialectCompatible(expected, inferred) {
+		return fmt.Errorf("%s 数据源不能绑定 %s 规则集", expected, legacyRuleDialectLabel(inferred))
+	}
+	return nil
+}
+
+func legacyRuleDialectCompatible(expected ruleset.Dialect, inferred factory.LegacyRuleDialect) bool {
+	switch expected {
+	case ruleset.DialectMySQL, ruleset.DialectPostgres:
+		return inferred == factory.LegacyRuleDialectSQL || inferred == ""
+	default:
+		return string(inferred) == string(expected)
+	}
+}
+
+func legacyRuleDialectLabel(inferred factory.LegacyRuleDialect) string {
+	if inferred == "" {
+		return "未知方言"
+	}
+	return string(inferred)
 }

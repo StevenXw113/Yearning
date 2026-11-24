@@ -2,6 +2,7 @@ package personal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -17,6 +18,8 @@ import (
 	"Yearning-go/src/model"
 
 	"engine/api"
+	"engine/mongoguard"
+	"engine/ruleset"
 
 	"github.com/cookieY/yee"
 	"github.com/vmihailenco/msgpack/v5"
@@ -116,17 +119,21 @@ const querySideCheckTimeout = 30 * time.Second
 //
 // 返回要写进查询记录的命中说明，以及拦截级错误（非 nil 时不要执行）。
 //
-// 引擎不可用**不拦查询**：查询是只读的，本地已有只读白名单硬保底
-// （mongodb.ValidateQuery），没必要因为引擎离线把整个查询功能拿掉；
-// 这种情况会在审计记录里写清「未做规则审核」。
+// 命中生产强制审核标签时 fail-closed：规则集、引擎或审核结果不可用均不得查询。
+// 非生产环境保持存量宽松语义，在审计记录里写清「未做规则审核」。
 func checkQuerySide(source *model.CoreDataSource, schema, command string) (string, error) {
-	rule, rerr := factory.CheckDataSourceRule(source.RuleId)
+	required := model.ProductionAuditRequired(source)
+	ruleSet, rule, rerr := factory.CheckDataSourceRuleSet(source)
 	if rerr != nil {
-		return "规则集加载失败，未做查询侧规则审核：" + rerr.Error(), nil
+		return queryAuditUnavailable(required, "规则集加载失败", rerr)
+	}
+	ruleSetJSON, err := mongoRuleSetJSON(ruleSet)
+	if err != nil {
+		return queryAuditUnavailable(required, "规则集序列化失败", err)
 	}
 	client, err := calls.Client()
 	if err != nil {
-		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
+		return queryAuditUnavailable(required, "审核引擎不可用", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), querySideCheckTimeout)
 	defer cancel()
@@ -141,10 +148,11 @@ func checkQuerySide(source *model.CoreDataSource, schema, command string) (strin
 		Source:       src,
 		Lang:         model.C.General.Lang,
 		Rule:         engine.AuditRoleToAPI(rule),
+		RuleSet:      ruleSetJSON,
 		Mode:         engine.CheckModeQuery,
 	})
 	if err != nil {
-		return "引擎不可用，未做查询侧规则审核：" + err.Error(), nil
+		return queryAuditUnavailable(required, "查询侧规则审核失败", err)
 	}
 	if rep == nil || !rep.Ok {
 		msg := "查询侧审核不通过"
@@ -172,9 +180,8 @@ func runMongoCommand(client *mongo.Client, schema, command, insulateWordList str
 	if !factory.IsValidIdentifier(schema) {
 		return nil, errors.New(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE))
 	}
-	var cmd bson.D
-	// relaxed 模式：允许直接写普通 JSON 数字，不必包成 {"$numberInt":"20"}
-	if err := bson.UnmarshalExtJSON([]byte(command), false, &cmd); err != nil {
+	cmd, err := mongoguard.Parse(command)
+	if err != nil {
 		return nil, errors.New(`请填写 MongoDB 命令的 JSON，例如 {"find":"users","filter":{},"limit":10}：` + err.Error())
 	}
 	// 查询页的硬保底：只读命令白名单（含 aggregate 的 $out / $merge 写库阶段）。
@@ -293,4 +300,21 @@ func mongoDisplay(v interface{}) interface{} {
 		}
 		return string(b)
 	}
+}
+
+func mongoRuleSetJSON(def *ruleset.Definition) ([]byte, error) {
+	if def == nil {
+		return nil, nil
+	}
+	return json.Marshal(def)
+}
+
+func queryAuditUnavailable(required bool, stage string, err error) (string, error) {
+	if err == nil {
+		return "", nil
+	}
+	if required {
+		return "", fmt.Errorf("生产数据源%s，已阻断查询：%w", stage, err)
+	}
+	return stage + "，未做查询侧规则审核：" + err.Error(), nil
 }

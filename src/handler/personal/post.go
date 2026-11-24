@@ -33,6 +33,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"engine/mongo"
 )
 
 func Post(c yee.Context) (err error) {
@@ -65,6 +67,9 @@ func sqlOrderPost(c yee.Context) (err error) {
 		var src model.CoreDataSource
 		model.DB().Model(model.CoreDataSource{}).Where("source_id =?", order.SourceId).First(&src)
 		if err := dbengine.For(src.DBType).ValidateChange(&src, order.SQL); err != nil {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+		}
+		if err := markMongoDBAApproval(order, src.DBType); err != nil {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 		}
 	}
@@ -202,4 +207,19 @@ func decodeRelation(sourceId string) []string {
 		relevant = append(relevant, i.Auditor...)
 	}
 	return relevant
+}
+
+func markMongoDBAApproval(order *model.CoreSqlOrder, dbType int) error {
+	if order == nil || dbType != model.DBTypeMongoDB {
+		return nil
+	}
+	required, _, _, err := mongo.RequiresDBAApproval(order.SQL)
+	if err != nil {
+		return fmt.Errorf("MongoDB DBA 特批预检失败: %w", err)
+	}
+	if required {
+		order.RequiresDBAApproval = true
+		order.DBAApprovalStatus = "pending"
+	}
+	return nil
 }

@@ -26,6 +26,15 @@
         <template v-if="column.dataIndex === 'db_type'">
           <span>{{ dbTypeLabel(text) }}</span>
         </template>
+        <template v-if="column.dataIndex === 'environment_tag'">
+          <a-tag v-if="record.environment_tag" color="#CF1322">
+            {{ record.environment_tag }}
+          </a-tag>
+          <a-tag v-else-if="record.is_production" color="#FA8C16">
+            production
+          </a-tag>
+          <span v-else>—</span>
+        </template>
         <template v-if="column.dataIndex === 'is_query'">
           <a-tag v-if="text === 2" color="#43A687">{{ $t('db.rw') }}</a-tag>
           <a-tag v-if="text === 1" color="#EA495F">{{ $t('db.r') }}</a-tag>
@@ -63,6 +72,11 @@
       { title: t('common.table.name'), dataIndex: 'source' },
       { title: t('common.table.db_type'), dataIndex: 'db_type' },
       { title: t('common.table.env'), dataIndex: 'idc' },
+      {
+        title: t('db.environment.tag'),
+        dataIndex: 'environment_tag',
+        width: 130,
+      },
       { title: 'IP', dataIndex: 'ip' },
       { title: t('common.table.type'), dataIndex: 'is_query' },
       { title: t('common.action'), dataIndex: 'action' },

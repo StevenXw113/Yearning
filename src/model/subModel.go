@@ -11,6 +11,9 @@ type Other struct {
 	// ManualExecute 为 true 时，末级审批通过只把工单置为「等待执行」(status=5)，
 	// 由人工点「执行」触发；false（默认）保持审批通过即自动执行。
 	ManualExecute bool `json:"manual_execute"`
+	// ProductionAuditTags 命中即启用生产强制审核的环境标签。空列表时默认
+	// production / pre-production，避免标签化后漏配导致生产查询静默放行。
+	ProductionAuditTags []string `json:"production_audit_tags"`
 }
 
 type AI struct {

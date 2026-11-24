@@ -3,7 +3,7 @@ export default {
   'db.is.production': 'Production data source',
   'db.allow.diag': 'Allow diagnostic commands',
   'db.allow.diag.tips':
-    'Redis only: allow SLOWLOG / LATENCY / DUMP / COMMAND and full INFO from the query page. These expose instance configuration or other tenants\' executions, off by default',
+    "Redis only: allow SLOWLOG / LATENCY / DUMP / COMMAND and full INFO from the query page. These expose instance configuration or other tenants' executions, off by default",
   'db.redis.mode': 'Deployment mode',
   'db.redis.mode.tips':
     'Auto-detection relies on CLUSTER INFO and may misjudge cloud proxies as standalone; pick manually when unsure',
@@ -36,4 +36,7 @@ export default {
   'db.ssl.certificate': 'Cert',
   'db.ssl.key': 'Key File',
   'db.global': 'Default audit rule',
+  'db.environment.tag': 'Environment tag',
+  'db.environment.tag.tips':
+    'e.g. production / pre-production; matching production audit tags requires manual query approval',
 };

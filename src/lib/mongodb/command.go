@@ -223,7 +223,7 @@ func filtersOf(cmd bson.D) []bson.D {
 
 func lookup(d bson.D, key string) (interface{}, bool) {
 	for _, e := range d {
-		if strings.EqualFold(e.Key, key) {
+		if e.Key == key {
 			return e.Value, true
 		}
 	}
@@ -261,19 +261,10 @@ func mapToDoc(m map[string]interface{}) bson.D {
 	return d
 }
 
-// isEmptyDoc 判断条件是否为「空」：{} / nil / 空文档
+// isEmptyDoc reports whether the filter lacks a nonempty document.
 func isEmptyDoc(v interface{}) bool {
-	switch x := v.(type) {
-	case nil:
-		return true
-	case bson.D:
-		return len(x) == 0
-	case bson.M:
-		return len(x) == 0
-	case map[string]interface{}:
-		return len(x) == 0
-	}
-	return false
+	d, _ := toDoc(v)
+	return len(d) == 0
 }
 
 // hasKeyRecursive 递归查找某个键（用于拦 $where 这类出现在任意层级的操作符）

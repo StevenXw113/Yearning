@@ -28,6 +28,32 @@
             }}</a-button>
           </a-space>
         </a-form-item>
+        <a-form-item :label="$t('setting.adv.production.tags')">
+          <template
+            v-for="item in config.other.production_audit_tags"
+            :key="item"
+          >
+            <a-tag color="#CF1322" closable @close="closeProductionTag(item)">{{
+              item
+            }}</a-tag>
+          </template>
+
+          <br />
+          <br />
+          <a-space>
+            <a-input
+              v-model:value="productionTagInput"
+              :placeholder="$t('setting.adv.production.tags.tips')"
+              @press-enter="pushProductionTag"
+            ></a-input>
+            <a-button @click="pushProductionTag">{{
+              $t('setting.adv.production.tags.add')
+            }}</a-button>
+          </a-space>
+          <div style="color: #8c8c8c; font-size: 12px; margin-top: 4px">
+            {{ $t('setting.adv.production.tags.help') }}
+          </div>
+        </a-form-item>
         <a-form-item :label="$t('setting.adv.query.open')">
           <a-switch v-model:checked="config.other.query"></a-switch>
         </a-form-item>
@@ -142,8 +168,35 @@
         ];
 
   const pushEnv = () => {
-    config.value.other.idc.push(config.value.other.force);
+    const value = config.value.other.force.trim();
+    if (!value) return;
+    if (
+      !config.value.other.idc.some(
+        (i) => i.toLowerCase() === value.toLowerCase(),
+      )
+    ) {
+      config.value.other.idc.push(value);
+    }
     config.value.other.force = '';
+  };
+
+  const productionTagInput = ref('');
+
+  const pushProductionTag = () => {
+    const value = productionTagInput.value.trim();
+    if (!value) return;
+    const tags = config.value.other.production_audit_tags || [];
+    if (!tags.some((i) => i.toLowerCase() === value.toLowerCase())) {
+      tags.push(value);
+    }
+    config.value.other.production_audit_tags = tags;
+    productionTagInput.value = '';
+  };
+
+  const closeProductionTag = (removedTag: string) => {
+    config.value.other.production_audit_tags = (
+      config.value.other.production_audit_tags || []
+    ).filter((tag) => tag !== removedTag);
   };
 
   const clearOrder = async () => {

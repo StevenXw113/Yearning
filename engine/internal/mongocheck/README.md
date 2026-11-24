@@ -12,17 +12,16 @@ MongoDB 审核规则。上游 bytebase **完全没有** Mongo 审核能力
 同一套级别（error / warn / observe）、同一个规则页，规则可注册、可分级、可配参。
 差别只在于**审核输入**：MySQL 是语法树，Mongo 是一段 extended JSON 命令。
 
-## 三层分层（两层各自不可替代）
+## 审核分层
 
 | 层 | 位置 | 读规则集 | 作用 |
 | --- | --- | --- | --- |
-| 引擎静态审核 | 本包 + `internal/server/check.go` | 是 | 可配开关 + 可调级别，申请页检测、执行前复检 |
-| 主程序硬保底 | `src/lib/mongodb/{command.go,exec.go}` | 否 | **引擎离线也必须在**的底线：空 filter 改删、删库、服务端脚本、非只读命令 |
-| 主程序执行期 | `src/lib/mongodb/exec.go` | 是（仅上限） | 抓前镜像 + 命中数上限，静态审核拿不到命中数 |
+| 静态规则 | `engine/internal/mongocheck` | 是 | 查询、申请页检测和工单执行前复检。开关和级别由规则集控制。 |
+| 硬校验 | `engine/mongoguard`、主程序及引擎的 `mongodb.Validate` | 否 | 单条 Extended JSON 命令；查询只读白名单；改删必须带非空文档条件；禁止删库和服务端脚本。 |
+| 执行期限制 | `engine/internal/mongodb/exec.go` | 是（仅上限） | 写入前抓前镜像，并对快照文档数执行上限检查。 |
 
-硬保底之所以不读规则集：规则集是可配的，而「无 filter 的 delete 会清空集合」这类事
-不该依赖配置正确、也不该依赖引擎在线。两层的判定语义保持一致即可，实现各写一份
-（引擎用 `encoding/json`，主程序用 bson 驱动）——这是刻意的重复，换的是独立性。
+应用和引擎共用 `mongoguard.Parse`，保留 BSON 字段顺序和类型，拒绝重复文档字段和尾随内容。
+查询审核和查询执行共用 `mongoguard.ValidateQuery`。变更执行的硬校验仍独立于可配级别。
 
 ## 审核模式（Mode）
 
@@ -53,7 +52,7 @@ type Rule interface {
 - 规则按族分文件（`rules_<族>.go`，如安全类、结构类、性能/查询类），每条规则在 `init()` 里
   `Register(...)`：重名、名称为空、级别非法、安全类默认不拦截，都直接 panic
   （与 `customrules.Register` 一致，让配置错误立刻暴露）。
-- `Command` 是共享解析层：命令名（JSON 首键）、目标集合、分类、子句数组
+- `Command` 是共享解析层：命令名（BSON 首键）、目标集合、分类、子句数组
   （`updates[]` / `deletes[]`）、`EmptyFilter()`、`Has()`（按键名递归）、`Walk()`（按值递归，
   给 `$regex` / `$in` 这类要取值判定的规则用）。规则只读它，不各自解析。
 - `All()` 返回注册表里的全部规则，供 `SELF_RULES.md` 生成与 archguard 核对。
@@ -66,7 +65,7 @@ type Rule interface {
 - `Config` 的字段保持**显式类型**，规则直接读 `cfg.ForbidEmptyFilter` / `cfg.IndexKeyLimit`——
   拼错名字编译期就报错，IDE 里能跳转；这层不需要反射。
 - **proto → Config 这一步才用反射**（`ConfigFromProto`）：按名字对应关系自动填
-  （proto 的 `mongo_` 前缀在 Config 里省略，见 `protoFieldKey`），
+  （API JSON 的 `mongo_` 前缀在 Config 里省略，见 `protoFieldKey`），
   于是 `server/rules.go` 的 `mongoRulesFrom` 只剩一行，不必为每条规则补映射。
 
 ```go
@@ -98,6 +97,8 @@ cfg.Level(rule)                  // 级别：RuleLevels[Name] 优先，非法/�
 | `MongoForbidSystemCollection` | security | error | 目标集合 ∈ `system.*`（`system.users` / `system.profile` / `system.js` / `system.views`） |
 | `MongoForbidAdminCommand` | security | error | `createUser` / `dropUser` / `grantRolesToUser` / `createRole` … 归 DDL 并拦 |
 | `MongoForbidImmutableId` | security | error | `$set` / `$unset` / `$rename` 触及 `_id`（`$setOnInsert` 除外） |
+| `MongoForbidUpsert` | security | error | `updates[].upsert` 或 `findAndModify.upsert` 为 `true` |
+| `MongoForbidMultiWrite` | security | error | `updates[].multi: true` 或 `deletes[].limit: 0`，按子句判定 |
 | `MongoForbidCappedConvert` | structure | error | `convertToCapped`（重建集合，不可逆） |
 | `MongoForbidCollMod` | structure | warn | `collMod`（validator / TTL / 索引可见性） |
 | `MongoIndexKeyLimit` | structure | warn | `createIndexes` 单索引键数 > 参数（0 = 不限） |
@@ -113,9 +114,9 @@ cfg.Level(rule)                  // 级别：RuleLevels[Name] 优先，非法/�
 
 | 规则名 | 类 | 默认 | 判定 |
 | --- | --- | --- | --- |
-| `MongoQueryForbidNoFilter` | performance | warn | `find` / `aggregate` 无 filter 或 filter 为空（全集合扫描） |
+| `MongoQueryForbidNoFilter` | performance | warn | `find` 缺少非空 `filter`，或 `aggregate` 首阶段缺少非空 `$match` |
 | `MongoQueryForbidLookup` | performance | warn | `aggregate` 顶层 `$lookup` / `$graphLookup` |
-| `MongoQueryForbidNoLimit` | performance | warn | `find` 带 `sort` 但无 `limit`（服务端大结果集排序） |
+| `MongoQueryForbidNoLimit` | performance | warn | `find` 带非空 `sort`，但未提供正整数 `limit` |
 
 上表 4 条 performance 规则同时适用于两种模式（`Modes()` 返回两个）。
 
@@ -123,66 +124,48 @@ cfg.Level(rule)                  // 级别：RuleLevels[Name] 优先，非法/�
 
 | 规则名 | 默认 | 判定 |
 | --- | --- | --- |
-| `MongoMaxAffectRows` | error | 单次 update / delete 命中文档数上限，0 = 不限；由主程序抓前镜像时判定，引擎只透传 |
+| `MongoMaxAffectRows` | error | 引擎执行 `update` / `delete` 前检查前镜像文档数。`0` 跳过规则集上限，前镜像仍受 `MaxSnapshot` 限制。 |
 
 `MongoMaxAffectRows` 不在静态规则表里（静态审核拿不到命中数），
 登记在 `internal/archguard` 的 `mongoExecOnly` 白名单。
 
 ## 查询侧审核链路
 
-现状：查询页 Mongo 分支**没有任何命令类型校验**，命令 JSON 直接 `RunCommand`——
-拿到查询权限的用户可以在此执行 `update` / `delete` / `dropDatabase`，无审批、无记录。
-这是本轮要修的 P0。
+查询页校验权限和查询申请后调用引擎 `Check(mode=query)`。拦截项会阻止执行并进入查询记录，提示和观察项随成功查询保存。
+引擎不可用时，应用执行同一份只读硬校验，并在成功查询的记录中标记未完成规则审核。
+只读白名单拒绝未知命令、`aggregate` 顶层 `$out` / `$merge`，以及 `$where` / `$function` / `$accumulator`。
+`explain` 的内层必须是白名单内的只读命令，查询规则检查内层命令。
 
-```
-查询页 WebSocket（SocketQueryResults）
-  → 权限 + 已有查询申请校验（permitQueryOrder，现状不变）
-  → 硬保底：mongodb.ValidateQuery(cmd)      ← 新增，只读命令白名单，不可配置
-  → 引擎 client.Check(mode=query)           ← 新增，可配规则 + 级别
-       命中 error → 拒绝执行，错误回显前端
-       命中 warn  → 照常执行，命中说明随结果回显并落 core_query_records
-  → RunCommand（现状不变）
-```
+## 生产规则集启用
 
-`ValidateQuery` 用**白名单**（find / aggregate / count / distinct / listCollections /
-listIndexes / collStats / dbStats / explain …）：Mongo 命令空间无限，
-黑名单挡不住 `mapReduce` 这类能写数据的"查询"。
-
-SQL 查询侧暂无同款规则审核（引擎 `QueryRequest` 里没有 `rule` 字段，只有 limit 与脱敏），
-故本轮查询侧规则只对 Mongo 生效，不改变 SQL 查询行为。
+`MongoForbidUpsert` 与 `MongoForbidMultiWrite` 在已有规则集里默认为关闭。开启后默认级别为 `error`。
+可以先设为 `warn` 收集命中情况，再按数据源切换为 `error`。新的查询硬校验随应用和引擎部署生效。
+多文档规则按子句限制，批次仍可包含多个单文档子句。整批写入范围需要结合同一规则集的 `MongoMaxAffectRows` 评估。
 
 ## 执行期复检
 
-SQL 工单执行前会 `client.Exec(..., Rules: ...)` 复检；Mongo 侧
-`executeMongoOrder` 此前只跑硬保底 `Validate`，规则集在执行前被改严/换宽松都不生效。
-现补一次 `client.Check(mode=write)`（与申请页检测同一入口、同一规则集）：
-命中 error 级即中止执行并记 `core_sql_records`，warn 级只记不拦。
+MongoDB 工单连接目标库前，会按执行请求携带的规则集以 `write` 模式复检。命中 `error` 则终止，提示随执行明细记录。
+`MongoMaxAffectRows` 统计执行前读到的文档。并发写入可以改变后续命中范围，静态规则与前镜像计数都无法给出事务级写入上限。
 
 ## 护栏（internal/archguard）
 
 | 测试 | 挡什么 |
 | --- | --- |
 | `TestSelfRulesManifest`（已有） | 规则改了没更新 `engine/SELF_RULES.md` |
-| `TestSelfRuleSwitchesExistInAuditRole`（已有） | 开关名与 proto 字段名不一致（页面配不出来、级别无处安放） |
-| `TestMongoSwitchesAreImplemented`（已有） | proto 有开关但引擎没实现 |
-| `TestMongoConfigCoversAllSwitches`（新） | proto 有开关但 `Config` 取不到（加了规则忘接线 → 勾了不生效） |
+| `TestSelfRuleSwitchesExistInAuditRole`（已有） | 开关名与 API 字段名不一致（页面配不出来、级别无处安放） |
+| `TestMongoSwitchesAreImplemented`（已有） | API 有开关但引擎没实现 |
+| `TestMongoConfigCoversAllSwitches`（新） | API 有开关但 `Config` 取不到（加了规则忘接线 → 勾了不生效） |
 | `TestMongoRulesHaveFrontendEntries`（新） | 规则没进 `front/src/views/manager/rules/rules.ts`，或 zh-cn/en-us 少文案 |
 | `TestMongoRuleDefaultLevels`（新） | 级别取值非法；或 `security` 类默认级别被写成非 error |
-| `TestAuditRoleMongoFieldsAreMapped`（新，主程序侧 `src/engine/convert_test.go`） | proto 里每个 `mongo_*` 字段都能被 `AuditRoleToProto` 填上（漏接线） |
+| `TestAuditRoleSelfRuleFieldsAreMapped`（新，主程序侧 `src/engine/convert_test.go`） | `api.AuditRole` 的 Mongo 字段都能被 `AuditRoleToAPI` 填上（漏接线） |
 
 ## 新增一条规则
 
 1. `internal/mongocheck/<规则>.go`（新文件）：实现 `Rule`，`init()` 里 `Register`；
    同时按规则声明 `Category` / `Modes` / `DefaultLevel`，规则名常量写在文件顶部。
-2. `internal/mongocheck/config.go`：`Config` 加同名字段（proto 的 `mongo_` 前缀在 Config 里省略）。
-3. `engine/proto/engine/v1/engine.proto`：`AuditRole` 加字段（**必须** `mongo_` 前缀，蛇形命名），
-   `cd engine && export PATH="$PATH:$(go env GOPATH)/bin" && buf generate`
-   （改前先跑一次确认生成物无额外 diff 作基线）。
-4. 主程序侧接线（**最容易漏，漏了开关根本传不到引擎，且不报错**）：
-   `src/engine/engine.go` 的 `AuditRole` 加字段 → `src/engine/convert.go` 的
-   `AuditRoleToProto` 加一行赋值。规则集在库里的确是 JSON blob，但它先被反序列化进
-   `src/engine/engine.go` 这个**有类型的结构体**，再逐字段映射到 proto——
-   没在这一步声明的字段，从库到引擎的路上就被丢掉了。
+2. `internal/mongocheck/config.go`：`Config` 加同名字段（API JSON 的 `mongo_` 前缀在 Config 里省略）。
+3. `engine/api/api.go` 的 `AuditRole` 加字段，JSON 键使用 `mongo_` 前缀和蛇形命名。
+4. `src/engine/engine.go` 的 `AuditRole` 保存前端规则集字段，`src/engine/convert.go` 的 `AuditRoleToAPI` 将字段传给引擎。
 5. `front/src/views/manager/rules/rules.ts` 加一行（`tp:0` 开关 / `1` 数字 / `2` 文本）
    + `front/src/lang/{zh-cn,en-us}/rule/index.ts` 加文案。
 6. `UPDATE_SELF_RULES_MANIFEST=1 go test ./internal/archguard -run TestSelfRule` 重生成清单。
@@ -190,7 +173,7 @@ SQL 工单执行前会 `client.Exec(..., Rules: ...)` 复检；Mongo 侧
 
 第 2、3、4、5 步都是「漏了不报错」的类型，所以每条都有护栏：
 `TestMongoConfigCoversAllSwitches`（步骤 2）、`TestSelfRuleSwitchesExistInAuditRole`（步骤 3）、
-`TestAuditRoleMongoFieldsAreMapped`（步骤 4）、`TestMongoRulesHaveFrontendEntries`（步骤 5）。
+`TestAuditRoleSelfRuleFieldsAreMapped`（步骤 4）、`TestMongoRulesHaveFrontendEntries`（步骤 5）。
 
 ## 明确不做（YAGNI）
 

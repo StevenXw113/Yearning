@@ -62,7 +62,11 @@ func TestRunMongoCommandRejectsWrites(t *testing.T) {
 		`{"delete":"users","deletes":[{"q":{"age":1},"limit":0}]}`:            "只读",
 		`{"update":"users","updates":[{"q":{"_id":1},"u":{"$set":{"a":2}}}]}`: "只读",
 		`{"dropDatabase":1}`: "只读",
-		`{"aggregate":"users","pipeline":[{"$out":"backup"}],"cursor":{}}`: "$out",
+		`{"aggregate":"users","pipeline":[{"$out":"backup"}],"cursor":{}}`:               "$out",
+		`{"explain":{"aggregate":"users","pipeline":[{"$merge":"backup"}],"cursor":{}}}`: "$merge",
+		`{"find":"users","filter":{"$where":"true"}}`:                                    "$where",
+		`{"find":"users","filter":{"a":1,"a":2}}`:                                        "重复字段",
+		`{"find":"users"} {"find":"other"}`:                                              "单个合法的 JSON 对象",
 	}
 	for q, want := range deny {
 		_, err := runMongoCommand(nil, "yearning_demo", q, "")

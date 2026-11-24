@@ -28,6 +28,8 @@ export interface Source {
   redis_mode?: string;
   // 是否生产数据源：审核侧对生产写入给出「补影响面/回滚」提示
   is_production?: boolean;
+  // 环境标签：production / pre-production 等命中全局生产审核标签后强制审核
+  environment_tag?: string;
 }
 
 // 数据源类型取值（与后端 db_type 对齐）：模板与脚本里不要再写魔法数
@@ -53,6 +55,22 @@ export const dbTypeLabel = (value: number) =>
 
 export const dbTypePort = (value: number, fallback: number) =>
   DB_TYPES.find((i) => i.value === Number(value))?.port ?? fallback;
+
+// 规则集 dialect 与数据源类型的稳定映射，用于绑定前预过滤。
+export const dbTypeDialect = (value: number): string => {
+  switch (Number(value)) {
+    case DBType.PostgreSQL:
+      return 'postgres';
+    case DBType.MongoDB:
+      return 'mongodb';
+    case DBType.Redis:
+      return 'redis';
+    case DBType.Doris:
+      return 'doris';
+    default:
+      return 'mysql';
+  }
+};
 
 export interface DBParams {
   page: number;

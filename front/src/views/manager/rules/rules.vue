@@ -40,6 +40,18 @@
     size="small"
   >
     <template #bodyCell="{ column, record }">
+      <template v-if="column.dataIndex === 'name'">
+        <div>{{ record.name }}</div>
+        <a-space v-if="record.ids || record.settingKey" wrap size="small">
+          <a-tag v-for="id in record.ids || []" :key="id" color="blue">
+            {{ id }}
+          </a-tag>
+          <a-tag v-if="record.settingKey" :key="record.settingKey" color="cyan">
+            {{ record.settingKey }}
+          </a-tag>
+          <a-tag v-if="record.dbaApproval" :key="'dba'" color="red">DBA</a-tag>
+        </a-space>
+      </template>
       <template v-if="column.dataIndex === 'level'">
         <a-select
           size="small"
@@ -52,20 +64,24 @@
       <template v-if="column.dataIndex === 'action'">
         <a-switch
           v-if="record.tp === 0"
-          v-model:checked="engine[record.name]"
+          :checked="
+            isDBAApprovalRule(record) ? true : Boolean(auditRole[record.name])
+          "
+          :disabled="isDBAApprovalRule(record)"
+          @change="(v: boolean) => setEngineValue(record, v)"
         ></a-switch>
         <a-input-number
           v-if="record.tp === 1"
-          v-model:value="engine[record.name]"
+          v-model:value="auditRole[record.name]"
         >
         </a-input-number>
         <a-input
           v-if="record.tp === 2"
-          v-model:value="engine[record.name]"
+          v-model:value="auditRole[record.name]"
         ></a-input>
         <a-textarea
           v-if="record.tp === 3"
-          v-model:value="engine[record.name]"
+          v-model:value="auditRole[record.name]"
           :rows="6"
         >
         </a-textarea>
@@ -139,6 +155,9 @@
     checkUpstreamRules,
     getRuleHistory,
     rollbackRule,
+    buildMongoRuleSetDefinition,
+    updateMongoRuleSetDefinition,
+    type RuleSetDefinition,
   } from '@/apis/rules';
   import { App } from 'ant-design-vue';
   const { message, modal } = App.useApp();
@@ -212,7 +231,17 @@
     { value: 'observe', label: t('ruleLevelObserve') },
   ];
 
-  const engine = ref({} as Rules);
+  const auditRole = ref({} as Rules);
+  const currentDefinition = ref<RuleSetDefinition | null>(null);
+
+  const isMongoRuleSet = computed(() => props.engine === 'mongo');
+
+  const isDBAApprovalRule = (r: Rule) => Boolean(r.dbaApproval);
+
+  const setEngineValue = (r: Rule, v: boolean) => {
+    if (isDBAApprovalRule(r)) return;
+    auditRole.value[r.name] = v;
+  };
 
   // 规则级别单独存一份（键为规则字段名），保存时合并进 audit_role.RuleLevel。
   const levels = ref({} as Record<string, string>);
@@ -224,7 +253,10 @@
   const pool = computed(() => filterByEngine(rule, props.engine));
   const counts = computed(() => categoryCounts(pool.value));
   const catOptions = computed(() => [
-    { label: `${t('ruleCatAll')} (${counts.value.all})`, value: 'all' as const },
+    {
+      label: `${t('ruleCatAll')} (${counts.value.all})`,
+      value: 'all' as const,
+    },
     ...RULE_CATEGORIES.map((c) => ({
       label: `${t(c.i18n)} (${counts.value[c.key]})`,
       value: c.key,
@@ -244,7 +276,12 @@
 
   // 后端把级别放在 audit_role.RuleLevel 里，取回来单独渲染，保存时再合并回去。
   const applyRules = (r: Rules) => {
-    engine.value = r;
+    auditRole.value = { ...r };
+    if (isMongoRuleSet.value) {
+      // DBA 硬底线规则在 UI 与 v2 Definition 中都不可关闭。
+      auditRole.value.MongoForbidDropCollection = true;
+      auditRole.value.MongoForbidAdminCommand = true;
+    }
     levels.value = ((r as unknown as { RuleLevel?: Record<string, string> })
       .RuleLevel || {}) as Record<string, string>;
   };
@@ -267,26 +304,51 @@
     levels.value[name] = v;
   };
 
-  const onRules = (r: Rules, ids: number) => {
+  const onRules = (
+    r: Rules,
+    ids: number,
+    definition?: RuleSetDefinition | null,
+  ) => {
     applyRules(r);
     id.value = ids;
+    // v2 Definition 是引擎事实来源；AuditRole 仅作为旧页面状态兼容层。
+    void definition;
   };
 
   const onSave = async () => {
     const audit = {
-      ...engine.value,
+      ...auditRole.value,
       RuleLevel: levels.value,
     } as unknown as Rules;
     if (props.isAdd) {
-      await addRules({ desc: props.desc, audit_role: audit });
+      await addRules({
+        desc: props.desc,
+        audit_role: audit,
+        ...(isMongoRuleSet.value
+          ? {
+              definition: buildMongoRuleSetDefinition(audit),
+              dialect: 'mongodb',
+              scope: 'data_source',
+            }
+          : {}),
+      });
+    } else if (props.global) {
+      await updateGlobalRules(audit);
+    } else if (isMongoRuleSet.value) {
+      await updateRules({
+        desc: props.desc,
+        audit_role: audit,
+        definition: updateMongoRuleSetDefinition(currentDefinition.value, audit),
+        dialect: 'mongodb',
+        scope: 'data_source',
+        id: id.value,
+      });
     } else {
-      props.global
-        ? await updateGlobalRules(audit)
-        : await updateRules({
-            desc: props.desc,
-            audit_role: audit,
-            id: id.value,
-          });
+      await updateRules({
+        desc: props.desc,
+        audit_role: audit,
+        id: id.value,
+      });
     }
     emit('ok');
   };
@@ -336,7 +398,8 @@
   const onRollback = async (hid: number) => {
     const { data } = await rollbackRule(hid);
     if (data.code !== 1200) return;
-    applyRules(data.payload);
+    currentDefinition.value = data.payload.definition || null;
+    applyRules(data.payload.audit_role);
     message.success(t('ruleRollbackDone'));
     historyOpen.value = false;
   };

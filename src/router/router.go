@@ -148,6 +148,9 @@ func AddRouter(e *yee.Core) {
 
 	roles := manager.Group("/roles/:tp")
 	roles.Restful("", roles2.RolesApis())
+	manager.GET("/rules-manifest", roles2.SuperRulesManifest)
+	manager.GET("/rule-sets/export", roles2.SuperRuleSetExport)
+	manager.POST("/rule-sets/import", roles2.SuperRuleSetImport)
 
 	autoTask := manager.Group("/task")
 	autoTask.Restful("", autoTask2.SuperAutoTaskApis())

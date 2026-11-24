@@ -54,10 +54,7 @@ func cronTabDelayOrder() {
 			// 原子抢占(status 5→3)，防止与人工执行/重复触发并发；仅当抢占成功才执行。
 			// 抢占必须在 goroutine 内做：串行抢占+并发执行会让「抢到但还没跑」的
 			// 工单在慢工单占满信号量时被饿死在待执行队列里。
-			res := model.DB().Model(model.CoreSqlOrder{}).
-				Where("work_id =? AND `status` =?", o.WorkId, model.OrderStatusWaiting).
-				Updates(map[string]interface{}{"status": model.OrderStatusExecuting, "execute_time": time.Now().Format("2006-01-02 15:04")})
-			if res.RowsAffected != 1 {
+			if !audit.ClaimExecution(&o, model.OrderStatusWaiting) {
 				continue
 			}
 			wg.Add(1)

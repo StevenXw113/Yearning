@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"engine/ruleset"
+
 	"github.com/cookieY/yee"
 	"gorm.io/gorm"
 )
@@ -88,10 +90,11 @@ func SuperRolesAdd(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
-	var after engine.AuditRole
-	_ = u.AuditRole.UnmarshalToJSON(&after)
+	if err := normalizeMongoRuleSet(u); err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
 	model.DB().Create(u)
-	writeRuleHistory(u.ID, engine.AuditRole{}, after, operatorName(c), "新增规则集")
+	writeRuleSetHistory(u.ID, nil, u, operatorName(c), "新增规则集")
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_RULE_IS_ADD)))
 }
 
@@ -109,9 +112,9 @@ func SuperRoleDelete(c yee.Context) (err error) {
 			fmt.Sprintf(i18n.DefaultLang.Load(i18n.ERR_RULE_SET_IN_USE), strings.Join(used, "、"))))
 	}
 	// 删除是破坏性操作：记一条历史（回滚可恢复），便于审计与反悔。
-	before, _ := loadRuleSet(u.ID)
+	before, _ := loadRuleSetRecord(u.ID)
 	model.DB().Model(model.CoreRules{}).Where("id =?", u.ID).Delete(&model.CoreRules{})
-	writeRuleHistory(u.ID, before, engine.AuditRole{}, operatorName(c), "删除规则集")
+	writeRuleSetHistory(u.ID, before, nil, operatorName(c), "删除规则集")
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_RULE_SET_DELETE)))
 }
 
@@ -121,16 +124,22 @@ func SuperRoleUpdate(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
+	if err := normalizeMongoRuleSet(u); err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
 	var after engine.AuditRole
 	if err = u.AuditRole.UnmarshalToJSON(&after); err != nil {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
-	before, _ := loadRuleSet(u.ID)
-	if shouldRejectEmptyRuleSet(&before, &after, c.QueryParam("confirm") == "true") {
+	before, _ := loadRuleSetRecord(u.ID)
+	beforeAudit, _ := loadRuleSet(u.ID)
+	if shouldRejectEmptyRuleSet(&beforeAudit, &after, c.QueryParam("confirm") == "true") {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_SET_EMPTY)))
 	}
-	model.DB().Model(model.CoreRules{}).Where("id =?", u.ID).Updates(&model.CoreRules{AuditRole: u.AuditRole, Desc: u.Desc})
-	writeRuleHistory(u.ID, before, after, operatorName(c), "更新规则集")
+	model.DB().Model(model.CoreRules{}).Where("id =?", u.ID).Updates(&model.CoreRules{
+		AuditRole: u.AuditRole, Desc: u.Desc, Definition: u.Definition, Dialect: u.Dialect, Scope: u.Scope,
+	})
+	writeRuleSetHistory(u.ID, before, u, operatorName(c), "更新规则集")
 	return c.JSON(http.StatusOK, common.SuccessPayLoadToMessage(i18n.DefaultLang.Load(i18n.INFO_RULE_IS_UPDATED)))
 }
 
@@ -169,26 +178,41 @@ func SuperRoleRollback(c yee.Context) (err error) {
 	if errors.Is(model.DB().Model(model.CoreRuleSetHistory{}).Where("id =?", u.ID).First(&h).Error, gorm.ErrRecordNotFound) || len(h.Before) == 0 {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_HISTORY_NOT_FOUND)))
 	}
-	var target engine.AuditRole
-	if h.Before.UnmarshalToJSON(&target) != nil {
-		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_HISTORY_NOT_FOUND)))
+	snapshot, err := decodeRuleSetHistorySnapshot(h.Before)
+	if err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
 	}
-	before, exists := loadRuleSet(h.RuleId)
-	if !exists {
-		// 规则集已被删除（删除同样记历史）：按快照重建，让删除也能反悔
-		if h.RuleId == 0 {
+	beforeAudit, exists := loadRuleSet(h.RuleId)
+	current, _ := loadRuleSetRecord(h.RuleId)
+	restored, err := restoreRuleSetFromHistory(current, snapshot)
+	if err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	if h.RuleId == 0 {
+		if !exists {
 			return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_RULE_HISTORY_NOT_FOUND)))
 		}
+		applyRuleSet(0, restored.AuditRole)
+		var target engine.AuditRole
+		_ = restored.AuditRole.UnmarshalToJSON(&target)
+		writeRuleHistory(0, beforeAudit, target, operatorName(c), fmt.Sprintf("回滚到历史 #%d", h.ID))
+		return c.JSON(http.StatusOK, common.SuccessPayload(restored))
+	}
+	if !exists {
+		// 规则集已被删除（删除同样记历史）：按快照重建，让删除也能反悔
 		model.DB().Create(&model.CoreRules{
-			ID:        h.RuleId,
-			Desc:      fmt.Sprintf("从历史 #%d 恢复", h.ID),
-			AuditRole: h.Before,
+			ID:         h.RuleId,
+			Desc:       restored.Desc,
+			AuditRole:  restored.AuditRole,
+			Definition: restored.Definition,
+			Dialect:    restored.Dialect,
+			Scope:      restored.Scope,
 		})
 	} else {
-		applyRuleSet(h.RuleId, h.Before)
+		applyRestoredRuleSet(h.RuleId, restored)
 	}
-	writeRuleHistory(h.RuleId, before, target, operatorName(c), fmt.Sprintf("回滚到历史 #%d", h.ID))
-	return c.JSON(http.StatusOK, common.SuccessPayload(target))
+	writeRuleSetHistory(h.RuleId, current, restored, operatorName(c), fmt.Sprintf("回滚到历史 #%d", h.ID))
+	return c.JSON(http.StatusOK, common.SuccessPayload(restored))
 }
 
 // shouldRejectEmptyRuleSet 判断本次写入是否属于「疑似空载荷」。
@@ -222,6 +246,128 @@ func loadRuleSet(ruleId uint) (engine.AuditRole, bool) {
 	return out, true
 }
 
+// loadRuleSetRecord 读取规则集当前行。回滚 MongoDB v2 时必须知道当前 dialect，
+// 因为空 v2 规则集的兼容层可能没有任何 Mongo 开关字段。
+func loadRuleSetRecord(ruleId uint) (*model.CoreRules, bool) {
+	if ruleId == 0 {
+		return nil, false
+	}
+	var rule model.CoreRules
+	if errors.Is(model.DB().Model(model.CoreRules{}).Where("id =?", ruleId).First(&rule).Error, gorm.ErrRecordNotFound) {
+		return nil, false
+	}
+	return &rule, true
+}
+
+const ruleSetHistoryVersion = 1
+
+type ruleSetHistorySnapshot struct {
+	HistoryVersion int        `json:"history_version"`
+	ID             uint       `json:"id,omitempty"`
+	Desc           string     `json:"desc"`
+	AuditRole      model.JSON `json:"audit_role"`
+	Definition     model.JSON `json:"definition"`
+	Dialect        string     `json:"dialect"`
+	Scope          string     `json:"scope"`
+}
+
+func ruleSetHistorySnapshotFromRule(rule *model.CoreRules) ruleSetHistorySnapshot {
+	if rule == nil {
+		return ruleSetHistorySnapshot{HistoryVersion: ruleSetHistoryVersion}
+	}
+	return ruleSetHistorySnapshot{
+		HistoryVersion: ruleSetHistoryVersion,
+		ID:             rule.ID,
+		Desc:           rule.Desc,
+		AuditRole:      rule.AuditRole,
+		Definition:     rule.Definition,
+		Dialect:        rule.Dialect,
+		Scope:          rule.Scope,
+	}
+}
+
+func emptyRuleSetHistoryField(raw json.RawMessage) bool {
+	value := strings.TrimSpace(string(raw))
+	return value == "" || value == "null"
+}
+
+func decodeRuleSetHistorySnapshot(data []byte) (model.JSON, error) {
+	var probe struct {
+		HistoryVersion int `json:"history_version"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("规则集历史快照非法: %w", err)
+	}
+	switch probe.HistoryVersion {
+	case ruleSetHistoryVersion:
+		var presence struct {
+			AuditRole  json.RawMessage `json:"audit_role"`
+			Definition json.RawMessage `json:"definition"`
+		}
+		if err := json.Unmarshal(data, &presence); err != nil {
+			return nil, fmt.Errorf("规则集历史快照非法: %w", err)
+		}
+		if emptyRuleSetHistoryField(presence.AuditRole) && emptyRuleSetHistoryField(presence.Definition) {
+			return nil, errors.New("规则集历史快照为空，无法回滚")
+		}
+		var snapshot ruleSetHistorySnapshot
+		if err := json.Unmarshal(data, &snapshot); err != nil {
+			return nil, fmt.Errorf("规则集历史快照非法: %w", err)
+		}
+	case 0:
+		var legacy map[string]json.RawMessage
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return nil, fmt.Errorf("旧规则集历史快照非法: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("不支持的规则集历史快照版本: %d", probe.HistoryVersion)
+	}
+	return model.JSON(data), nil
+}
+
+// restoreRuleSetFromHistory supports both the versioned full CoreRules snapshot and the
+// legacy AuditRole-only snapshot. Legacy MongoDB history is still normalized to v2.
+func restoreRuleSetFromHistory(current *model.CoreRules, snapshot model.JSON) (*model.CoreRules, error) {
+	var versioned ruleSetHistorySnapshot
+	if err := json.Unmarshal(snapshot, &versioned); err == nil && versioned.HistoryVersion == ruleSetHistoryVersion {
+		return &model.CoreRules{
+			ID:         versioned.ID,
+			Desc:       versioned.Desc,
+			AuditRole:  versioned.AuditRole,
+			Definition: versioned.Definition,
+			Dialect:    versioned.Dialect,
+			Scope:      versioned.Scope,
+		}, nil
+	}
+
+	out := &model.CoreRules{AuditRole: snapshot}
+	if current == nil {
+		return out, nil
+	}
+	isMongo := current.Dialect == string(ruleset.DialectMongoDB)
+	if !isMongo {
+		isMongo = looksLikeMongoAuditRole(out)
+	}
+	if isMongo {
+		out.Dialect = string(ruleset.DialectMongoDB)
+		if err := normalizeMongoRuleSet(out); err != nil {
+			return nil, fmt.Errorf("恢复 MongoDB v2 规则集失败: %w", err)
+		}
+	}
+	return out, nil
+}
+
+// applyRestoredRuleSet 使用 map 更新，确保回滚能把 dialect/definition/scope 清空或覆盖。
+func applyRestoredRuleSet(ruleId uint, restored *model.CoreRules) {
+	model.DB().Model(model.CoreRules{}).Where("id =?", ruleId).Updates(map[string]interface{}{
+		"desc":       restored.Desc,
+		"audit_role": restored.AuditRole,
+		"definition": restored.Definition,
+		"dialect":    restored.Dialect,
+		"scope":      restored.Scope,
+	})
+}
+
 // applyRuleSet 写入规则集；全局规则同时刷新内存缓存（与原有的即时生效语义一致）。
 func applyRuleSet(ruleId uint, rules model.JSON) {
 	if ruleId == 0 {
@@ -239,6 +385,21 @@ func applyRuleSet(ruleId uint, rules model.JSON) {
 func writeRuleHistory(ruleId uint, before, after engine.AuditRole, operator, note string) {
 	b, _ := json.Marshal(before)
 	a, _ := json.Marshal(after)
+	model.DB().Create(&model.CoreRuleSetHistory{
+		RuleId:    ruleId,
+		Before:    b,
+		After:     a,
+		Operator:  operator,
+		Note:      note,
+		CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
+	})
+}
+
+// writeRuleSetHistory stores the complete CoreRules snapshot, preserving unknown v2 rules
+// and settings that are not represented by the legacy AuditRole form.
+func writeRuleSetHistory(ruleId uint, before, after *model.CoreRules, operator, note string) {
+	b, _ := json.Marshal(ruleSetHistorySnapshotFromRule(before))
+	a, _ := json.Marshal(ruleSetHistorySnapshotFromRule(after))
 	model.DB().Create(&model.CoreRuleSetHistory{
 		RuleId:    ruleId,
 		Before:    b,

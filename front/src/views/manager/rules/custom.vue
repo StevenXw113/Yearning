@@ -1,23 +1,24 @@
 <template>
   <a-card ref="card">
     <a-row>
-      <a-col :span="19">
+      <a-col :span="15">
         <a-input-search
-          placeholder="input search text"
+          :placeholder="$t('ruleSearchTips')"
           enter-button
           style="max-width: 320px"
           @search="onSearch"
         />
       </a-col>
-      <a-col :span="4" offset="1">
-        <a-button
-          type="primary"
-          @click="
-            is_open = true;
-            ist_add = true;
-          "
-          >{{ $t('common.add') }}</a-button
-        >
+      <a-col :span="9" style="text-align: right">
+        <a-space>
+          <a-button @click="openManifest">
+            {{ $t('ruleManifest') }}
+          </a-button>
+          <a-button @click="openImport">{{ $t('ruleSetImport') }}</a-button>
+          <a-button type="primary" @click="openCreate">
+            {{ $t('common.add') }}
+          </a-button>
+        </a-space>
       </a-col>
     </a-row>
     <br />
@@ -27,31 +28,40 @@
           <a-tag v-for="s in record.ref_sources || []" :key="s">{{ s }}</a-tag>
           <span v-if="!record.ref_count">{{ $t('ruleRefNone') }}</span>
         </template>
-        <template v-if="column.dataIndex === 'action'">
-          <a-button
-            size="small"
-            @click="
-              () => {
-                r.onRules(record.audit_role, record.id);
-                desc = record.desc;
-                turnState();
-              }
-            "
-            >{{ $t('common.profile') }}</a-button
-          >
-          <a-popconfirm
-            :title="$t('ruleDeleteConfirm')"
-            @confirm="onDelete(record.id)"
-          >
-            <a-button
-              type="primary"
-              size="small"
-              danger
-              ghost
-              style="margin-left: 8px"
-              >{{ $t('common.delete') }}</a-button
+        <template v-if="column.dataIndex === 'dialect'">
+          <a-tag :color="record.dialect ? 'blue' : 'default'">
+            {{ record.dialect || 'legacy' }}
+          </a-tag>
+        </template>
+        <template v-if="column.dataIndex === 'rule_ids'">
+          <a-space wrap size="small">
+            <a-tag
+              v-for="id in ruleSetStableIds(record)"
+              :key="id"
+              color="geekblue"
             >
-          </a-popconfirm>
+              {{ id }}
+            </a-tag>
+            <span v-if="!ruleSetStableIds(record).length">—</span>
+          </a-space>
+        </template>
+        <template v-if="column.dataIndex === 'action'">
+          <a-space size="small">
+            <a-button size="small" @click="openProfile(record)">
+              {{ $t('common.profile') }}
+            </a-button>
+            <a-button size="small" @click="onExport(record)">
+              {{ $t('ruleSetExport') }}
+            </a-button>
+            <a-popconfirm
+              :title="$t('ruleDeleteConfirm')"
+              @confirm="onDelete(record.id)"
+            >
+              <a-button type="primary" size="small" danger ghost>
+                {{ $t('common.delete') }}
+              </a-button>
+            </a-popconfirm>
+          </a-space>
         </template>
       </template>
     </a-table>
@@ -157,31 +167,118 @@
     placement="right"
     :width="width"
   >
-    <a-input
-      v-model:value="desc"
-      :placeholder="$t('common.table.name')"
-    ></a-input>
-    <br />
-    <br />
+    <a-form layout="vertical">
+      <a-form-item :label="$t('common.table.name')" required>
+        <a-input v-model:value="desc" />
+      </a-form-item>
+      <a-form-item :label="$t('ruleSetType')">
+        <a-radio-group
+          v-model:value="ruleSetType"
+          :disabled="!ist_add && !!currentRecord"
+          :options="ruleSetTypeOptions"
+        />
+        <div style="color: #8c8c8c; font-size: 12px; margin-top: 4px">
+          {{ $t('ruleSetTypeTips') }}
+        </div>
+      </a-form-item>
+    </a-form>
     <rules
       ref="r"
       :desc="desc"
       :is-add="ist_add"
+      :engine="ruleSetType === 'mongo' ? 'mongo' : undefined"
       @ok="
         turnState();
         get();
       "
     />
   </a-drawer>
+
+  <a-modal
+    v-model:open="importOpen"
+    :title="$t('ruleSetImport')"
+    :confirm-loading="importLoading"
+    @ok="saveImport"
+  >
+    <a-form layout="vertical">
+      <a-form-item :label="$t('common.table.name')" required>
+        <a-input v-model:value="importDesc" />
+      </a-form-item>
+      <a-form-item
+        v-if="isSqlRuleSetImport"
+        :label="$t('ruleSetTargetDialect')"
+        :extra="$t('ruleSetTargetDialectTips')"
+        required
+      >
+        <a-select
+          v-model:value="importTargetDialect"
+          :options="importTargetDialectOptions"
+        />
+      </a-form-item>
+      <a-form-item :label="$t('ruleSetFile')" required>
+        <a-upload
+          accept=".json"
+          :before-upload="onImportFile"
+          :max-count="1"
+          :show-upload-list="false"
+        >
+          <a-button>
+            {{ importFileName || $t('ruleSetSelectFile') }}
+          </a-button>
+        </a-upload>
+      </a-form-item>
+      <a-alert type="info" show-icon :message="$t('ruleSetImportTips')" />
+    </a-form>
+  </a-modal>
+
+  <a-modal
+    v-model:open="manifestOpen"
+    :title="$t('ruleManifest')"
+    width="920px"
+    :footer="null"
+  >
+    <a-table
+      bordered
+      size="small"
+      :columns="manifestCol"
+      :data-source="manifest"
+      :pagination="{ pageSize: 10 }"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'id'">
+          <code>{{ record.id }}</code>
+        </template>
+        <template v-if="column.dataIndex === 'requires_dba_approval'">
+          <a-tag v-if="record.requires_dba_approval" color="red">DBA</a-tag>
+          <span v-else>—</span>
+        </template>
+        <template v-if="column.dataIndex === 'param_type'">
+          {{
+            record.param_type === 'none'
+              ? '—'
+              : `${record.param_type} ${record.param_key || ''}`
+          }}
+        </template>
+      </template>
+    </a-table>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
   import {
+    CustomRule,
     CustomRuleItem,
+    RuleManifest,
+    RuleManifestRule,
+    RuleSetImportPayload,
     deleteCustomRule,
     deleteRules,
+    exportRuleSet,
     getCustomRuleList,
     getCustomRulesList,
+    getRulesManifest,
+    importRuleSet,
+    ruleSetStableIds,
     saveCustomRule,
   } from '@/apis/rules';
   import { computed, onMounted, reactive, ref } from 'vue';
@@ -204,29 +301,39 @@
 
   const desc = ref('');
 
+  const currentRecord = ref<CustomRule | null>(null);
+
+  const ruleSetType = ref<'legacy' | 'mongo'>('legacy');
+
   const { t } = useI18n();
 
+  const ruleSetTypeOptions = [
+    { label: t('ruleSetTypeLegacy'), value: 'legacy' },
+    { label: 'MongoDB v2', value: 'mongo' },
+  ];
+
   const col = [
-    {
-      title: t('common.table.name'),
-      dataIndex: 'desc',
-    },
+    { title: t('common.table.name'), dataIndex: 'desc', width: 180 },
+    { title: t('ruleSetDialect'), dataIndex: 'dialect', width: 100 },
+    { title: t('ruleSetScope'), dataIndex: 'scope', width: 120 },
+    { title: t('ruleStableIds'), dataIndex: 'rule_ids' },
     {
       // 引用数据源:改这条规则集前先看影响面(后端 SuperRolesList 聚合返回)
       title: t('ruleRefSources'),
       dataIndex: 'ref_sources',
+      width: 180,
     },
     {
       title: t('common.action'),
       dataIndex: 'action',
-      slotName: 'action',
+      width: 210,
     },
   ];
 
-  const list = ref([] as any);
+  const list = ref<CustomRule[]>([]);
 
   const onSearch = (vl: string) => {
-    list.value = list.value.filter((item: any) => item.desc.indexOf(vl) !== -1);
+    list.value = list.value.filter((item) => item.desc.indexOf(vl) !== -1);
   };
 
   const get = async () => {
@@ -234,12 +341,133 @@
     list.value = data.payload;
   };
 
+  const isMongoRuleSet = (record: CustomRule) =>
+    record.dialect === 'mongodb' || record.definition?.dialect === 'mongodb';
+
+  const openCreate = () => {
+    ist_add.value = true;
+    currentRecord.value = null;
+    ruleSetType.value = 'legacy';
+    desc.value = '';
+    is_open.value = true;
+  };
+
+  const openProfile = (record: CustomRule) => {
+    ist_add.value = false;
+    currentRecord.value = record;
+    ruleSetType.value = isMongoRuleSet(record) ? 'mongo' : 'legacy';
+    desc.value = record.desc;
+    r.value?.onRules(record.audit_role, record.id || 0, record.definition);
+    is_open.value = true;
+  };
+
   // 被数据源引用的规则集后端会拒绝删除，并把数据源名字写在 text 里（拦截器已提示）
-  const onDelete = async (id: number) => {
+  const onDelete = async (id?: number) => {
     const { data } = await deleteRules({ id });
     if (data.code !== 1200) return;
     message.success(t('ruleDeleteDone'));
     get();
+  };
+
+  const onExport = async (record: CustomRule) => {
+    if (!record.id) return;
+    const { data } = await exportRuleSet(record.id);
+    if (data.code !== 1200) return;
+    const blob = new Blob([JSON.stringify(data.payload, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${record.desc || `rule-set-${record.id}`}.ruleset.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ---- 规则集导入 ----
+  const importOpen = ref(false);
+  const importDesc = ref('');
+  const importFileName = ref('');
+  const importPayload = ref<RuleSetImportPayload | null>(null);
+  const importTargetDialect = ref<'mysql' | 'postgres'>('mysql');
+  const importLoading = ref(false);
+
+  const importTargetDialectOptions = [
+    { label: 'MySQL', value: 'mysql' },
+    { label: 'PostgreSQL', value: 'postgres' },
+  ];
+
+  const isSqlRuleSetImport = computed(() => {
+    const payload = importPayload.value;
+    return Boolean(
+      payload &&
+        'export_version' in payload &&
+        payload.export_version === 1 &&
+        payload.dialect === 'sql',
+    );
+  });
+
+  const openImport = () => {
+    importDesc.value = '';
+    importPayload.value = null;
+    importFileName.value = '';
+    importTargetDialect.value = 'mysql';
+    importOpen.value = true;
+  };
+
+  const onImportFile = async (file: File) => {
+    try {
+      importPayload.value = JSON.parse(await file.text());
+      importFileName.value = file.name;
+    } catch {
+      importPayload.value = null;
+      importFileName.value = '';
+      message.error(t('ruleSetInvalidJson'));
+    }
+    return false;
+  };
+
+  const saveImport = async () => {
+    if (!importDesc.value.trim() || !importPayload.value) {
+      message.warning(t('ruleSetImportRequired'));
+      return;
+    }
+    importLoading.value = true;
+    const { data } = await importRuleSet(
+      importDesc.value.trim(),
+      importPayload.value,
+      importTargetDialect.value,
+    );
+    importLoading.value = false;
+    if (data.code !== 1200) return;
+    message.success(t('ruleSetImportDone'));
+    importOpen.value = false;
+    get();
+  };
+
+  // ---- 规则清单 ----
+  const manifestOpen = ref(false);
+  const manifest = ref<RuleManifestRule[]>([]);
+
+  const manifestCol = [
+    { title: t('ruleStableId'), dataIndex: 'id', width: 230 },
+    { title: t('common.table.name'), dataIndex: 'name', width: 160 },
+    { title: t('common.desc'), dataIndex: 'desc' },
+    { title: t('ruleLegacyId'), dataIndex: 'legacy_id', width: 220 },
+    { title: t('ruleLevelTitle'), dataIndex: 'default_level', width: 100 },
+    { title: t('ruleParam'), dataIndex: 'param_type', width: 150 },
+    {
+      title: 'DBA',
+      dataIndex: 'requires_dba_approval',
+      width: 90,
+    },
+  ];
+
+  const openManifest = async () => {
+    manifestOpen.value = true;
+    const { data } = await getRulesManifest();
+    if (data.code !== 1200) return;
+    manifest.value = (data.payload as RuleManifest).rules;
   };
 
   // ---- 自定义审核规则（正则文本规则） ----
@@ -276,7 +504,10 @@
   };
 
   const openRule = (record?: CustomRuleItem) => {
-    Object.assign(ruleForm, record ? { ...record } : { ...emptyRule(), id: undefined });
+    Object.assign(
+      ruleForm,
+      record ? { ...record } : { ...emptyRule(), id: undefined },
+    );
     ruleOpen.value = true;
   };
 

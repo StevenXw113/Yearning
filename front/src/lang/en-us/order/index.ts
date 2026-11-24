@@ -148,4 +148,19 @@ export default {
     'MongoDB change: put the command JSON (db.runCommand arguments) in the editor, e.g. update / delete / insert / createIndexes',
   'order.apply.redis.tips':
     'Write one Redis command (e.g. SET k v EX 60 / DEL k). The key values and TTL are snapshotted before execution so the change can be rolled back',
+  'order.dba.title': 'MongoDB DBA approval',
+  'order.dba.status': 'DBA approval',
+  'order.dba.approver': 'Approver',
+  'order.dba.reason': 'Reason',
+  'order.dba.time': 'Approval time',
+  'order.dba.none': 'Pending approval',
+  'order.dba.pending': 'Pending approval',
+  'order.dba.approved': 'Approved',
+  'order.dba.rejected': 'Rejected',
+  'order.dba.review': 'DBA approval',
+  'order.dba.approve': 'Approve',
+  'order.dba.reject': 'Reject',
+  'order.dba.reason.required': 'Enter the DBA approval reason',
+  'order.dba.tips':
+    'dropCollection / renameCollection / account privilege changes are hard safety baselines and require DBA approval before execution.',
 };

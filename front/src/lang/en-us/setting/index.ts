@@ -69,4 +69,10 @@ export default {
   'setting.ai.mongo_sql_gen_prompt': 'MongoDB generation prompt',
   'setting.ai.mongo_prompt.tips':
     'Applies to MongoDB sources only. Leave empty to use the built-in MongoDB template (empty filter / full scan / index aware)',
+  'setting.adv.production.tags': 'Production audit tags',
+  'setting.adv.production.tags.tips':
+    'Enter production / pre-production environment tags',
+  'setting.adv.production.tags.add': 'Add production tag',
+  'setting.adv.production.tags.help':
+    'When a source environment tag matches any value, queries fail closed to manual audit. Defaults: production / pre-production.',
 };

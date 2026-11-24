@@ -145,4 +145,19 @@ export default {
     'MongoDB 变更：请在编辑器里填写命令 JSON（db.runCommand 的参数），例如 update / delete / insert / createIndexes',
   'order.apply.redis.tips':
     'Redis 变更请填写一条命令（如 SET k v EX 60 / DEL k）。命令会经审核后执行，执行前会记录键的原值与 TTL 以便回滚',
+  'order.dba.title': 'MongoDB DBA 特批',
+  'order.dba.status': 'DBA 特批',
+  'order.dba.approver': '特批人',
+  'order.dba.reason': '特批理由',
+  'order.dba.time': '特批时间',
+  'order.dba.none': '待特批',
+  'order.dba.pending': '待特批',
+  'order.dba.approved': '已通过',
+  'order.dba.rejected': '已驳回',
+  'order.dba.review': 'DBA 特批',
+  'order.dba.approve': '通过',
+  'order.dba.reject': '驳回',
+  'order.dba.reason.required': '请填写 DBA 特批理由',
+  'order.dba.tips':
+    'dropCollection / renameCollection / 账号权限属于硬安全底线，必须由 DBA 特批后才能执行。',
 };

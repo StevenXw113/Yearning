@@ -17,7 +17,7 @@ import (
 
 // QueryField 审批列表字段。id 用于把项目的子工单按创建顺序排列；
 // batch_id 供前端按项目（批次）聚合展示：先看项目，展开后逐条审核。
-const QueryField = "id, work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`, `source_id`,`id_c`,`data_base`,`table`,`execute_time`,assigned,current_step,relevant,batch_id,tx_mode"
+const QueryField = "id, work_id, username, text, backup, date, real_name, `status`, `type`, `delay`, `source`, `source_id`,`id_c`,`data_base`,`table`,`execute_time`,assigned,current_step,relevant,batch_id,tx_mode,requires_dba_approval,dba_approval_status,dba_approver,dba_approval_reason,dba_approval_time"
 
 func AuditOrderState(c yee.Context) (err error) {
 	u := new(Confirm)
@@ -255,6 +255,8 @@ func AuditOrderApis(c yee.Context) (err error) {
 		return DelayKill(c)
 	case "scheduled":
 		return ScheduledChange(c)
+	case "dba":
+		return DBAApprovalOrder(c)
 	case "batch":
 		return BatchExecute(c)
 	default:

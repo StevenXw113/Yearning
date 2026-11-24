@@ -127,6 +127,9 @@ export default {
   MongoForbidAdminCommand:
     'MongoDB: forbid user/role management commands (createUser, ...)',
   MongoForbidImmutableId: 'MongoDB: forbid modifying _id (immutable field)',
+  MongoForbidUpsert: 'MongoDB: forbid upsert (insert when no document matches)',
+  MongoForbidMultiWrite:
+    'MongoDB: forbid updating or deleting multiple documents per clause',
   MongoForbidCappedConvert:
     'MongoDB: forbid convertToCapped (rebuilds the collection)',
   MongoForbidCollMod: 'MongoDB: forbid collMod (validator / index options)',
@@ -173,23 +176,28 @@ export default {
     'Forbid CONFIG SET/REWRITE/RESETSTAT and CLIENT KILL/PAUSE; read-only subcommands are allowed',
   RedisForbidDebug: 'Forbid DEBUG',
   RedisForbidMonitor: 'Forbid MONITOR (performance impact and data exposure)',
-  RedisForbidAclChange: 'Forbid ACL change subcommands such as SETUSER / DELUSER / LOAD',
+  RedisForbidAclChange:
+    'Forbid ACL change subcommands such as SETUSER / DELUSER / LOAD',
   RedisForbidModuleChange: 'Forbid MODULE LOAD / LOADEX / UNLOAD',
-  RedisForbidReplica: 'Forbid REPLICAOF / SLAVEOF (changes replication topology)',
+  RedisForbidReplica:
+    'Forbid REPLICAOF / SLAVEOF (changes replication topology)',
   RedisForbidClusterChange:
     'Forbid CLUSTER subcommands that change topology or slots; read-only ones are allowed',
-  RedisForbidPersistence: 'Forbid SAVE / BGSAVE / BGREWRITEAOF from the business entry point',
+  RedisForbidPersistence:
+    'Forbid SAVE / BGSAVE / BGREWRITEAOF from the business entry point',
   RedisForbidMigration: 'Forbid MIGRATE / RESTORE; require a dedicated review',
   RedisForbidMove: 'Forbid MOVE; SELECT is checked by the DB scope rule',
   RedisForbidKeysCommand: 'Forbid KEYS, use a bounded SCAN instead',
-  RedisForbidRandomKey: 'Forbid RANDOMKEY (result is outside the authorized key range)',
+  RedisForbidRandomKey:
+    'Forbid RANDOMKEY (result is outside the authorized key range)',
   RedisScanMatchRequired:
     'SCAN must carry an allowed MATCH range; block when it cannot be confirmed',
   RedisMaxScanCount: 'Max COUNT for SCAN / HSCAN / SSCAN / ZSCAN, 0 = no check',
   RedisFullCollectionRead:
     'Warn on HGETALL / SMEMBERS / full LRANGE / ZRANGE when collection size is unknown or large',
   RedisMaxReadElements: 'Max elements per range or random read, 0 = unlimited',
-  RedisMaxReadKeys: 'Max keys per batch read command such as MGET, 0 = unlimited',
+  RedisMaxReadKeys:
+    'Max keys per batch read command such as MGET, 0 = unlimited',
   RedisExpensiveRead:
     'Warn on SORT and set intersections/unions when input size is unknown or over budget',
   RedisMaxValueSize:
@@ -198,8 +206,10 @@ export default {
     'Max total payload bytes per command, 0 = unlimited; prevents bypassing the value limit',
   RedisMaxWriteKeys:
     'Max keys per write command, 0 = unlimited; over the limit requires batch review',
-  RedisMaxWriteElements: 'Max fields / members / elements written per command, 0 = unlimited',
-  RedisNonIdempotentWrite: 'Warn on non-idempotent writes such as INCR / DECR / list pop',
+  RedisMaxWriteElements:
+    'Max fields / members / elements written per command, 0 = unlimited',
+  RedisNonIdempotentWrite:
+    'Warn on non-idempotent writes such as INCR / DECR / list pop',
   RedisLargeOffsetWrite:
     'Max projected object size for offset writes (SETRANGE / SETBIT), 0 = unlimited',
   RedisForbidRename:
@@ -208,7 +218,8 @@ export default {
     'Warn on COPY ... REPLACE and check source, target and target DB permissions',
   RedisStoreOperation:
     'Check input size, target overwrite and key permissions for store operations',
-  RedisRequireTtl: 'Cache keys must carry a TTL; registered permanent keys may be exempted',
+  RedisRequireTtl:
+    'Cache keys must carry a TTL; registered permanent keys may be exempted',
   RedisTtlLossOnOverwrite:
     'Warn when an overwrite may drop the existing TTL without KEEPTTL or a new expiry',
   RedisRequireTtlExempt:
@@ -216,7 +227,8 @@ export default {
   RedisForbidPersist: 'Forbid PERSIST; permanent business keys may be exempted',
   RedisMinTtl: 'Warn when the TTL is below the business minimum; 0 = no check',
   RedisMaxTtl: 'Warn when the TTL exceeds the business maximum; 0 = no check',
-  RedisImmediateExpire: 'Warn when the expiry is immediate or already past (the key is deleted)',
+  RedisImmediateExpire:
+    'Warn when the expiry is immediate or already past (the key is deleted)',
   RedisDeleteKey: 'Warn on DEL / UNLINK data deletion',
   RedisMaxDeleteKeys:
     'Max keys per delete command, 0 = unlimited; over the limit requires batch review',
@@ -228,12 +240,14 @@ export default {
     'Forbid unregistered EVAL / EVALSHA / EVAL_RO / EVALSHA_RO / FCALL / FCALL_RO',
   RedisForbidScriptManagement:
     'Forbid SCRIPT / FUNCTION subcommands that change script or function state; read-only ones allowed',
-  RedisForbidWatch: 'Forbid WATCH / UNWATCH unless full session semantics are supported',
+  RedisForbidWatch:
+    'Forbid WATCH / UNWATCH unless full session semantics are supported',
   RedisForbidBlockingCommand:
     'Forbid blocking commands (list / stream waits); configure dedicated scenarios separately',
   RedisForbidSubscription:
     'Forbid SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE and other long-lived subscriptions',
-  RedisStreamStateChange: 'Warn on consumer-group changes, acknowledgements and claims',
+  RedisStreamStateChange:
+    'Warn on consumer-group changes, acknowledgements and claims',
   RedisTransactionIntegrity:
     'Block MULTI/EXEC: single-command entry cannot guarantee every command in the transaction is reviewed',
   RedisClusterDbZero:
@@ -263,12 +277,18 @@ export default {
     'Proxy cluster only supports single-shard transactions; MULTI/EXEC and WATCH across shards are unreliable',
   RedisReadConsistency:
     'Multi-key reads across shards are not a single point-in-time snapshot; some values may be stale',
-  RedisTypeMismatch: 'Key type does not match what the write command expects; the command will fail with WRONGTYPE',
-  RedisOverwriteExisting: 'Overwriting an existing key discards its previous value',
-  RedisLargeValueRead: 'Reading a key larger than 1 MB holds the query connection for a long time',
-  RedisBigKeySyncDelete: 'Synchronous deletion of a big key blocks the server; prefer UNLINK',
-  RedisProductionWrite: 'Write against a production data source; describe blast radius and rollback',
-  RedisCommandCompatibility: 'Command requires a newer Redis version than this instance provides',
+  RedisTypeMismatch:
+    'Key type does not match what the write command expects; the command will fail with WRONGTYPE',
+  RedisOverwriteExisting:
+    'Overwriting an existing key discards its previous value',
+  RedisLargeValueRead:
+    'Reading a key larger than 1 MB holds the query connection for a long time',
+  RedisBigKeySyncDelete:
+    'Synchronous deletion of a big key blocks the server; prefer UNLINK',
+  RedisProductionWrite:
+    'Write against a production data source; describe blast radius and rollback',
+  RedisCommandCompatibility:
+    'Command requires a newer Redis version than this instance provides',
   RedisBatchExpireConcentration:
     'Round-hour TTLs make similar keys expire at the same instant; add jitter',
   RedisDeleteManifestRequired:
@@ -293,4 +313,27 @@ export default {
   ruleCatEngine: 'Engine',
   ruleRefSources: 'Used by sources',
   ruleRefNone: '—',
+  ruleManifest: 'Rule manifest',
+  ruleSetImport: 'Import rule set',
+  ruleSetExport: 'Export rule set',
+  ruleSetType: 'Rule set type',
+  ruleSetTypeTips:
+    'Legacy/mixed keeps the old AuditRole; MongoDB v2 saves a Definition and stays isolated by data source type.',
+  ruleSetTypeLegacy: 'Legacy / Mixed',
+  ruleSetDialect: 'Dialect',
+  ruleSetScope: 'Scope',
+  ruleStableIds: 'Stable rule IDs',
+  ruleStableId: 'Rule ID',
+  ruleLegacyId: 'Legacy field',
+  ruleParam: 'Parameter',
+  ruleSetFile: 'Rule set file',
+  ruleSetSelectFile: 'Select a JSON file',
+  ruleSetImportTips:
+    'Definitions are validated before import; the three MongoDB DBA baseline rules are always enforced.',
+  ruleSetInvalidJson: 'The rule set file is not valid JSON',
+  ruleSetImportRequired: 'Enter a name and select a JSON file',
+  ruleSetImportDone: 'Rule set imported',
+  ruleSetTargetDialect: 'Target data source type',
+  ruleSetTargetDialectTips:
+    'Legacy SQL rule sets cannot distinguish MySQL from PostgreSQL; choose the target data source when importing.',
 };

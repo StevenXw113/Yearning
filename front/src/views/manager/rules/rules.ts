@@ -13,6 +13,12 @@ interface Rule {
   // level 规则自带的默认级别（引擎缺少配置时用的那一档），只用于把级别下拉显示成
   // 「默认(拦截/提示/观察)」。必须与引擎的 DefaultLevel 一致，由 archguard 护栏核对。
   level?: 'error' | 'warn' | 'observe';
+  // MongoDB v2 稳定公开 ID；旧字段名只是兼容层。
+  ids?: string[];
+  // dropCollection / renameCollection / 账号权限必须走 DBA 特批，前端不允许关闭。
+  dbaApproval?: boolean;
+  // 非规则字段（如 settings.max_affect_rows）在 UI 上用稳定路径展示。
+  settingKey?: string;
 }
 
 const { t } = i18n.global;
@@ -502,6 +508,22 @@ const rule: Rule[] = [
     tp: 0,
   },
   {
+    name: 'MongoForbidUpsert',
+    category: 'statement',
+    desc: t('MongoForbidUpsert'),
+    level: 'error',
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
+    name: 'MongoForbidMultiWrite',
+    category: 'statement',
+    desc: t('MongoForbidMultiWrite'),
+    level: 'error',
+    type: 'Mongo',
+    tp: 0,
+  },
+  {
     name: 'MongoForbidCappedConvert',
     category: 'table',
 
@@ -740,8 +762,52 @@ const rule: Rule[] = [
   },
 ];
 
-export { rule, Rule };
+const MONGO_RULE_ID_MAP: Record<string, string[]> = {
+  MongoForbidEmptyFilter: ['mongo.empty_filter'],
+  MongoForbidDangerous: ['mongo.dangerous_command'],
+  MongoForbidWhere: ['mongo.where'],
+  MongoForbidDropCollection: [
+    'mongo.collection.drop',
+    'mongo.collection.rename',
+  ],
+  MongoForbidSystemCollection: ['mongo.system_collection'],
+  MongoForbidAdminCommand: ['mongo.account.privilege'],
+  MongoForbidImmutableId: ['mongo.immutable_id'],
+  MongoForbidUpsert: ['mongo.upsert'],
+  MongoForbidMultiWrite: ['mongo.multi_write'],
+  MongoForbidCappedConvert: ['mongo.capped_convert'],
+  MongoForbidCollMod: ['mongo.coll_mod'],
+  MongoIndexKeyLimit: ['mongo.index_key_limit'],
+  MongoIndexNameSpec: ['mongo.index_name_spec'],
+  MongoCollectionPrefix: ['mongo.collection_prefix'],
+  MongoMaxCollectionNameLen: ['mongo.max_collection_name_len'],
+  MongoRegexUnanchored: ['mongo.regex_unanchored'],
+  MongoNegationOperator: ['mongo.negation_operator'],
+  MongoOrClause: ['mongo.or_clause'],
+  MongoLargeInList: ['mongo.large_in_list'],
+  MongoQueryForbidNoFilter: ['mongo.query.no_filter'],
+  MongoQueryForbidLookup: ['mongo.query.no_lookup'],
+  MongoQueryForbidNoLimit: ['mongo.query.no_limit'],
+};
 
+const MONGO_DBA_APPROVAL_IDS = [
+  'mongo.collection.drop',
+  'mongo.collection.rename',
+  'mongo.account.privilege',
+];
+
+for (const item of rule) {
+  const ids = MONGO_RULE_ID_MAP[item.name];
+  if (ids) {
+    item.ids = ids;
+    item.dbaApproval = ids.some((id) => MONGO_DBA_APPROVAL_IDS.includes(id));
+  }
+  if (item.name === 'MongoMaxAffectRows') {
+    item.settingKey = 'settings.max_affect_rows';
+  }
+}
+
+export { rule, Rule };
 // 七类页签:顺序即页签顺序,计数由 categoryCounts 运行时算出(设计见 .zcode/superpowers/design.md)。
 export const RULE_CATEGORIES: { key: RuleCategory; i18n: string }[] = [
   { key: 'statement', i18n: 'ruleCatStatement' },

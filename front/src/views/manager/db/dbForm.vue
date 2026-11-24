@@ -10,10 +10,21 @@
     </a-form-item>
     <a-form-item :label="$t('common.table.db_type')">
       <a-select v-model:value="dbForm.db_type" @change="onTypeChange">
-        <a-select-option v-for="i in DB_TYPES" :key="i.value" :value="i.value">{{
-          i.label
-        }}</a-select-option>
+        <a-select-option
+          v-for="i in DB_TYPES"
+          :key="i.value"
+          :value="i.value"
+          >{{ i.label }}</a-select-option
+        >
       </a-select>
+    </a-form-item>
+    <a-form-item :label="$t('db.environment.tag')">
+      <a-auto-complete
+        v-model:value="dbForm.environment_tag"
+        style="width: 100%"
+        :options="productionTagOptions"
+        :placeholder="$t('db.environment.tag.tips')"
+      />
     </a-form-item>
     <a-form-item :label="$t('common.rules')">
       <!-- 新建时即可指定规则集,与编辑弹窗对齐;0 = 全局规则 -->
@@ -21,9 +32,12 @@
         <a-select-option :key="-1" :value="0">{{
           $t('db.global')
         }}</a-select-option>
-        <a-select-option v-for="i in ruleSets" :key="i.id" :value="i.id">{{
-          i.desc
-        }}</a-select-option>
+        <a-select-option
+          v-for="i in compatibleRuleSets"
+          :key="i.id"
+          :value="i.id"
+          >{{ i.desc }}
+        </a-select-option>
       </a-select>
     </a-form-item>
     <a-form-item :label="$t('common.table.name')" name="source">
@@ -155,8 +169,19 @@
 
 <script lang="ts" setup>
   import { ref, computed, reactive, onMounted } from 'vue';
-  import { DB_TYPES, dbTypePort, Source, createSource as cs, DBType } from '@/apis/db';
-  import { getCustomRulesList, type CustomRule } from '@/apis/rules';
+  import {
+    DB_TYPES,
+    dbTypePort,
+    Source,
+    createSource as cs,
+    DBType,
+  } from '@/apis/db';
+  import {
+    getCustomRulesList,
+    isRuleSetCompatibleWithDBType,
+    type CustomRule,
+  } from '@/apis/rules';
+  import { getSettingInfo } from '@/apis/setting';
   import { useCommonStore } from '@/store';
   import { RuleObject } from 'ant-design-vue/es/form';
   import { useI18n } from 'vue-i18n';
@@ -171,9 +196,29 @@
 
   // 规则集选项(与编辑弹窗同源 getCustomRulesList);0 = 全局规则
   const ruleSets = ref([] as CustomRule[]);
+  const productionTags = ref<string[]>([]);
+
+  const productionTagOptions = computed(() =>
+    productionTags.value.map((tag) => ({ value: tag })),
+  );
+
+  const compatibleRuleSets = computed(() =>
+    ruleSets.value.filter((item) =>
+      isRuleSetCompatibleWithDBType(item, dbForm.value.db_type),
+    ),
+  );
+
   onMounted(async () => {
-    const { data } = await getCustomRulesList();
-    ruleSets.value = data.payload;
+    const [rulesRes, settingRes] = await Promise.all([
+      getCustomRulesList(),
+      getSettingInfo(),
+    ]);
+    ruleSets.value = rulesRes.data.payload;
+    productionTags.value = Array.isArray(
+      settingRes.data.payload.other?.production_audit_tags,
+    )
+      ? settingRes.data.payload.other.production_audit_tags
+      : ['production', 'pre-production'];
   });
 
   const open = reactive({
@@ -262,11 +307,25 @@
     db_type: 0,
     auth_database: '',
     rule_id: 0,
+    environment_tag: '',
   } as Source);
 
   // 切换类型时带出该类型的默认端口（MySQL 3306 / PG 5432 / Mongo 27017 / Redis 6379 / Doris 9030）
   const onTypeChange = (v: number) => {
     dbForm.value.port = dbTypePort(v, dbForm.value.port);
+    // 类型切换后旧规则集可能不再兼容，先回到全局规则，避免提交后才被后端拒绝。
+    if (
+      dbForm.value.rule_id !== 0 &&
+      !isRuleSetCompatibleWithDBType(
+        ruleSets.value.find((item) => item.id === dbForm.value.rule_id) || {
+          dialect: '',
+          audit_role: {},
+        },
+        v,
+      )
+    ) {
+      dbForm.value.rule_id = 0;
+    }
   };
 
   const formRef = ref();

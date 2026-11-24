@@ -1,10 +1,9 @@
 package mongocheck
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // 变更类型，取值与工单 Type 对齐（主程序侧 vars.DDL=0 / vars.DML=1）
@@ -64,42 +63,34 @@ type Command struct {
 	Kind int
 }
 
-// Parse 解析一条命令。命令名是 JSON 里的第一个键——map 遍历无序，
-// 所以单独用 token 流再读一次。
-func Parse(cmdJSON string) (*Command, error) {
-	body := strings.TrimSpace(cmdJSON)
-	if body == "" {
-		return nil, errors.New("MongoDB 命令不能为空")
-	}
-	dec := json.NewDecoder(strings.NewReader(body))
-	dec.UseNumber()
-	var doc map[string]interface{}
-	if err := dec.Decode(&doc); err != nil {
-		return nil, fmt.Errorf("命令不是合法的 JSON：%v", err)
-	}
+func commandFromBSON(doc bson.D) *Command {
+	name := strings.ToLower(doc[0].Key)
+	coll, _ := doc[0].Value.(string)
+	return &Command{Name: name, Coll: coll, Kind: classify(name), Doc: ruleDoc(doc)}
+}
 
-	name := ""
-	toks := json.NewDecoder(strings.NewReader(body))
-	if t, err := toks.Token(); err == nil {
-		if d, ok := t.(json.Delim); ok && d == '{' {
-			if k, err := toks.Token(); err == nil {
-				if s, ok := k.(string); ok {
-					name = strings.ToLower(s)
-				}
-			}
-		}
+// ruleDoc converts ordered documents to lookup maps while preserving BSON scalars.
+func ruleDoc(doc bson.D) map[string]interface{} {
+	out := make(map[string]interface{}, len(doc))
+	for _, field := range doc {
+		out[field.Key] = ruleValue(field.Value)
 	}
-	if name == "" {
-		return nil, errors.New(`无法识别命令名，示例：{"update":"users","updates":[...]}`)
-	}
+	return out
+}
 
-	cmd := &Command{Name: name, Doc: doc, Kind: classify(name)}
-	if coll, ok := Lookup(doc, name); ok {
-		if s, ok := coll.(string); ok {
-			cmd.Coll = s
+func ruleValue(value interface{}) interface{} {
+	switch value := value.(type) {
+	case bson.D:
+		return ruleDoc(value)
+	case bson.A:
+		out := make([]interface{}, len(value))
+		for i, item := range value {
+			out[i] = ruleValue(item)
 		}
+		return out
+	default:
+		return value
 	}
-	return cmd, nil
 }
 
 // classify 按命令名分类：先看 dml/ddl 表，管理命令与危险命令都按结构变更处理
@@ -120,17 +111,10 @@ func classify(name string) int {
 	return KindQuery
 }
 
-// Lookup 从文档里取值，键名大小写不敏感（Mongo 命令名与字段名都不区分大小写）
+// Lookup takes an exact field name. Only the command name is normalized by Yearning.
 func Lookup(doc map[string]interface{}, key string) (interface{}, bool) {
-	if v, ok := doc[key]; ok {
-		return v, true
-	}
-	for k, v := range doc {
-		if strings.EqualFold(k, key) {
-			return v, true
-		}
-	}
-	return nil, false
+	v, ok := doc[key]
+	return v, ok
 }
 
 // Lookup 成员方法版本，等价于 Lookup(cmd.Doc, key)
@@ -211,33 +195,23 @@ func (c *Command) EmptyFilter() bool {
 	return !ok || IsEmptyDoc(q)
 }
 
-// IsEmptyDoc 判断条件是否为「空」：{} / nil / 空文档
+// IsEmptyDoc reports whether a filter lacks a nonempty BSON document.
 func IsEmptyDoc(v interface{}) bool {
-	switch m := v.(type) {
-	case nil:
-		return true
-	case map[string]interface{}:
-		return len(m) == 0
-	}
-	return false
+	doc, _ := v.(map[string]interface{})
+	return len(doc) == 0
 }
 
-// AsInt 把解析出来的 JSON 数字转成 int（UseNumber 解出的是 json.Number）
-func AsInt(v interface{}) (int, bool) {
+// AsInt accepts BSON numbers with an exact integer value.
+func AsInt(v interface{}) (int64, bool) {
 	switch n := v.(type) {
-	case json.Number:
-		if i, err := n.Int64(); err == nil {
-			return int(i), true
-		}
-		if f, err := n.Float64(); err == nil {
-			return int(f), true
-		}
-	case float64:
-		return int(n), true
-	case int:
-		return n, true
+	case int32:
+		return int64(n), true
 	case int64:
-		return int(n), true
+		return n, true
+	case float64:
+		if n >= -1<<63 && n < 1<<63 && float64(int64(n)) == n {
+			return int64(n), true
+		}
 	}
 	return 0, false
 }

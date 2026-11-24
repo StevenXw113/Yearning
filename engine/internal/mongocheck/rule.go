@@ -47,9 +47,11 @@ const (
 
 // Finding 一条命中的规则
 type Finding struct {
-	Rule    string // 规则名（= AuditRole 字段名 = RuleLevels 的 key）
-	Level   Level  // 拦截 / 提示 / 观察
-	Message string
+	Rule                string // 旧规则名，兼容存量前端与 RuleLevels
+	RuleID              string // v2 稳定规则 ID（mongo.*）
+	Level               Level  // 拦截 / 提示 / 观察
+	Message             string
+	RequiresDBAApproval bool // 命中硬安全底线，必须走 DBA 特批
 }
 
 // Rule 一条静态审核规则。

@@ -7,7 +7,7 @@ import (
 	"Yearning-go/src/lib/mongodb"
 	"Yearning-go/src/model"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
+	"engine/mongoguard"
 )
 
 func init() { register(model.DBTypeMongoDB, mongoEngine{}) }
@@ -75,10 +75,10 @@ func (mongoEngine) Highlight(src *model.CoreDataSource, isField bool, db string)
 }
 
 func (mongoEngine) ValidateChange(_ *model.CoreDataSource, sql string) error {
-	var cmd bson.D
-	if err := bson.UnmarshalExtJSON([]byte(sql), false, &cmd); err != nil {
+	cmd, err := mongoguard.Parse(sql)
+	if err != nil {
 		return errors.New("请填写 MongoDB 命令的 JSON，例如 {\"update\":\"users\",\"updates\":[...]}：" + err.Error())
 	}
-	_, err := mongodb.Validate(cmd)
+	_, err = mongodb.Validate(cmd)
 	return err
 }

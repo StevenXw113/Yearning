@@ -3,6 +3,8 @@ package mongocheck
 import (
 	"strconv"
 	"strings"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // 性能类规则：默认 warn，只提示不拦。
@@ -63,7 +65,10 @@ func (r regexUnanchored) Check(cfg Config, cmd *Command) []Finding {
 		return nil
 	}
 	hit := cmd.Walk(func(key string, val interface{}) bool {
-		if !strings.EqualFold(key, "$regex") {
+		if v, ok := val.(bson.Regex); ok {
+			return !strings.HasPrefix(v.Pattern, "^")
+		}
+		if key != "$regex" {
 			return false
 		}
 		switch v := val.(type) {
@@ -173,7 +178,7 @@ type queryNoFilter struct{}
 
 func (queryNoFilter) Name() string { return RuleQueryNoFilter }
 func (queryNoFilter) Desc() string {
-	return "查询条件不能为空：find 需要 filter，aggregate 需要 $match（避免全集合扫描）"
+	return "查询条件不能为空：find 需要 filter，aggregate 的首个阶段需要非空 $match（提示检查扫描范围）"
 }
 func (queryNoFilter) Category() Category  { return CategoryPerformance }
 func (queryNoFilter) Modes() []Mode       { return []Mode{ModeQuery} }
@@ -189,9 +194,13 @@ func (r queryNoFilter) Check(cfg Config, cmd *Command) []Finding {
 			return nil
 		}
 	case "aggregate":
-		// 聚合没有 filter 字段，判据是管道里有没有 $match
-		if cmd.Has("$match") {
-			return nil
+		raw, _ := cmd.Lookup("pipeline")
+		pipeline, _ := raw.([]interface{})
+		if len(pipeline) > 0 {
+			stage, _ := pipeline[0].(map[string]interface{})
+			if !IsEmptyDoc(stage["$match"]) {
+				return nil
+			}
 		}
 	default:
 		return nil
@@ -199,7 +208,7 @@ func (r queryNoFilter) Check(cfg Config, cmd *Command) []Finding {
 	return []Finding{{
 		Rule:    RuleQueryNoFilter,
 		Level:   cfg.Level(r),
-		Message: "查询没有过滤条件（find 的 filter / aggregate 的 $match），会扫描整个集合",
+		Message: "查询缺少非空 filter 或首阶段 $match，请确认扫描范围",
 	}}
 }
 
@@ -240,7 +249,10 @@ func (queryNoLimit) Modes() []Mode       { return []Mode{ModeQuery} }
 func (queryNoLimit) DefaultLevel() Level { return LevelWarn }
 
 func (r queryNoLimit) Check(cfg Config, cmd *Command) []Finding {
-	if !cfg.QueryForbidNoLimit || cmd.Name != "find" || !cmd.Has("sort") {
+	if !cfg.QueryForbidNoLimit || cmd.Name != "find" {
+		return nil
+	}
+	if sort, _ := cmd.Lookup("sort"); IsEmptyDoc(sort) {
 		return nil
 	}
 	if v, ok := cmd.Lookup("limit"); ok {
@@ -251,6 +263,6 @@ func (r queryNoLimit) Check(cfg Config, cmd *Command) []Finding {
 	return []Finding{{
 		Rule:    RuleQueryNoLimit,
 		Level:   cfg.Level(r),
-		Message: "find 带 sort 但没写 limit：服务端需要对全部命中排序，请加上 limit",
+		Message: "find 带 sort，但缺少正整数 limit，请限制返回数量并确认排序成本",
 	}}
 }

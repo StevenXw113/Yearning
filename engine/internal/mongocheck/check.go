@@ -11,43 +11,67 @@
 // 结构：规则注册表（rule.go）+ 共享解析层（command.go）+ 规则开关（config.go），
 // 一条规则一个文件、在 init() 里注册。新增规则见 README。
 //
-// 只用标准库解析：本包不引入 mongo-driver，避免引擎依赖变重。
+// 审核与执行共用 Extended JSON 解析器。
 package mongocheck
 
-import "errors"
+import (
+	"errors"
+
+	"engine/mongoguard"
+)
 
 // Check 审核一条 MongoDB 命令（extended JSON 文本）。
 //
 // 返回变更类型与命中的规则；第三个返回值非 nil 表示命令本身不可用：
 // 不是合法 JSON、不是变更命令（变更审核下），或是查询审核下出现的写命令。
 func Check(cmdJSON string, cfg Config) (int, []Finding, error) {
-	cmd, err := Parse(cmdJSON)
+	doc, err := mongoguard.Parse(cmdJSON)
 	if err != nil {
 		return KindQuery, nil, err
 	}
-
 	if cfg.queryMode() {
-		// 查询页出现写命令：直接拒绝。这不是可配置的规则——
-		// 查询页能改数据等于绕过整个工单审批链路，不该依赖谁把开关配对。
-		if cmd.Kind != KindQuery {
-			return cmd.Kind, nil, errors.New(notReadOnly(cmd.Name))
+		doc, err = mongoguard.ValidateQuery(doc)
+		if err != nil {
+			return KindQuery, nil, err
 		}
-	} else if cmd.Kind == KindQuery {
+	}
+	cmd := commandFromBSON(doc)
+	if !cfg.queryMode() && cmd.Kind == KindQuery {
 		return cmd.Kind, nil, errors.New("不是变更命令（insert / update / delete / createIndexes 等），无需提交工单")
 	}
 
 	var out []Finding
+	dbaRuleID, dbaMessage, dbaRequired := DBAApprovalRequirement(cmd)
 	for _, r := range All() {
 		if !applies(r, cfg.mode()) {
 			continue
 		}
+		if dbaRequired && dbaBaselineRuleSuppressed(cmd, r.Name()) {
+			continue
+		}
 		out = append(out, r.Check(cfg, cmd)...)
+	}
+	if dbaRequired {
+		out = append(out, Finding{
+			Rule:                dbaLegacyRule(cmd.Name),
+			RuleID:              dbaRuleID,
+			Level:               LevelError,
+			Message:             dbaMessage,
+			RequiresDBAApproval: true,
+		})
+	}
+	for i := range out {
+		if out[i].RuleID == "" {
+			out[i].RuleID = RuleID(out[i].Rule)
+		}
 	}
 	return cmd.Kind, out, nil
 }
 
-// notReadOnly 查询页的拒绝文案：说清为什么不行、以及该去哪儿做
-func notReadOnly(name string) string {
-	return "查询页只能执行只读命令（find / aggregate / count / distinct 等），" +
-		name + " 属于变更命令，请到工单申请页提交"
+// dbaLegacyRule 返回硬底线对应的旧规则名，便于存量前端按 Rule 字段分组展示。
+func dbaLegacyRule(command string) string {
+	if _, ok := adminCommands[command]; ok {
+		return RuleAdminCommand
+	}
+	return RuleDropCollection
 }

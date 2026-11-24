@@ -22,6 +22,8 @@ type Config struct {
 	ForbidSystemCollection bool
 	ForbidAdminCommand     bool
 	ForbidImmutableID      bool
+	ForbidUpsert           bool
+	ForbidMultiWrite       bool
 
 	// ---- 结构类（批次 4）：命名规范与结构类默认只提示，convertToCapped 除外 ----
 	ForbidCappedConvert  bool

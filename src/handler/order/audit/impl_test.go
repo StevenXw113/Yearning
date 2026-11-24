@@ -188,3 +188,25 @@ func TestRemainingSQLAfter(t *testing.T) {
 		})
 	}
 }
+
+
+func TestDBAApprovalSatisfied(t *testing.T) {
+	cases := []struct {
+		name  string
+		order model.CoreSqlOrder
+		want  bool
+	}{
+		{"plain", model.CoreSqlOrder{}, true},
+		{"dba not required", model.CoreSqlOrder{RequiresDBAApproval: false, DBAApprovalStatus: "pending"}, true},
+		{"dba pending", model.CoreSqlOrder{RequiresDBAApproval: true, DBAApprovalStatus: "pending"}, false},
+		{"dba rejected", model.CoreSqlOrder{RequiresDBAApproval: true, DBAApprovalStatus: "rejected"}, false},
+		{"dba approved", model.CoreSqlOrder{RequiresDBAApproval: true, DBAApprovalStatus: "approved"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := dbaApprovalSatisfied(&c.order); got != c.want {
+				t.Fatalf("dbaApprovalSatisfied() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

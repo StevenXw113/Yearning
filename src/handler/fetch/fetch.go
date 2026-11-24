@@ -286,9 +286,16 @@ func FetchSQLTest(c yee.Context) (err error) {
 	}
 	var s model.CoreDataSource
 	model.DB().Where("source_id =?", u.SourceId).First(&s)
-	rule, err := factory.CheckDataSourceRule(s.RuleId)
-	if err != nil || rule == nil {
+	ruleSet, rule, err := factory.CheckDataSourceRuleSet(&s)
+	if err != nil || (ruleSet == nil && rule == nil) {
 		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	var ruleSetJSON []byte
+	if ruleSet != nil {
+		ruleSetJSON, err = json.Marshal(ruleSet)
+		if err != nil {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+		}
 	}
 	// Decrypt 无错误信号:空密文(数据源未设口令)解密出的空串是合法明文,
 	// 只有「存储了密文却解不出」才算秘钥失败。
@@ -326,6 +333,7 @@ func FetchSQLTest(c yee.Context) (err error) {
 		Source:       src,
 		Lang:         model.C.General.Lang,
 		Rule:         engine.AuditRoleToAPI(rule),
+		RuleSet:      ruleSetJSON,
 		// 申请页检测：显式声明按变更命令审核，Mongo 数据源填 find 会报「不是变更命令」
 		Mode: engine.CheckModeWrite,
 	})

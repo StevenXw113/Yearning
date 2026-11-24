@@ -125,6 +125,14 @@ export function markOrderFinished(work_id: string, text: string) {
   });
 }
 
+export function reviewDBAApproval(args: {
+  work_id: string;
+  action: 'approve' | 'reject';
+  reason: string;
+}) {
+  return request.post(`${COMMON_URI}/audit/order/dba`, args);
+}
+
 export function changeOrderStateUndo(args: SQLAuditOrder) {
   return request.post(`${COMMON_URI}/audit/order/state`, args);
 }
