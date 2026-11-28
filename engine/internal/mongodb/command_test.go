@@ -214,3 +214,30 @@ func rollbackAll(ctx context.Context, client *driver.Client, db string, cmds []s
 	}
 	return nil
 }
+
+// The limit must reject inserts before dereferencing a client or sending a command.
+func TestExecuteInsertLimitBeforeWrite(t *testing.T) {
+	out, err := Execute(context.Background(), nil, "test", cmd(`{"insert":"isolated","documents":[{"_id":1},{"_id":2}]}`), 1)
+	if err == nil || !strings.Contains(err.Error(), "上限 1") || out.Affected != 0 || len(out.Rollback) != 0 {
+		t.Fatalf("expected pre-write limit error: outcome=%+v error=%v", out, err)
+	}
+}
+
+func TestAffectedFindAndModify(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  bson.M
+		want int64
+	}{
+		{"matched", bson.M{"value": bson.M{"_id": 1}, "lastErrorObject": bson.M{"n": 1}}, 1},
+		{"unmatched", bson.M{"value": nil, "lastErrorObject": bson.M{"n": 0}}, 0},
+		{"upserted", bson.M{"value": nil, "lastErrorObject": bson.M{"n": 1, "upserted": 1}}, 1},
+		{"null_without_metadata", bson.M{"value": nil}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := affected("findandmodify", tc.raw); got != tc.want {
+				t.Fatalf("affected=%d want=%d", got, tc.want)
+			}
+		})
+	}
+}

@@ -1,6 +1,13 @@
 <template>
-  <!-- 标签与输入框同排（antd 默认横向布局）；不给标签设固定宽度，长标签自动撑开，不会被输入框截断 -->
-  <a-form ref="formRef" :model="dbForm" :rules="rules">
+  <a-form
+    ref="formRef"
+    name="datasource-create"
+    :model="dbForm"
+    :rules="rules"
+    layout="vertical"
+    class="datasource-form"
+  >
+    <h3 class="form-section-title">{{ $t('db.section.basic') }}</h3>
     <a-form-item :label="$t('common.table.env')" name="idc">
       <a-select v-model:value="dbForm.idc">
         <a-select-option v-for="i in idc" :key="i" :value="i">{{
@@ -8,7 +15,7 @@
         }}</a-select-option>
       </a-select>
     </a-form-item>
-    <a-form-item :label="$t('common.table.db_type')">
+    <a-form-item :label="$t('common.table.db_type')" name="db_type">
       <a-select v-model:value="dbForm.db_type" @change="onTypeChange">
         <a-select-option
           v-for="i in DB_TYPES"
@@ -18,7 +25,7 @@
         >
       </a-select>
     </a-form-item>
-    <a-form-item :label="$t('db.environment.tag')">
+    <a-form-item :label="$t('db.environment.tag')" name="environment_tag">
       <a-auto-complete
         v-model:value="dbForm.environment_tag"
         style="width: 100%"
@@ -26,7 +33,7 @@
         :placeholder="$t('db.environment.tag.tips')"
       />
     </a-form-item>
-    <a-form-item :label="$t('common.rules')">
+    <a-form-item :label="$t('common.rules')" name="rule_id">
       <!-- 新建时即可指定规则集,与编辑弹窗对齐;0 = 全局规则 -->
       <a-select v-model:value="dbForm.rule_id" style="width: 100%">
         <a-select-option :key="-1" :value="0">{{
@@ -43,31 +50,62 @@
     <a-form-item :label="$t('common.table.name')" name="source">
       <a-input v-model:value="dbForm.source"></a-input>
     </a-form-item>
-    <a-form-item :label="$t('db.addr')" name="ip">
-      <a-input v-model:value="dbForm.ip"></a-input>
+    <h3 class="form-section-title">{{ $t('db.section.connection') }}</h3>
+    <a-form-item
+      :label="$t('db.addr')"
+      name="ip"
+      :extra="
+        dbForm.db_type === DBType.MongoDB ? $t('db.mongo.hostsTips') : undefined
+      "
+    >
+      <a-input
+        v-model:value="dbForm.ip"
+        :placeholder="
+          dbForm.db_type === DBType.MongoDB
+            ? $t('db.mongo.hostsTips')
+            : undefined
+        "
+      ></a-input>
     </a-form-item>
     <a-form-item :label="$t('db.port')" name="port">
       <a-input-number v-model:value="dbForm.port"></a-input-number>
     </a-form-item>
     <a-form-item :label="$t('db.kind')">
       <a-switch
+        :aria-label="$t('db.kind')"
         v-model:checked="checked"
         :checked-children="$t('db.ssl')"
         :un-checked-children="$t('user.password')"
       />
     </a-form-item>
+    <a-form-item
+      v-if="dbForm.db_type === DBType.MongoDB"
+      :label="$t('db.mongo.authMechanism')"
+      name="mongo_auth_mechanism"
+    >
+      <a-select v-model:value="dbForm.mongo_auth_mechanism">
+        <a-select-option value="">{{
+          $t('db.mongo.authAuto')
+        }}</a-select-option>
+        <a-select-option value="SCRAM-SHA-1">SCRAM-SHA-1</a-select-option>
+        <a-select-option value="SCRAM-SHA-256">SCRAM-SHA-256</a-select-option>
+      </a-select>
+    </a-form-item>
     <template v-if="checked">
-      <a-form-item :label="$t('db.ssl.ca')">
+      <a-form-item v-if="dbForm.db_type === DBType.MongoDB">
+        {{ $t('db.mongo.tlsTips') }}
+      </a-form-item>
+      <a-form-item :label="$t('db.ssl.ca')" name="ca_file">
         <a-button size="small" @click="open.ca = true">
           {{ $t('db.upload') }}
         </a-button>
       </a-form-item>
-      <a-form-item :label="$t('db.ssl.certificate')">
+      <a-form-item :label="$t('db.ssl.certificate')" name="cert">
         <a-button size="small" @click="open.cert = true">
           {{ $t('db.upload') }}
         </a-button>
       </a-form-item>
-      <a-form-item :label="$t('db.ssl.key')">
+      <a-form-item :label="$t('db.ssl.key')" name="key_file">
         <a-button size="small" @click="open.key = true">
           {{ $t('db.upload') }}
         </a-button>
@@ -89,6 +127,17 @@
         :placeholder="$t('db.authDatabaseTips')"
       ></a-input>
     </a-form-item>
+    <a-form-item
+      v-if="dbForm.db_type === DBType.MongoDB"
+      :label="$t('db.mongo.replicaSet')"
+      name="mongo_replica_set"
+    >
+      <a-input
+        v-model:value="dbForm.mongo_replica_set"
+        :placeholder="$t('db.mongo.replicaSetTips')"
+      />
+    </a-form-item>
+    <h3 class="form-section-title">{{ $t('db.section.access') }}</h3>
     <a-form-item :label="$t('menu.manage.flow')" name="flow_id">
       <a-select v-model:value="dbForm.flow_id">
         <a-select-option v-for="i in flow" :key="i.id" :value="i.id">{{
@@ -118,20 +167,14 @@
       </a-radio-group>
     </a-form-item>
     <a-form-item :label="$t('common.action')">
-      <a-space size="small">
-        <a-button
-          type="dashed"
-          :loading="loading"
-          size="small"
-          @click="checkConn"
+      <a-space size="small" wrap>
+        <a-button type="dashed" :loading="loading" @click="checkConn"
           >{{ $t('db.test') }}
         </a-button>
-        <a-button type="primary" size="small" @click="createSource">{{
+        <a-button type="primary" @click="createSource">{{
           $t('common.create')
         }}</a-button>
-        <a-button type="primary" danger size="small" @click="resetFields"
-          >{{ $t('common.cancel') }}
-        </a-button>
+        <a-button @click="resetFields">{{ $t('db.form.reset') }} </a-button>
       </a-space>
     </a-form-item>
   </a-form>
@@ -192,7 +235,18 @@
   // 新建数据源成功后通知父组件(由其刷新列表),替代原全局 EventBus('postOk')
   const emit = defineEmits<{ created: [] }>();
 
-  const checked = ref(false);
+  const sqlTLS = ref(false);
+  const checked = computed({
+    get: () =>
+      dbForm.value.db_type === DBType.MongoDB
+        ? !!dbForm.value.mongo_tls
+        : sqlTLS.value,
+    set: (value: boolean) => {
+      if (dbForm.value.db_type === DBType.MongoDB)
+        dbForm.value.mongo_tls = value;
+      else sqlTLS.value = value;
+    },
+  });
 
   // 规则集选项(与编辑弹窗同源 getCustomRulesList);0 = 全局规则
   const ruleSets = ref([] as CustomRule[]);
@@ -241,6 +295,7 @@
   };
 
   const regExp_password = (rule: RuleObject, value: string) => {
+    if (dbForm.value.db_type === DBType.MongoDB) return Promise.resolve();
     let pPattern = new RegExp('[`?？^$]');
     if (pPattern.test(value)) {
       return Promise.reject(t('db.exp.password'));
@@ -249,7 +304,7 @@
     }
   };
 
-  const rules = {
+  const rules = computed(() => ({
     idc: [{ required: true, message: t('db.check.env'), trigger: 'change' }],
     source: [
       { required: true, message: t('db.check.name'), trigger: 'blur' },
@@ -257,7 +312,12 @@
     ],
     ip: [{ required: true, message: t('db.check.addr'), trigger: 'blur' }],
     username: [
-      { required: true, message: t('db.check.username'), trigger: 'blur' },
+      {
+        required:
+          dbForm.value.db_type !== DBType.MongoDB || !!dbForm.value.password,
+        message: t('db.check.username'),
+        trigger: 'blur',
+      },
     ],
     port: [
       {
@@ -274,10 +334,14 @@
       { required: true, message: t('db.check.principal'), trigger: 'change' },
     ],
     password: [
-      { required: true, message: t('db.check.password'), trigger: 'blur' },
+      {
+        required: dbForm.value.db_type !== DBType.MongoDB,
+        message: t('db.check.password'),
+        trigger: 'blur',
+      },
       { validator: regExp_password, trigger: 'blur' },
     ],
-  };
+  }));
 
   const loading = ref(false);
 
@@ -306,6 +370,9 @@
     key_file: '',
     db_type: 0,
     auth_database: '',
+    mongo_replica_set: '',
+    mongo_tls: false,
+    mongo_auth_mechanism: '',
     rule_id: 0,
     environment_tag: '',
   } as Source);
@@ -347,9 +414,13 @@
   };
 
   const checkConn = async () => {
-    loading.value = !loading.value;
-    await cs({ db: dbForm.value, tp: 'test' });
-    loading.value = !loading.value;
+    if (loading.value) return;
+    loading.value = true;
+    try {
+      await cs({ db: dbForm.value, tp: 'test' });
+    } finally {
+      loading.value = false;
+    }
   };
 
   defineExpose({
@@ -358,12 +429,23 @@
 </script>
 
 <style scoped>
-  /* 字段多、容器窄：行距 24px→10px、标签 12px，一行放下「标签 + 输入框」；
-   标签宽度交给内容，长标签（英文）自动撑开，不会被输入框截断 */
   :deep(.ant-form-item) {
-    margin-bottom: 10px;
+    margin-bottom: 18px;
   }
-  :deep(.ant-form-item .ant-form-item-label) {
-    font-size: 12px;
+  :deep(.ant-input-number) {
+    width: 100%;
+  }
+  .form-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 24px 0 16px;
+    padding-top: 20px;
+    border-top: 1px solid var(--frame-line);
+    color: var(--text-muted);
+  }
+  .form-section-title:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
   }
 </style>

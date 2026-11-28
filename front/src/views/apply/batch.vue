@@ -331,7 +331,12 @@
     { title: '工单号', dataIndex: 'work_id', key: 'work_id' },
     { title: '数据源', dataIndex: 'source', key: 'source' },
     { title: '目标库', dataIndex: 'data_base', key: 'data_base' },
-    { title: '状态', key: 'status' },
+    {
+      title: '状态',
+      key: 'status',
+      width: 112,
+      className: 'table-status-cell',
+    },
     { title: '提交时间', dataIndex: 'date', key: 'date' },
     { title: '执行时间', dataIndex: 'execute_time', key: 'execute_time' },
   ];

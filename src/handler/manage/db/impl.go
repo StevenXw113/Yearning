@@ -13,15 +13,55 @@ import (
 	"strings"
 
 	"engine/ruleset"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gorm.io/gorm"
 )
 
 type CommonDBPost struct {
-	Encrypt       bool                 `json:"encrypt"`
-	Tp            string               `json:"tp"`
-	DB            model.CoreDataSource `json:"db"`
-	ExcludeDbList []string             `json:"exclude_db_list"`
-	WordList      []string             `json:"word_list"`
+	Encrypt       bool            `json:"encrypt"`
+	Tp            string          `json:"tp"`
+	DB            json.RawMessage `json:"db"`
+	ClearPassword bool            `json:"clear_password"`
+	ExcludeDbList []string        `json:"exclude_db_list"`
+	WordList      []string        `json:"word_list"`
+}
+
+// mergeSourceEdit overlays supplied fields while retaining secrets omitted by the list API.
+func mergeSourceEdit(raw json.RawMessage, stored model.CoreDataSource, clearPassword bool) (model.CoreDataSource, error) {
+	source := stored
+	source.Password = ""
+	if err := json.Unmarshal(raw, &source); err != nil {
+		return source, err
+	}
+	// Data source type is fixed after creation.
+	source.DBType = stored.DBType
+	if clearPassword {
+		if source.DBType != model.DBTypeMongoDB || source.Password != "" {
+			return source, errors.New("清除密码仅适用于 MongoDB，且不能同时提交新密码")
+		}
+		source.Password = ""
+	} else if source.Password == "" {
+		source.Password = stored.Password
+	}
+	if source.CAFile == "" {
+		source.CAFile = stored.CAFile
+	}
+	if source.Cert == "" {
+		source.Cert = stored.Cert
+	}
+	if source.KeyFile == "" {
+		source.KeyFile = stored.KeyFile
+	}
+	return source, nil
+}
+
+func validateMongoConnection(source *model.CoreDataSource) error {
+	if source == nil || source.DBType != model.DBTypeMongoDB {
+		return nil
+	}
+	_, err := source.MongoConfig(source.Password).Options()
+	return err
 }
 
 func ConnTest(u *model.CoreDataSource) error {
@@ -32,7 +72,12 @@ func ConnTest(u *model.CoreDataSource) error {
 		if err != nil {
 			return err
 		}
-		return client.Disconnect(context.Background())
+		defer client.Disconnect(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), model.MongoTimeout)
+		defer cancel()
+		// ping does not require authentication; verify a permitted read as well.
+		_, err = client.ListDatabaseNames(ctx, bson.D{}, options.ListDatabases().SetAuthorizedDatabases(true))
+		return err
 	}
 	// Redis 数据源用 go-redis 探活，同样不经过 gorm / mysql 方言
 	if u.DBType == model.DBTypeRedis {
@@ -66,6 +111,9 @@ func ConnTest(u *model.CoreDataSource) error {
 }
 
 func SuperEditSource(source *model.CoreDataSource) common.Resp {
+	if err := validateMongoConnection(source); err != nil {
+		return common.ERR_COMMON_MESSAGE(err)
+	}
 	if err := validateDataSourceRuleBinding(source); err != nil {
 		return common.ERR_COMMON_MESSAGE(err)
 	}
@@ -77,29 +125,37 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 		if pwd == "" {
 			return common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_KEY_DECRYPTION_FAILED))
 		}
-		model.DB().Model(&model.CoreDataSource{}).Where("source_id =?", source.SourceId).Updates(&model.CoreDataSource{Password: pwd})
+		source.Password = pwd
 	}
-	model.DB().Model(&model.CoreDataSource{}).Where("source_id =?", source.SourceId).Updates(map[string]interface{}{
-		"id_c":               source.IDC,
-		"ip":                 source.IP,
-		"port":               source.Port,
-		"source":             source.Source,
-		"username":           source.Username,
-		"is_query":           source.IsQuery,
-		"flow_id":            source.FlowID,
-		"exclude_db_list":    source.ExcludeDbList,
-		"principal":          source.Principal,
-		"insulate_word_list": source.InsulateWordList,
-		"ca_file":            source.CAFile,
-		"cert":               source.Cert,
-		"key_file":           source.KeyFile,
-		"rule_id":            source.RuleId,
+	updates := map[string]interface{}{
+		"id_c":                 source.IDC,
+		"ip":                   source.IP,
+		"port":                 source.Port,
+		"source":               source.Source,
+		"username":             source.Username,
+		"password":             source.Password,
+		"auth_database":        source.AuthDatabase,
+		"mongo_replica_set":    source.MongoReplicaSet,
+		"mongo_tls":            source.MongoTLS,
+		"mongo_auth_mechanism": source.MongoAuthMechanism,
+		"is_query":             source.IsQuery,
+		"flow_id":              source.FlowID,
+		"exclude_db_list":      source.ExcludeDbList,
+		"principal":            source.Principal,
+		"insulate_word_list":   source.InsulateWordList,
+		"ca_file":              source.CAFile,
+		"cert":                 source.Cert,
+		"key_file":             source.KeyFile,
+		"rule_id":              source.RuleId,
 		// Redis：查询页是否允许诊断命令；编辑表单里是开关，必须显式写回（map 更新没有零值跳过）
 		"allow_diag_commands": source.AllowDiagCommands,
 		"redis_mode":          source.RedisMode,
 		"is_production":       source.IsProduction,
 		"environment_tag":     source.EnvironmentTag,
-	})
+	}
+	if err := model.DB().Model(&model.CoreDataSource{}).Where("source_id =?", source.SourceId).Updates(updates).Error; err != nil {
+		return common.ERR_COMMON_MESSAGE(err)
+	}
 	// 地址/口令/形态可能都变了：丢掉旧客户端与部署形态缓存，下次访问重新建连探测
 	// （非 Redis 数据源是空操作）
 	model.DropRedisClients(source.SourceId)
@@ -126,6 +182,9 @@ func SuperEditSource(source *model.CoreDataSource) common.Resp {
 }
 
 func SuperCreateSource(source *model.CoreDataSource) common.Resp {
+	if err := validateMongoConnection(source); err != nil {
+		return common.ERR_COMMON_MESSAGE(err)
+	}
 	if err := validateDataSourceRuleBinding(source); err != nil {
 		return common.ERR_COMMON_MESSAGE(err)
 	}

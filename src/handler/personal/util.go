@@ -81,15 +81,18 @@ func autoTask(order *model.CoreSqlOrder, length int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	src := &api.DataSource{
-		Ip:       source.IP,
-		Port:     int32(source.Port),
-		Username: source.Username,
-		Password: p,
-		Ca:       source.CAFile,
-		Cert:     source.Cert,
-		Key:      source.KeyFile,
-		Kind:     calls.DataSourceKind(source.DBType),
-		AuthDb:   source.AuthDatabase,
+		Ip:                 source.IP,
+		Port:               int32(source.Port),
+		Username:           source.Username,
+		Password:           p,
+		Ca:                 source.CAFile,
+		Cert:               source.Cert,
+		Key:                source.KeyFile,
+		Kind:               calls.DataSourceKind(source.DBType),
+		AuthDb:             source.AuthDatabase,
+		MongoReplicaSet:    source.MongoReplicaSet,
+		MongoTLS:           source.MongoTLS,
+		MongoAuthMechanism: source.MongoAuthMechanism,
 	}
 	calls.FillRedisFacts(src, &source)
 	rep, err := client.Exec(ctx, &api.ExecRequest{

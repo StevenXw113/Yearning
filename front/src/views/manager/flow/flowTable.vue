@@ -6,6 +6,7 @@
   <br />
   <a-table
     :columns="tblRef.col"
+    :scroll="{ x: 480 }"
     :data-source="tblRef.data"
     bordered
     :pagination="{
@@ -18,7 +19,7 @@
   >
     <template #bodyCell="{ column, record }">
       <template v-if="column.dataIndex === 'action'">
-        <a-space size="small">
+        <a-space size="small" wrap>
           <a-button
             type="primary"
             size="small"
@@ -113,7 +114,12 @@
           }
         },
       },
-      { title: t('common.action'), dataIndex: 'action' },
+      {
+        title: t('common.action'),
+        dataIndex: 'action',
+        width: 152,
+        className: 'table-action-cell',
+      },
     ] as any,
     data: [] as RespTPLs[],
     pageCount: 0,

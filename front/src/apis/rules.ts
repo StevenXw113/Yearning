@@ -527,16 +527,3 @@ export function getRuleHistory(
 export function rollbackRule(id: number): AxiosPromise<Res<CustomRule>> {
   return request.post(`${COMMON_URI}/manage/roles/rollback`, { id });
 }
-
-export interface UpstreamStatus {
-  current: string;
-  latest: string;
-  hasUpdate: boolean;
-  // 非空 = 本次检测没做成（多为访问 GitHub 超时），不是接口失败
-  note?: string;
-}
-
-// 只检测上游 Bytebase 是否有新版本；更新需重新同步源码并编译发布。
-export function checkUpstreamRules(): AxiosPromise<Res<UpstreamStatus>> {
-  return request.post(`${COMMON_URI}/manage/roles/upstream`);
-}

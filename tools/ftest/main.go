@@ -20,7 +20,7 @@
 // 覆盖：认证与越权、工单全流程（立即/定时/人工执行、驳回、撤销、回滚语句）、
 // 项目级工单（批量提交多条 SQL、批次查询、逐条审批后停等待执行、批量执行、失败即停、原子性）、
 // 规则（级别灰度、自研规则、空载荷护栏、规则集增删与回滚）、查询链路（结果、脱敏、审计记录、导出标志）、
-// 权限读写、上游版本检测。
+// 权限读写。
 //
 // 数据：**测试产生的数据会保留**（工单文本以 FT- 开头，便于在界面上辨认与人工清理），
 // 只把过程中改过的配置还原（规则集、数据源脱敏字段、查询导出开关）。
@@ -61,11 +61,10 @@ var (
 const marker = "FT-"
 
 var (
-	metaDB  *sql.DB
-	target  *sql.DB
-	fails   []string
-	pass    int
-	skipped int
+	metaDB *sql.DB
+	target *sql.DB
+	fails  []string
+	pass   int
 )
 
 func check(id, name string, ok bool, detail string) {
@@ -76,12 +75,6 @@ func check(id, name string, ok bool, detail string) {
 	}
 	fails = append(fails, strings.TrimSpace(id+" "+name+" "+detail))
 	fmt.Printf("%-8s %-44s FAIL %s\n", id, name, detail)
-}
-
-// skip 用于「依赖外部环境、当前不可用」的用例（例如上游 GitHub 不可达），不计入失败
-func skip(id, name, detail string) {
-	skipped++
-	fmt.Printf("%-8s %-44s SKIP %s\n", id, name, detail)
 }
 
 func fatal(msg string) {
@@ -564,16 +557,6 @@ func main() {
 	r = call(adminTok, "/api/v2/manage/user?tp=policy", map[string]any{"username": applicant, "group": own})
 	check("T5.2", "写用户权限组（原值回写）", codeOf(r) == 1200, fmt.Sprintf("code=%v", r["code"]))
 
-	fmt.Println("\n=== 组 6 运维接口 ===")
-	r = call(adminTok, "/api/v2/manage/roles/upstream", nil)
-	// 上游检测要访问 GitHub，网络不通时接口返回 1200 + payload.note（属环境问题，跳过不判失败）
-	up, _ := r["payload"].(map[string]any)
-	if up == nil || up["note"] != nil {
-		skip("T6.1", "上游版本检测（页面按钮接口）", "上游不可达："+textOf(r))
-	} else {
-		check("T6.1", "上游版本检测（页面按钮接口）", codeOf(r) == 1200 && up["latest"] != nil, brief(up))
-	}
-
 	fmt.Println("\n=== 组 7 项目级工单（批量，多条 SQL） ===")
 	batchItem := func(sql string) map[string]any {
 		return map[string]any{"source_id": *sourceID, "data_base": *schema, "sql": sql}
@@ -763,7 +746,7 @@ func main() {
 	check("T8.5", "状态混合的项目里子工单仍严格按 -1、-2、-3… 排列",
 		len(gotSeq) == 3 && seqOK, fmt.Sprintf("batch=%s 序号=%v", sortBid, gotSeq))
 
-	fmt.Printf("\n=== 汇总：用例 %d，PASS %d，SKIP %d，FAIL %d ===\n", pass+skipped+len(fails), pass, skipped, len(fails))
+	fmt.Printf("\n=== 汇总：用例 %d，PASS %d，FAIL %d ===\n", pass+len(fails), pass, len(fails))
 	fmt.Printf("测试数据保留（工单文本前缀 %q），可在界面上核对；配置类改动已还原。\n", marker)
 	for _, f := range fails {
 		fmt.Println("  FAIL", f)

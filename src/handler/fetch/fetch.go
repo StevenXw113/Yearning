@@ -313,15 +313,18 @@ func FetchSQLTest(c yee.Context) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	src := &api.DataSource{
-		Ip:       s.IP,
-		Port:     int32(s.Port),
-		Username: s.Username,
-		Password: p,
-		Ca:       s.CAFile,
-		Cert:     s.Cert,
-		Key:      s.KeyFile,
-		Kind:     calls.DataSourceKind(s.DBType),
-		AuthDb:   s.AuthDatabase,
+		Ip:                 s.IP,
+		Port:               int32(s.Port),
+		Username:           s.Username,
+		Password:           p,
+		Ca:                 s.CAFile,
+		Cert:               s.Cert,
+		Key:                s.KeyFile,
+		Kind:               calls.DataSourceKind(s.DBType),
+		AuthDb:             s.AuthDatabase,
+		MongoReplicaSet:    s.MongoReplicaSet,
+		MongoTLS:           s.MongoTLS,
+		MongoAuthMechanism: s.MongoAuthMechanism,
 	}
 	// 部署形态/生产标记/版本/键状态快照一次给齐；探测失败按未知处理（只提示不拦）
 	keySnapshot := calls.RedisAudit(src, &s, u.SQL, u.Database)

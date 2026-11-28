@@ -11,7 +11,12 @@
         "
       >
       </order-table-search>
-      <c-table ref="tbl" :tbl-ref="tblRef" :size="props.size">
+      <c-table
+        ref="tbl"
+        v-model:expanded-row-keys="expandedRowKeys"
+        :tbl-ref="tblRef"
+        :size="props.size"
+      >
         <template #bodyCell="{ column, text, record }">
           <template v-if="column.dataIndex === 'type'">
             <span>{{ text === 0 ? 'DDL' : 'DML' }}</span>
@@ -45,24 +50,45 @@
             <span v-else>—</span>
           </template>
           <template v-if="column.dataIndex === 'action'">
-            <a-space v-if="!record.isProject">
-              <a-button type="primary" size="small" @click="profile(record)"
-                >{{ $t('common.profile') }}
-              </a-button>
+            <div v-if="!record.isProject" class="order-row-actions" @click.stop>
+              <a-button type="link" size="small" @click="profile(record)"
+                ><EyeOutlined aria-hidden="true" />{{
+                  $t('common.profile')
+                }}</a-button
+              >
               <a-button
                 v-if="
                   !props.disabledBtn &&
                   record.status === OrderState.PROCESS &&
                   record.delay !== 'none'
                 "
+                type="text"
                 size="small"
                 @click="delay.openSchedule(record.work_id)"
                 >{{ $t('order.delay') }}</a-button
               >
-            </a-space>
-            <span v-else style="color: #999"
-              >{{ record.children?.length || 0 }} 个子工单，点击展开审核</span
+            </div>
+            <a-button
+              v-else
+              class="order-project-action"
+              type="text"
+              size="small"
+              :aria-expanded="expandedRowKeys.includes(record.key)"
+              @click.stop="toggleProject(record.key)"
             >
+              <UpOutlined
+                v-if="expandedRowKeys.includes(record.key)"
+                aria-hidden="true"
+              /><DownOutlined v-else aria-hidden="true" />
+              {{
+                $t(
+                  expandedRowKeys.includes(record.key)
+                    ? 'order.project.collapse'
+                    : 'order.project.expand',
+                  { count: record.children?.length || 0 },
+                )
+              }}
+            </a-button>
           </template>
         </template>
       </c-table>
@@ -78,6 +104,7 @@
 </template>
 
 <script lang="ts" setup>
+  import { EyeOutlined, UpOutlined, DownOutlined } from '@ant-design/icons-vue';
   import StateTags from './stateTags.vue';
   import OrderTableSearch from './orderTableSearch.vue';
   import { onBeforeRouteUpdate, useRoute } from 'vue-router';
@@ -123,6 +150,12 @@
   const orderStore = useOrderStore();
 
   const tbl = ref();
+  const expandedRowKeys = ref<(string | number)[]>([]);
+  const toggleProject = (key: string | number) => {
+    expandedRowKeys.value = expandedRowKeys.value.includes(key)
+      ? expandedRowKeys.value.filter((value) => value !== key)
+      : [...expandedRowKeys.value, key];
+  };
 
   const isAudit = ref('');
 
@@ -182,7 +215,7 @@
     {
       title: t('common.table.source'),
       dataIndex: 'source',
-      width: 130,
+      width: 160,
       filters: [] as any[], // 选项来自 querySourceList('all')，见 onMounted
       filterMultiple: false,
     },
@@ -235,7 +268,8 @@
     {
       title: t('common.table.state'),
       dataIndex: 'status',
-      width: 110,
+      width: 112,
+      className: 'order-status-cell',
       filters: [
         { text: t('order.state.audit'), value: OrderState.AUDIT },
         { text: t('order.state.success'), value: OrderState.SUCCESS },
@@ -248,7 +282,9 @@
     {
       title: t('common.action'),
       dataIndex: 'action',
-      width: 210,
+      width: 112,
+      resizable: false,
+      className: 'order-action-cell',
       fixed: 'right', // 详情/延迟操作固定在右侧，横向滚动时始终可点
     },
   ];
@@ -330,6 +366,32 @@
 </script>
 
 <style scoped>
+  .order-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .order-row-actions :deep(.ant-btn),
+  .order-project-action {
+    height: 32px;
+    padding-inline: 8px;
+  }
+  :deep(.order-status-cell .ant-tag) {
+    margin-inline-end: 0;
+  }
+  :deep(.ant-table-tbody > tr > td.order-action-cell) {
+    padding-inline: 12px;
+  }
+  .order-project-action {
+    color: var(--text-muted);
+  }
+  @media (max-width: 767px) {
+    .order-row-actions :deep(.ant-btn),
+    .order-project-action {
+      min-height: 44px;
+    }
+  }
   /* 列多且都是短内容，换行会让行高翻倍；统一不换行，超出宽度时表格内部横向滚动 */
   :deep(.ant-table-thead th),
   :deep(.ant-table-tbody td) {

@@ -4,7 +4,7 @@
 engine 自身只做「拆分 → 逐条审核 → 结果映射」，不重复实现任何规则，也不依赖第三方封装 module。
 
 - 上游仓库：`https://github.com/bytebase/bytebase`
-- 当前同步版本：见 [`UPSTREAM`](./UPSTREAM)（默认取最新 release tag）
+- 当前同步版本：见 [`UPSTREAM`](./UPSTREAM)（同步时显式指定版本）
 - 许可：MIT Expat，见 [`LICENSE`](./LICENSE)（上游 `enterprise` 相关目录未纳入）
 - 目录布局**镜像上游 `backend/`**，便于对照升级：
 
@@ -65,23 +65,21 @@ engine/internal/bytebase/          # 对应 bytebase/backend/
 
 ```bash
 cd engine
-./scripts/sync-bytebase.sh              # 同步脚本内置的默认版本
 ./scripts/sync-bytebase.sh 3.24.0       # 指定 tag / 分支 / commit
 ```
 
 流程：稀疏拉取上游 → 复制子集 → 改写 import 前缀为 `engine/internal/bytebase/` → 重放裁剪 → `gofmt` → `go build` / `go test`。
 同步后务必审阅 `git diff` 再提交。
 
-查看是否有新版本：
+升级时显式指定目标 tag、分支或 commit；可先预演影响范围：
 
 ```bash
 cd engine
-./scripts/check-upstream.sh          # 对比当前内化版本与上游最新 release
+./scripts/upgrade-engine.sh 3.24.0 --preview
+./scripts/upgrade-engine.sh 3.24.0
 ```
 
-页面「设置 → 审核规则 → 检测上游更新」也会告诉你有没有新版本（拿到新版本号后在 `engine/` 下执行
-`./scripts/upgrade-engine.sh` 即可自动同步，先加 `--preview` 可以只预演、不动工作区）。
-**检测与预演都不会自动改代码**，确认后再正式执行并审阅 diff。
+完成后审阅 diff，并按 `engine/README.md` 的说明重新部署引擎。
 
 本目录**只放同步来的代码，不要手改**——手改会在下次同步时丢失。
 自研规则请写在 [`internal/customrules/`](../customrules/README.md)（同步脚本不触碰）。

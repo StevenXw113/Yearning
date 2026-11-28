@@ -63,6 +63,7 @@
           <a-table
             bordered
             :columns="col"
+            :scroll="{ x: 1120 }"
             :data-source="tData"
             size="small"
             :pagination="false"
@@ -113,22 +114,27 @@
     {
       title: 'SQL',
       dataIndex: 'sql',
+      width: 320,
     },
     {
       title: t('common.table.source'),
       dataIndex: 'source',
+      width: 140,
     },
     {
       title: t('common.table.schema'),
       dataIndex: 'schema',
+      width: 140,
     },
     {
       title: t('common.table.time'),
       dataIndex: 'time',
+      width: 176,
     },
     {
       title: t('common.table.ex_time'),
       dataIndex: 'ex_time',
+      width: 112,
     },
     {
       // 查询侧规则命中的说明（MongoDB 查询才有），便于事后审计

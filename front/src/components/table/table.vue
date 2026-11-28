@@ -72,7 +72,7 @@
     isResizable.value
       ? (props.tblRef.col as any[]).map((col, idx) => ({
           ...col,
-          resizable: true,
+          resizable: col.resizable !== false,
           width: colWidth(col.width),
           __idx: idx, // 拖拽回写时用来找回父组件的原列
         }))

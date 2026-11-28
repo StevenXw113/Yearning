@@ -1,8 +1,8 @@
 <template>
   <a-card>
     <UserTableSearch @search="search"></UserTableSearch>
-    <!-- x 取各列宽度之和：容器不够宽时出现横向滚动，而不是把操作按钮挤出可视区 -->
-    <c-table ref="tbl" :tbl-ref="tblRef" :scroll="{ x: 1170 }">
+    <!-- 窄窗口内横向滚动，多项操作按可用空间换行。 -->
+    <c-table ref="tbl" :tbl-ref="tblRef" :scroll="{ x: 1000 }">
       <template #bodyCell="{ column, text, record }">
         <template v-if="column.dataIndex === 'action'">
           <!-- 所有操作按钮统一用 primary 描边：无 type 的 ghost 按钮在深色主题下几乎不可见 -->
@@ -146,14 +146,17 @@
       {
         title: t('user.form.user'),
         dataIndex: 'username',
+        width: 140,
       },
       {
         title: t('user.form.real_name'),
         dataIndex: 'real_name',
+        width: 140,
       },
       {
         title: t('user.form.dept'),
         dataIndex: 'department',
+        width: 140,
       },
       {
         title: t('user.form.email'),
@@ -162,13 +165,14 @@
       {
         title: t('user.form.recorder'),
         dataIndex: 'is_recorder',
+        width: 112,
+        className: 'table-status-cell',
       },
       {
         title: t('common.action'),
         dataIndex: 'action',
-        // 5 个操作按钮（编辑/密码/权限/重置MFA/删除）需要足够宽度，
-        // 否则 auto 布局下被其它列挤压、按钮跑到可视区外
-        width: 420,
+        width: 256,
+        className: 'table-action-cell',
       },
     ],
     data: [] as UserTableData[],

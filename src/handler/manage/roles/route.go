@@ -34,8 +34,6 @@ func SuperCustomRoles(c yee.Context) (err error) {
 		return SuperRoleHistory(c)
 	case "rollback":
 		return SuperRoleRollback(c)
-	case "upstream":
-		return SuperUpstreamCheck(c)
 	case "custom_list":
 		return SuperCustomRuleList(c)
 	case "custom_save":

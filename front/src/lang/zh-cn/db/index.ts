@@ -1,4 +1,13 @@
 export default {
+  'db.section.basic': '基本信息',
+  'db.section.connection': '连接与认证',
+  'db.section.access': '权限与审核',
+  'db.section.approval': '审批流程预览',
+  'db.flow.empty': '选择审批流程后，可在此查看审批节点与审核人。',
+  'db.mongo.hostsPlaceholder': 'host1:27017,host2:27017',
+  'db.form.reset': '重置',
+  'db.edit.passwordTips': '留空保留原密码',
+  'db.mongo.clearPassword': '清除已保存密码（无认证连接时勾选）',
   'db.port': '端口',
   'db.is.production': '生产数据源',
   'db.allow.diag': '允许诊断命令',
@@ -10,6 +19,14 @@ export default {
   'db.kind': '连接模式',
   'db.addr': '地址',
   'db.principal': '负责人',
+  'db.mongo.hostsTips':
+    '多个节点用英文逗号分隔，如 host1:27017,host2:27017；未填节点端口时使用下方端口',
+  'db.mongo.authMechanism': '认证机制',
+  'db.mongo.authAuto': '自动协商',
+  'db.mongo.tlsTips':
+    '启用 TLS 后校验证书链和主机名；自签名证书请填写云控制台下载的 CA（PEM）。Cert 和 Key 仅在服务端要求客户端证书时填写。',
+  'db.mongo.replicaSet': '副本集名称',
+  'db.mongo.replicaSetTips': '可选，例如 cmgo-xxxxxxxx_0；填写后校验副本集身份',
   'db.authDatabase': '认证库',
   'db.authDatabaseTips': 'MongoDB 认证库（authSource），留空默认 admin',
   'db.rw': '读写',

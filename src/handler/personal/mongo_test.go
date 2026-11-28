@@ -98,19 +98,25 @@ func TestMongoCommandIntegration(t *testing.T) {
 	}
 	defer func() { _ = client.Disconnect(ctx) }()
 
-	// listCollections 是只读的非游标命令：验证 RunCommand → mongoRows → 表格契约这条链路
+	// listCollections 返回游标，空库合法地返回零行。
 	q, err := runMongoCommand(client, dbName, `{"listCollections":1}`, "")
 	if err != nil {
 		t.Fatalf("执行命令失败: %v", err)
-	}
-	if len(q.Data) == 0 {
-		t.Error("应至少返回一行")
 	}
 	var titles []string
 	for _, f := range q.Field {
 		titles = append(titles, f["title"].(string))
 	}
 	t.Logf("字段=%v 行数=%d", titles, len(q.Data))
+
+	// ping 的非游标响应始终有一行，用它验证命令到表格的转换。
+	ping, err := runMongoCommand(client, dbName, `{"ping":1}`, "")
+	if err != nil {
+		t.Fatalf("ping 执行失败: %v", err)
+	}
+	if len(ping.Data) != 1 || len(ping.Field) == 0 || ping.Data[0]["ok"] != float64(1) {
+		t.Fatalf("ping 表格结果异常: %+v", ping)
+	}
 
 	// 非法命令要报出可读原因，而不是 panic
 	if _, err := runMongoCommand(client, dbName, `not-json`, ""); err == nil {

@@ -20,9 +20,12 @@ import (
 	"Yearning-go/src/lib/factory"
 	"Yearning-go/src/lib/permission"
 	"Yearning-go/src/model"
+	"encoding/json"
 	"github.com/cookieY/yee"
 	"net/http"
 )
+
+const dataSourceListFields = "id,id_c,ip,port,username,source,is_query,flow_id,source_id,exclude_db_list,insulate_word_list,principal,db_type,rule_id,allow_diag_commands,redis_mode,is_production,auth_database,mongo_replica_set,mongo_tls,mongo_auth_mechanism,environment_tag"
 
 func SuperFetchSource(c yee.Context) (err error) {
 	req := new(common.PageList[[]model.CoreDataSource])
@@ -31,7 +34,7 @@ func SuperFetchSource(c yee.Context) (err error) {
 		return
 	}
 	// 显式限定返回字段：不得把数据源口令与 TLS 私钥下发到前端
-	req.Paging().Select("id,id_c,ip,port,username,source,is_query,flow_id,source_id,exclude_db_list,insulate_word_list,principal,db_type,rule_id,allow_diag_commands,redis_mode,is_production").Query(
+	req.Paging().Select(dataSourceListFields).Query(
 		common.AccordingToOrderIDC(req.Expr.IDC),
 		common.AccordingToOrderIP(req.Expr.IP),
 		common.AccordingToOrderType(req.Expr.IsQuery),
@@ -80,20 +83,35 @@ func ManageDBCreateOrEdit(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_BIND)))
 	}
+	var source model.CoreDataSource
+	if err := json.Unmarshal(u.DB, &source); err != nil {
+		return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+	}
+	if u.Tp == "edit" || (u.Tp == "test" && source.SourceId != "") {
+		var stored model.CoreDataSource
+		if err := model.DB().Where("source_id = ?", source.SourceId).First(&stored).Error; err != nil {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+		}
+		merged, err := mergeSourceEdit(u.DB, stored, u.ClearPassword)
+		if err != nil {
+			return c.JSON(http.StatusOK, common.ERR_COMMON_MESSAGE(err))
+		}
+		source = merged
+	}
 	switch u.Tp {
 	case "edit":
-		resp := SuperEditSource(&u.DB)
+		resp := SuperEditSource(&source)
 		permission.InvalidateAll() // 数据源增删影响超管的全量权限列表（缓存）
 		return c.JSON(http.StatusOK, resp)
 	case "create":
-		resp := SuperCreateSource(&u.DB)
+		resp := SuperCreateSource(&source)
 		permission.InvalidateAll()
 		return c.JSON(http.StatusOK, resp)
 	case "test":
-		if u.DB.Password != "" && enc.Decrypt(model.C.General.SecretKey, u.DB.Password) != "" {
-			u.DB.Password = enc.Decrypt(model.C.General.SecretKey, u.DB.Password)
+		if source.Password != "" && enc.Decrypt(model.C.General.SecretKey, source.Password) != "" {
+			source.Password = enc.Decrypt(model.C.General.SecretKey, source.Password)
 		}
-		return c.JSON(http.StatusOK, SuperTestDBConnect(&u.DB))
+		return c.JSON(http.StatusOK, SuperTestDBConnect(&source))
 	}
 	return c.JSON(http.StatusOK, common.ERR_COMMON_TEXT_MESSAGE(i18n.DefaultLang.Load(i18n.ER_REQ_FAKE)))
 }

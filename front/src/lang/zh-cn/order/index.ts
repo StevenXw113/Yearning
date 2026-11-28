@@ -1,4 +1,11 @@
 export default {
+  'order.filter.reset': '重置',
+  'order.filter.advanced': '高级筛选',
+  'order.filter.collapse': '收起筛选',
+  'order.filter.this.week': '本周',
+  'order.filter.this.month': '本月',
+  'order.project.expand': '展开',
+  'order.project.collapse': '收起',
   'order.desc.audit': 'DML/DDL工单审批及执行',
   'order.desc.self': '我的DML/DDL工单查看',
   'order.profile.work_id': '单号 {id}',

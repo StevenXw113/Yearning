@@ -22,11 +22,15 @@
   </a-row>
 
   <br />
-  <c-table ref="tbl" :tbl-ref="tblRef">
+  <c-table ref="tbl" :tbl-ref="tblRef" :scroll="{ x: 1200 }">
     <template #bodyCell="{ column, text, record }">
       <template v-if="column.dataIndex === 'action'">
-        <a-space>
-          <a-button type="primary" ghost size="small" @click="p.editTask(record)"
+        <a-space size="small" wrap>
+          <a-button
+            type="primary"
+            ghost
+            size="small"
+            @click="p.editTask(record)"
             >{{ $t('common.edit') }}</a-button
           >
           <a-popconfirm
@@ -81,34 +85,44 @@
       {
         title: t('common.table.type'),
         dataIndex: 'tp',
+        width: 112,
       },
       {
         title: t('common.table.env'),
         dataIndex: 'idc',
+        width: 112,
       },
       {
         title: t('common.table.source'),
         dataIndex: 'source',
+        width: 150,
       },
       {
         title: t('common.table.schema'),
         dataIndex: 'data_base',
+        width: 150,
       },
       {
         title: t('common.table.table'),
         dataIndex: 'table',
+        width: 150,
       },
       {
         title: t('common.table.max'),
         dataIndex: 'affect_rows',
+        width: 112,
       },
       {
         title: t('common.table.state'),
         dataIndex: 'status',
+        width: 112,
+        className: 'table-status-cell',
       },
       {
         title: t('common.action'),
         dataIndex: 'action',
+        width: 152,
+        className: 'table-action-cell',
       },
     ],
     data: [] as AutoTask[],

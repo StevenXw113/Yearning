@@ -22,6 +22,9 @@ export interface Source {
   id?: number;
   // MongoDB 认证库（authSource），空 = 默认 admin；账号建在业务库上时必填
   auth_database: string;
+  mongo_replica_set?: string;
+  mongo_tls?: boolean;
+  mongo_auth_mechanism?: string;
   // Redis：查询页是否允许诊断命令（SLOWLOG/LATENCY/DUMP/COMMAND/INFO 全量），默认 false
   allow_diag_commands?: boolean;
   // Redis 部署形态：空/auto = 自动探测；standalone/cluster/proxy 手动指定
@@ -93,6 +96,7 @@ export interface RequestDB {
   tp: string;
   db: Source[] | Source;
   encrypt?: boolean;
+  clear_password?: boolean;
 }
 
 export function getSourceList(args: DBParams) {

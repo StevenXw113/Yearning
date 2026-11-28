@@ -1,4 +1,14 @@
 export default {
+  'common.navigation.toggle': 'Toggle navigation',
+  'common.navigation.label': 'Main navigation',
+  'common.fullscreen.toggle': 'Toggle fullscreen',
+  'common.login.headline': 'Database changes, with confidence.',
+  'common.login.description':
+    'Review SQL, query data, and manage access in one workspace built for your team.',
+  'common.login.audit': 'SQL review',
+  'common.login.query': 'Data queries',
+  'common.login.access': 'Access control',
+  'common.login.welcome': 'Sign in to your database workspace',
   'common.create': 'Create',
   'common.add': 'Add',
   'common.qq': 'https://gitter.im/talk-to-yearning',

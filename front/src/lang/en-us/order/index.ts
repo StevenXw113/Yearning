@@ -1,4 +1,11 @@
 export default {
+  'order.filter.reset': 'Reset',
+  'order.filter.advanced': 'More filters',
+  'order.filter.collapse': 'Fewer filters',
+  'order.filter.this.week': 'This week',
+  'order.filter.this.month': 'This month',
+  'order.project.expand': 'Expand',
+  'order.project.collapse': 'Collapse',
   'order.desc.audit': 'DML/DDL work order approval and execution',
   'order.desc.self': 'Check my DML/DDL work order',
   'order.profile.work_id': 'OrderID {id}',

@@ -26,7 +26,11 @@
   <br />
   <a-collapse v-model:activeKey="activeKey" accordion>
     <a-collapse-panel key="1" :header="$t('order.profile.results.result')">
-      <c-table :tbl-ref="resultTable" size="small"></c-table>
+      <c-table
+        :tbl-ref="resultTable"
+        :scroll="{ x: 1000 }"
+        size="small"
+      ></c-table>
     </a-collapse-panel>
     <a-collapse-panel key="2" :header="$t('order.profile.results.roll')">
       <c-table :tbl-ref="rollTable" is-all size="small"></c-table>
@@ -75,18 +79,22 @@
       {
         title: t('common.table.sql'),
         dataIndex: 'sql',
+        width: 360,
       },
       {
         title: t('common.table.result'),
         dataIndex: 'state',
+        width: 112,
       },
       {
         title: t('common.table.rows'),
         dataIndex: 'affect_row',
+        width: 112,
       },
       {
         title: t('common.table.time'),
         dataIndex: 'time',
+        width: 120,
       },
       {
         title: t('common.table.error'),

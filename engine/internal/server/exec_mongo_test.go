@@ -11,23 +11,6 @@ import (
 	"engine/ruleset"
 )
 
-// TestMongoURI 认证库（authSource）随数据源配置：默认 admin，显式配置用配置值，
-// 含特殊字符的库名走 URL 转义（否则会把连接串拆坏）。
-func TestMongoURI(t *testing.T) {
-	if u := mongoURI("u", "p", "127.0.0.1", 27017, ""); !strings.Contains(u, "authSource=admin") {
-		t.Fatalf("未配置认证库应默认 admin: %s", u)
-	}
-	if u := mongoURI("u", "p", "127.0.0.1", 27017, "appdb"); !strings.Contains(u, "authSource=appdb") {
-		t.Fatalf("显式认证库应生效: %s", u)
-	}
-	if u := mongoURI("u", "p", "127.0.0.1", 27017, "my db"); !strings.Contains(u, "authSource=my+db") {
-		t.Fatalf("含空格的库名应 URL 转义: %s", u)
-	}
-	if u := mongoURI("u", "p@:/%", "127.0.0.1", 27017, ""); strings.Contains(u, "p@") || strings.Contains(u, "p:") {
-		t.Fatalf("口令特殊字符必须转义: %s", u)
-	}
-}
-
 // TestConnectMongoRejectsEmptyIP IP 为空必须在建连前报错。
 func TestConnectMongoRejectsEmptyIP(t *testing.T) {
 	if _, err := connectMongo(nil); err == nil || !strings.Contains(err.Error(), "IP") {
@@ -96,5 +79,73 @@ func TestExecMongoDBAApprovalDoesNotMaskNormalError(t *testing.T) {
 	}
 	if !decision.RequiresDBAApproval {
 		t.Fatalf("expected DBA approval requirement, got %+v", decision)
+	}
+}
+
+func TestConnectMongoValidatesTLSBeforeNetwork(t *testing.T) {
+	_, err := connectMongo(&api.DataSource{Ip: "localhost", MongoTLS: true, Ca: "invalid-ca"})
+	if err == nil || !strings.Contains(err.Error(), "CA") {
+		t.Fatalf("expected CA validation error, got %v", err)
+	}
+	_, err = connectMongo(&api.DataSource{Ip: "localhost", MongoAuthMechanism: "unsupported"})
+	if err == nil || !strings.Contains(err.Error(), "认证机制") {
+		t.Fatalf("expected authentication validation error, got %v", err)
+	}
+}
+
+// These checks never connect: approved destructive commands are audited only.
+func TestExecMongoDBAApprovalMatrix(t *testing.T) {
+	commands := map[string]string{
+		"drop":    `{"drop":"users"}`,
+		"rename":  `{"renameCollection":"test.users","to":"test.archived"}`,
+		"account": `{"createUser":"reader","pwd":"test-only","roles":[]}`,
+	}
+	approvals := []struct {
+		name    string
+		value   *api.DBAApproval
+		allowed bool
+	}{
+		{name: "missing"},
+		{name: "rejected", value: &api.DBAApproval{Approver: "dba", Reason: "reviewed"}},
+		{name: "no_approver", value: &api.DBAApproval{Approved: true, Reason: "reviewed"}},
+		{name: "no_reason", value: &api.DBAApproval{Approved: true, Approver: "dba"}},
+		{name: "blank_approver", value: &api.DBAApproval{Approved: true, Approver: " ", Reason: "reviewed"}},
+		{name: "blank_reason", value: &api.DBAApproval{Approved: true, Approver: "dba", Reason: " "}},
+		{name: "approved", value: &api.DBAApproval{Approved: true, Approver: "dba", Reason: "reviewed"}, allowed: true},
+	}
+	for name, command := range commands {
+		for _, approval := range approvals {
+			t.Run(name+"/"+approval.name, func(t *testing.T) {
+				req := &api.ExecRequest{Order: &api.Order{Sql: command, DataBase: "test"}, DBAApproval: approval.value}
+				warns, err := recheckMongoRules(req, ruleset.MongoDefinitionFromAPI(nil))
+				if approval.allowed {
+					if err != nil || len(warns) != 0 {
+						t.Fatalf("approved baseline must pass without unresolved warnings: warnings=%v error=%v", warns, err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), "DBA 特批未完成") {
+					t.Fatalf("incomplete approval must block: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestExecMongoApprovedBaselinePreservesNormalLevels(t *testing.T) {
+	for _, level := range []string{"error", "warn", "observe"} {
+		t.Run(level, func(t *testing.T) {
+			rules := &api.AuditRole{MongoCollectionPrefix: "app_", RuleLevels: map[string]string{"MongoCollectionPrefix": level}}
+			req := &api.ExecRequest{
+				Order:       &api.Order{Sql: `{"drop":"legacy"}`},
+				DBAApproval: &api.DBAApproval{Approved: true, Approver: "dba", Reason: "reviewed"},
+			}
+			warns, err := recheckMongoRules(req, ruleset.MongoDefinitionFromAPI(rules))
+			if level == "error" {
+				if err == nil || !strings.Contains(err.Error(), "legacy") || strings.Contains(err.Error(), "DBA 特批未完成") {
+					t.Fatalf("normal rule must still block: %v", err)
+				}
+			} else if err != nil || len(warns) != 1 || !strings.Contains(warns[0], "legacy") || strings.Contains(warns[0], "DBA") {
+				t.Fatalf("normal nonblocking finding must survive approval: warnings=%v error=%v", warns, err)
+			}
+		})
 	}
 }

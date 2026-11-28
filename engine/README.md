@@ -120,20 +120,9 @@ cel-go / connectrpc / LSP 等无关依赖。
 自研规则清单见 [`SELF_RULES.md`](./SELF_RULES.md)（自动生成：`UPDATE_SELF_RULES_MANIFEST=1 go test ./internal/archguard -run TestSelfRule`）；
 上游规则清单 `RULES.md` 管「上游新增的有没有被漏掉」，`SELF_RULES.md` 管「自己写的有没有被漏掉」。
 
-## 上游规则更新
+## 引擎源码维护
 
-Go 是编译型语言，Bytebase 规则是 Go 代码，**无法运行时热加载**；因此"更新"= 重新同步 + 重新构建 + 重新发布。
-在此基础上，引擎把「跟随上游」自动化到接近实时：
-
-```bash
-./scripts/check-upstream.sh              # 对比当前内化版本与上游最新 release（退出码 10 表示有更新）
-./scripts/check-upstream.sh --latest     # 只打印最新版本
-./scripts/sync-bytebase.sh <ref>         # 同步并跑全套护栏
-```
-
-检测在页面上完成：「设置 → 审核规则 → 检测上游更新」，用 GitHub 的 `releases/latest` 302 取最新 tag，
-与主程序里的内化版本号（`src/handler/manage/roles/upstream.go` 的 `bytebaseRef`，由同步脚本自动维护）比较。
-**页面只做检测，不改任何代码**；升级在源码侧用下面的一键脚本完成。
+Bytebase 规则随引擎编译。同步指定版本后，需要重新构建并部署引擎。
 
 ### Docker 升级与回滚（无预发环境）
 
@@ -170,21 +159,18 @@ docker run -d --name yearning-engine --restart always -p 13307:13307 yearning-en
   同端口替换只需审核人重试一次即可。Exec 不会自动重试（非幂等，防止语句二次执行）。
 - diff 用的是「当前全局规则集」，配置本身不参与比较——门禁只看引擎行为。
 - 没有元数据库权限时可先导出 SQL：`-sql-file`（每行一个工单）+ `-rule-file`（`audit_role` JSON）。
-- 发布后到「设置 → 审核规则 → 检测上游更新」核对版本号（该数字来自主程序的 `bytebaseRef` 常量，
-  同步脚本会自动写入新版本号，无需手工改）。
 
 ### 源码侧升级流程（一条命令）
 
-页面只负责告诉你「上游有新版本」，更新动作在源码侧完成：
+在源码目录指定需要同步的版本、分支或 commit：
 
 ```bash
 cd engine
-./scripts/upgrade-engine.sh            # 自动检测上游最新版本并升级
-./scripts/upgrade-engine.sh 3.23.0     # 或指定版本 / 分支 / commit
+./scripts/upgrade-engine.sh 3.23.0
 ```
 
-脚本依次做：检测目标版本 → 重放同步（稀疏拉取 → 复制子集 → 改写 import → 重放裁剪 →
-`go mod tidy` → `build` / `test` → 登记新增规则 → 更新主程序版本号）→ 打印规则增删 →
+脚本依次做：读取指定版本 → 重放同步（稀疏拉取 → 复制子集 → 改写 import → 重放裁剪 →
+`go mod tidy` → `build` / `test` → 登记新增规则）→ 打印规则增删 →
 构建镜像 `yearning-engine:<ref>`（有 docker 时）→ 打印对拍与重新部署的命令。
 
 跑完你要做三件事：审阅 `git diff` 并提交 → 对拍线上引擎 → 同端口替换容器（旧 tag 留回滚）。
@@ -195,12 +181,11 @@ cd engine
 ./scripts/upgrade-engine.sh 3.23.0 --preview   # 等价于 PREVIEW=1，内部走 preview-upgrade.sh
 ```
 
-同步脚本会自动做掉三件机械活，避免升级卡在半路：
+同步脚本会自动做掉两件机械活，避免升级卡在半路：
 
 | 自动处理 | 为什么需要 |
 | --- | --- |
 | `go mod tidy` | 上游可能新增依赖，不补 `engine/go.mod` 就直接编译失败 |
-| 更新主程序的 `bytebaseRef` | 否则「检测上游更新」会一直显示有新版本 |
 | 把新增规则按「未启用」登记进 `engine/RULES.md` | 否则 archguard 清单测试会失败 → 同步被判失败并回滚，升级卡死 |
 
 任何一步失败，脚本都会把 `internal/bytebase` 还原成同步前的内容，**仓库不会停在半成品状态**。

@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 #
-# 一键升级引擎：把上游 Bytebase 的最新规则同步进 engine/internal/bytebase，
+# 升级引擎：把指定 Bytebase 版本同步进 engine/internal/bytebase，
 # 生成新的规则清单，并给出重新部署引擎的命令。
 #
 # 用法（在 engine/ 目录下执行）：
-#   ./scripts/upgrade-engine.sh                # 自动检测上游最新版本并升级
 #   ./scripts/upgrade-engine.sh 3.23.0         # 升到指定版本 / 分支 / commit
 #   ./scripts/upgrade-engine.sh 3.23.0 --preview   # 只预演，不改动工作区
-#   SKIP_DOCKER_BUILD=1 ./scripts/upgrade-engine.sh   # 不构建镜像，只改源码
+#   SKIP_DOCKER_BUILD=1 ./scripts/upgrade-engine.sh 3.23.0   # 不构建镜像，只改源码
 #
 # 执行完后需要你做的：审阅 git diff → 提交 → 重新部署引擎（脚本会打印命令）。
 #
-# 退出码：0=已是最新或升级成功；1=升级失败（已自动回滚，工作区保持原样）；2=用法/环境错误。
+# 退出码：0=指定版本与当前一致或升级成功；1=升级失败（已自动回滚，工作区保持原样）；2=用法/环境错误。
 set -euo pipefail
 
 SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +23,7 @@ for arg in "$@"; do
 	case "$arg" in
 	--preview) PREVIEW=1 ;;
 	-h | --help)
-		sed -n '2,14p' "${BASH_SOURCE[0]}"
+		sed -n '2,13p' "${BASH_SOURCE[0]}"
 		exit 0
 		;;
 	-*)
@@ -34,15 +33,14 @@ for arg in "$@"; do
 	*) REF="$arg" ;;
 	esac
 done
+# ---- 1. 要求显式指定目标版本 ----
+if [ -z "$REF" ]; then
+	echo "用法: $0 <bytebase-ref> [--preview]（如 3.23.0）" >&2
+	exit 2
+fi
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-
-# ---- 1. 决定目标版本：没给参数就查上游最新 release ----
-if [ -z "$REF" ]; then
-	echo "==> 未指定版本，查询上游最新 release"
-	REF="$(bash "$SCRIPTS/check-upstream.sh" --latest)"
-	echo "    上游最新: $REF"
-fi
 
 CURRENT="$(awk '/^ref:/{print $2}' "$ROOT/internal/bytebase/UPSTREAM" 2>/dev/null || echo 未知)"
 if [ "$REF" = "$CURRENT" ]; then
@@ -134,6 +132,4 @@ else
 fi
 cat <<'NEXT'
        # 回滚：把镜像 tag 换回上一版即可（引擎无状态，秒级）
-
-  4) 页面「检测上游更新」核对版本号已变为新版本
 NEXT

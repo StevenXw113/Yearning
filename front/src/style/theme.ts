@@ -35,42 +35,33 @@ type ThemeConfig = Omit<AntdThemeConfig, 'components'> & {
 };
 
 function buildThemeConfig(name: ThemeName): ThemeConfig {
-  if (name === 'dark') {
-    return {
-      algorithm: theme.darkAlgorithm,
-      token: {
-        colorPrimary: '#527590',
-        colorError: '#EB175D',
-        colorBgLayout: '#1F262E',
-        colorBgContainer: '#1F262E',
-        colorBgElevated: 'rgb(32, 37, 46)',
-        colorBorderSecondary: '#3E4451',
-        borderRadius: 4,
-      },
-      components: {
-        Table: { headerBg: '#2A323D' },
-        Card: { headBg: '#2A323D', bodyPadding: 16 },
-        Menu: { itemSelectedBg: '#527590' },
-        Tabs: {
-          itemSelectedColor: '#FF9900',
-          inkBarColor: '#FF9900',
-          itemHoverColor: '#FF9900',
-        },
-        Transfer: { listHeaderBg: 'rgb(32, 37, 46)' },
-      },
-    };
-  }
+  const dark = name === 'dark';
   return {
-    algorithm: theme.defaultAlgorithm,
+    algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
-      colorPrimary: 'rgb(38, 111, 232)',
-      colorError: '#e34d59',
-      colorBgLayout: '#F2F3F5',
-      colorBgContainer: '#fff',
-      borderRadius: 4,
+      colorPrimary: dark ? '#6B9EFF' : '#245DD8',
+      colorInfo: dark ? '#6B9EFF' : '#245DD8',
+      colorError: dark ? '#FF7875' : '#C93645',
+      colorBgLayout: dark ? '#101722' : '#F3F5F9',
+      colorBgContainer: dark ? '#192332' : '#FFFFFF',
+      colorBgElevated: dark ? '#202D3E' : '#FFFFFF',
+      colorText: dark ? '#E6EDF7' : '#1D2939',
+      colorTextSecondary: dark ? '#A5B4C8' : '#526174',
+      colorBorderSecondary: dark ? '#304056' : '#E1E7F0',
+      borderRadius: 8,
+      fontFamily:
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+      fontSize: 14,
+      controlHeight: 36,
     },
     components: {
-      Menu: { itemSelectedBg: 'rgb(38, 111, 232)' },
+      Table: { headerBg: dark ? '#202D3E' : '#F7F9FC', cellPaddingBlock: 13 },
+      Card: { bodyPadding: 20, headerFontSize: 15 },
+      Menu: {
+        itemSelectedBg: dark ? '#253D62' : '#EAF0FF',
+        itemSelectedColor: dark ? '#BDD4FF' : '#245DD8',
+        itemHeight: 42,
+      },
     },
   };
 }

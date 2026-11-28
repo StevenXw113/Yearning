@@ -117,15 +117,18 @@ func checkAlter(order *model.CoreSqlOrder, source *model.CoreDataSource, passwor
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	src := &api.DataSource{
-		Ip:       source.IP,
-		Port:     int32(source.Port),
-		Username: source.Username,
-		Password: password,
-		Ca:       source.CAFile,
-		Cert:     source.Cert,
-		Key:      source.KeyFile,
-		Kind:     calls.DataSourceKind(source.DBType),
-		AuthDb:   source.AuthDatabase,
+		Ip:                 source.IP,
+		Port:               int32(source.Port),
+		Username:           source.Username,
+		Password:           password,
+		Ca:                 source.CAFile,
+		Cert:               source.Cert,
+		Key:                source.KeyFile,
+		Kind:               calls.DataSourceKind(source.DBType),
+		AuthDb:             source.AuthDatabase,
+		MongoReplicaSet:    source.MongoReplicaSet,
+		MongoTLS:           source.MongoTLS,
+		MongoAuthMechanism: source.MongoAuthMechanism,
 	}
 	// 部署形态/生产标记/版本/键状态快照一次给齐；MySQL 源这里返回 nil
 	keySnapshot := calls.RedisAudit(src, source, order.SQL, order.DataBase)

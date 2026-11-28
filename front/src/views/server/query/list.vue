@@ -14,10 +14,15 @@
           }
         "
       ></QuerySearch>
-      <c-table ref="tbl" :tbl-ref="tblRef" :size="props.size">
+      <c-table
+        ref="tbl"
+        :tbl-ref="tblRef"
+        :size="props.size"
+        :scroll="{ x: 1050 }"
+      >
         <template #bodyCell="{ column, text, record }">
           <template v-if="column.dataIndex === 'action'">
-            <a-space>
+            <a-space size="small" wrap>
               <template v-if="record.status === 2 && !props.isRecord">
                 <a-popconfirm
                   :title="$t('order.query.audit.end.tips')"
@@ -108,26 +113,34 @@
       {
         title: t('order.query.table.username'),
         dataIndex: 'username',
+        width: 130,
       },
       {
         title: t('order.query.table.real_name'),
         dataIndex: 'real_name',
+        width: 130,
       },
       {
         title: t('order.query.table.time'),
         dataIndex: 'date',
+        width: 176,
       },
       {
         title: t('order.query.table.export'),
         dataIndex: 'export',
+        width: 96,
       },
       {
         title: t('order.query.table.status'),
         dataIndex: 'status',
+        width: 112,
+        className: 'table-status-cell',
       },
       {
         title: t('common.action'),
         dataIndex: 'action',
+        width: 152,
+        className: 'table-action-cell',
       },
     ],
     data: [] as IQueryListResp[],

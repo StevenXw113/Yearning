@@ -228,15 +228,18 @@ func ExecuteWorkOrder(order *model.CoreSqlOrder, actor string) (oscAsync bool, e
 		return false, err
 	}
 	src := &api.DataSource{
-		Ip:       source.IP,
-		Port:     int32(source.Port),
-		Username: source.Username,
-		Password: p,
-		Ca:       source.CAFile,
-		Cert:     source.Cert,
-		Key:      source.KeyFile,
-		Kind:     calls.DataSourceKind(source.DBType),
-		AuthDb:   source.AuthDatabase,
+		Ip:                 source.IP,
+		Port:               int32(source.Port),
+		Username:           source.Username,
+		Password:           p,
+		Ca:                 source.CAFile,
+		Cert:               source.Cert,
+		Key:                source.KeyFile,
+		Kind:               calls.DataSourceKind(source.DBType),
+		AuthDb:             source.AuthDatabase,
+		MongoReplicaSet:    source.MongoReplicaSet,
+		MongoTLS:           source.MongoTLS,
+		MongoAuthMechanism: source.MongoAuthMechanism,
 	}
 	calls.FillRedisFacts(src, &source)
 	// Redis 执行前复核：审批到执行之间规则可能被收紧，带齐运行时事实再跑一遍

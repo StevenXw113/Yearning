@@ -83,11 +83,6 @@ export default {
   customRuleDeleted: 'Custom rule deleted',
 
   ruleSearchTips: 'Please enter a rule description to search',
-  upstreamCheck: 'Check upstream',
-  upstreamLatest: 'Already up to date ({version})',
-  upstreamNew: 'New upstream version',
-  upstreamNewDesc:
-    'Current {current}, upstream latest {latest}. Updating happens in the source tree: run ./scripts/upgrade-engine.sh inside engine/ (syncs upstream and regenerates the rule list; add --preview to dry-run first), then redeploy the engine (see engine/README.md). This page only detects.',
   ruleHistory: 'Change history',
   ruleHelp: 'How to use',
   ruleDeleteConfirm:
@@ -95,15 +90,27 @@ export default {
   ruleDeleteDone:
     'Rule set deleted — you can restore it from the change history',
   ruleHelpIntro:
-    'Every row on this page (including custom rules that default to off) is defined in engine code; the page only controls the switch and the level. Data sources bind a rule set and configure masked fields in Data source management.',
+    'Configure audit rule switches, parameters and levels here. Use database tabs, categories or description search to find a rule.',
+  ruleHelpScope:
+    'Scope: the Global tab and database tabs edit the same global configuration. Data sources without a dedicated rule set use global rules; bound data sources use their selected rule set without merging global rules.',
   ruleHelpAdd:
-    'Add: copy engine/internal/customrules/forbid_truncate.go inside engine/internal/customrules/ (implement Name/Check + Register in init). If it needs a switch, follow the four-place wiring in that directory README — missing the convert.go mapping makes the switch silently ineffective.',
+    'Create a rule set: in the Custom rules list, add a name and select a rule set type. MongoDB v2 is recommended for MongoDB data sources. Configure the rules and click Save.',
   ruleHelpEnable:
-    'Enable: tick the switch and save. Set the level to "observe" or "notify" first and watch for false positives before promoting it to "block".',
+    'Configure rules: use switches to enable or disable checks. Follow each rule description when entering numeric or text parameters; the meaning of 0 or an empty value depends on the rule.',
+  ruleHelpLevel:
+    'Levels: Default uses the rule’s built-in level. Block prevents operations that violate the rule; Notify and Observe do not block on that rule. Observe still runs the check; turn off the switch to disable it.',
+  ruleHelpBind:
+    'Bind a data source: select a compatible rule set in Data source management and save. Check Referencing data sources before editing a shared rule set.',
+  ruleHelpMongo:
+    'MongoDB approval: DBA-tagged rules for dropping or renaming collections and managing users or roles are always enabled. Disabling or lowering their level cannot bypass DBA approval.',
+  ruleHelpHistory:
+    'History and rollback: select a record in Change history to undo that change and replace the current rule configuration with its state before that change. Creation records without a prior snapshot cannot be rolled back. Rollback is also recorded and restores rule configuration only.',
   ruleHelpDelete:
-    'Delete: to merely disable it, untick the switch (or set the level to observe). To remove it for good, delete the rule file and its switch wiring (proto / app / frontend). Rule sets themselves can be deleted in the Custom rules tab; deletion is refused while a data source uses it.',
-  ruleHelpDoc:
-    'Full details: engine/internal/customrules/README.md and the "把上游规则接到开关上" section in engine/README.md.',
+    'Delete a rule set in the Custom rules list. Deletion is refused while data sources reference it; change their bindings first.',
+  ruleHelpCustom:
+    'Add text checks: create and enable a regular expression with a severity level under Custom audit rules to match submitted SQL text.',
+  ruleHelpSave:
+    'Click Save after changing switches, parameters or levels, before switching tabs or leaving the page.',
   ruleOperator: 'Operator',
   ruleCreatedAt: 'Time',
   ruleLevelTitle: 'Level',

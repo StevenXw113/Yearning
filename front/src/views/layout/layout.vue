@@ -1,6 +1,6 @@
 <template>
   <div v-watermark="{ text: userStore.account.user }">
-    <a-layout style="min-height: 100vh">
+    <a-layout class="workspace-layout" style="min-height: 100vh">
       <!-- 窄屏（<992px）自动收起成 0 宽，靠顶栏的折叠图标展开，
            取代原来那个永远打不开的 drawer（is_open 全文件没人置 true） -->
       <a-layout-sider
@@ -9,30 +9,49 @@
         collapsible
         breakpoint="lg"
         :collapsed-width="0"
-        :width="200"
+        :width="224"
       >
         <div class="logo">
-          <img :src="logoUrl" alt="Yearning" />
+          <img :src="logoUrl" alt="" />
+          <span>Yearning</span>
         </div>
-        <Menu></Menu>
+        <nav
+          id="workspace-navigation"
+          :aria-label="$t('common.navigation.label')"
+          ><Menu @close="closeMobileMenu"
+        /></nav>
       </a-layout-sider>
+      <button
+        v-if="!collapsed"
+        class="navigation-backdrop"
+        type="button"
+        :aria-label="$t('common.navigation.toggle')"
+        @click="collapsed = true"
+      />
 
       <a-layout>
         <a-row>
           <a-layout-header :style="{ zIndex: 1, width: '100%' }">
             <div class="header-bar">
               <div class="header-actions">
-                <menu-unfold-outlined
-                  v-if="collapsed"
-                  class="trigger"
-                  @click="() => (collapsed = !collapsed)"
-                />
-                <menu-fold-outlined
-                  v-else
-                  class="trigger"
-                  @click="() => (collapsed = !collapsed)"
-                />
-                <a-button type="text" @click="toggle">
+                <a-button
+                  type="text"
+                  :aria-label="$t('common.navigation.toggle')"
+                  :aria-expanded="!collapsed"
+                  aria-controls="workspace-navigation"
+                  @click="collapsed = !collapsed"
+                >
+                  <template #icon>
+                    <MenuUnfoldOutlined v-if="collapsed" />
+                    <MenuFoldOutlined v-else />
+                  </template>
+                </a-button>
+                <a-button
+                  type="text"
+                  :aria-label="$t('common.fullscreen.toggle')"
+                  :aria-pressed="isFullscreen"
+                  @click="toggle"
+                >
                   <template v-if="isFullscreen" #icon>
                     <FullscreenExitOutlined />
                   </template>
@@ -47,7 +66,15 @@
                     isDark ? $t('common.theme.light') : $t('common.theme.dark')
                   "
                 >
-                  <a-button type="text" @click="changeTheme">
+                  <a-button
+                    type="text"
+                    :aria-label="
+                      isDark
+                        ? $t('common.theme.light')
+                        : $t('common.theme.dark')
+                    "
+                    @click="changeTheme"
+                  >
                     <!-- 图标库(icons-vue 7)没有 sun/moon，内联两条描边路径，颜色跟 currentColor -->
                     <template #icon>
                       <svg
@@ -75,9 +102,9 @@
                   </a-button>
                 </a-tooltip>
                 <a-dropdown>
-                  <span class="user-entry user-name">{{
+                  <button type="button" class="user-entry user-name">{{
                     userStore.account.user
-                  }}</span>
+                  }}</button>
                   <template #overlay>
                     <a-menu @click="changeUser">
                       <a-menu-item key="/home/profile">
@@ -97,9 +124,7 @@
         </a-row>
         <a-row>
           <!-- minWidth:0 让 flex 项可以收缩，否则宽表格会把整页顶出横向滚动条 -->
-          <a-layout-content
-            :style="{ margin: '24px 16px 0', overflow: 'initial', minWidth: 0 }"
-          >
+          <a-layout-content class="workspace-content">
             <router-view v-slot="{ Component }">
               <component :is="Component" />
             </router-view>
@@ -144,7 +169,11 @@
   const collapsed = ref<boolean>(false);
 
   // antd 4 主题运行时切换（CSS-in-JS token + data-theme CSS 变量），不再整页重载
-  const isDark = computed(() => themeIsDark.value);
+  const isDark = computed(() => themeIsDark.value === 'dark');
+
+  const closeMobileMenu = () => {
+    if (window.matchMedia('(max-width: 991px)').matches) collapsed.value = true;
+  };
 
   const changeTheme = () => {
     toggleTheme();
@@ -165,144 +194,159 @@
 </script>
 
 <style scoped>
-  /* 只放图标：与菜单图标同一左内边距，上下留白收窄 */
+  .workspace-layout {
+    min-width: 0;
+  }
+  .navigation-backdrop {
+    display: none;
+  }
   .logo {
     display: flex;
     align-items: center;
-    padding: 10px 12px 10px 32px; /* 32px = 菜单项胶囊内缩 8 + 内边距 24，图标与菜单图标同一条竖线 */
-    margin-bottom: 6px;
+    gap: 12px;
+    min-height: 72px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--frame-line);
   }
   .logo img {
-    display: block;
     width: 30px;
     height: 30px;
   }
-  /* 收起时图标居中，与收起的菜单图标对齐 */
-  :deep(.ant-layout-sider-collapsed) .logo {
-    justify-content: center;
-    padding-left: 12px;
+  .logo span {
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -0.5px;
+    color: var(--total-color);
   }
-
-  /* 去掉分隔线后靠底色区分：暗色主题下框架（侧栏+顶栏）比内容区(#1F262E)暗一档，
-   原来的 #21262D 与内容区只差 1%，去掉线会糊成一片。
-   取值走 CSS 变量，否则亮色主题下侧栏/顶栏也会是这块深色 */
   :deep(.ant-layout-sider),
   :deep(.ant-layout-header) {
     background: var(--frame-bg);
   }
-
-  /* 展开态侧栏宽度按内容自适应（收起态仍用 antd 的 80px） */
-  :deep(.ant-layout-sider:not(.ant-layout-sider-collapsed)) {
-    flex: 0 0 auto !important;
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: none !important;
+  :deep(.ant-layout-sider) {
+    border-right: 1px solid var(--frame-line);
   }
-
-  /* 子菜单箭头紧跟标题文字：antd 默认把它绝对定位在列最右侧 */
-  :deep(.ant-menu-inline .ant-menu-submenu-title) {
-    padding-right: 12px; /* 不再为浮动箭头预留 34px */
+  :deep(.ant-layout-sider-children) {
+    overflow-y: auto;
   }
-  :deep(.ant-menu-inline .ant-menu-submenu-title .ant-menu-submenu-arrow) {
-    position: static;
-    transform: none;
-    margin-left: 6px;
+  :deep(.ant-layout-header) {
+    height: 64px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--frame-line);
   }
-
-  /* ── 侧边菜单：内缩圆角胶囊高亮，替掉 antd 默认的整条填充 ── */
-  :deep(.ant-menu-inline .ant-menu-item),
-  :deep(.ant-menu-inline .ant-menu-submenu-title) {
-    width: auto;
-    margin: 4px 8px;
-    border-radius: 6px;
-  }
-  /* antd 选中项右侧的 3px 竖条，和胶囊样式冲突 */
-  :deep(.ant-menu-item-selected)::after {
-    display: none;
-  }
-  :deep(.ant-menu-light .ant-menu-item:hover),
-  :deep(.ant-menu-light .ant-menu-submenu-title:hover) {
-    background: var(--frame-hover);
-  }
-  /* 去掉菜单右侧 1px 分隔线；整列统一用侧栏底色（#21262D）与内容区（#1F262E）区分。
-   .ant-menu 同时覆盖展开(inline)与收起(vertical)两种模式 */
   :deep(.ant-menu) {
-    border-right: none;
-    border-inline-end: none;
     background: transparent;
+    border-inline-end: 0;
   }
-  /* 子菜单只要胶囊高亮，不要整块底色 */
   :deep(.ant-menu-sub.ant-menu-inline) {
     background: transparent;
   }
+  :deep(.ant-menu-inline .ant-menu-item),
+  :deep(.ant-menu-inline .ant-menu-submenu-title) {
+    width: auto;
+    margin: 4px 12px;
+    border-radius: 8px;
+  }
+  :deep(.ant-menu-item-selected)::after {
+    display: none;
+  }
   :deep(.ant-menu-item .anticon),
   :deep(.ant-menu-submenu-title .anticon) {
-    font-size: 15px;
+    font-size: 16px;
   }
-  /* 展开的分组：标题加一层淡淡底色，标出当前所在分组 */
-  :deep(.ant-menu-submenu-open > .ant-menu-submenu-title) {
-    background: var(--frame-group);
-  }
-  /* 子项靠字色区分层级，选中/悬停时回到高对比 */
   :deep(.ant-menu-sub .ant-menu-item) {
     color: var(--menu-sub-color);
   }
-  :deep(.ant-menu-sub .ant-menu-item-selected),
-  :deep(.ant-menu-sub .ant-menu-item:hover) {
+  :deep(.ant-menu-sub .ant-menu-item-selected) {
     color: var(--menu-sub-active);
   }
-  :deep(.ant-menu-submenu-arrow) {
-    opacity: 0.45;
-  }
-
-  /* 收起态宽度为 0 时 antd 会在左上角浮出一个箭头，顶栏已经有折叠图标了，去掉避免两个入口打架 */
   :deep(.ant-layout-sider-zero-width-trigger) {
     display: none;
   }
-
-  /* 顶栏：左侧操作区 + 右侧用户区，两端对齐，不再用栅格 offset 定位 */
-  .header-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 100%;
+  .workspace-content {
+    width: 100%;
+    margin: 24px;
+    min-width: 0;
   }
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  /* 折叠/全屏图标原本没有任何样式（12px、无手型） */
-  .trigger {
-    font-size: 18px;
-    cursor: pointer;
-  }
-
+  .header-bar,
+  .header-actions,
   .header-right {
     display: flex;
     align-items: center;
-    gap: 4px;
+  }
+  .header-bar {
+    justify-content: space-between;
+    height: 100%;
+    gap: 12px;
+  }
+  .header-actions,
+  .header-right {
+    gap: 8px;
+  }
+  .header-bar :deep(.ant-btn) {
+    min-width: 40px;
+    height: 40px;
   }
   .theme-icon {
-    width: 1em;
-    height: 1em;
+    width: 18px;
+    height: 18px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-
   .user-entry {
-    cursor: pointer;
-    padding: 0 8px;
+    border: 0;
     border-radius: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
   }
   .user-entry:hover {
-    background: var(--frame-hover-strong);
+    background: var(--surface-muted);
   }
   .user-name {
-    font-weight: bold;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+  }
+  @media (max-width: 991px) {
+    :deep(.ant-layout-sider) {
+      position: fixed;
+      top: 64px;
+      bottom: 0;
+      left: 0;
+      z-index: 20;
+    }
+    .navigation-backdrop {
+      display: block;
+      position: fixed;
+      inset: 64px 0 0;
+      z-index: 10;
+      border: 0;
+      background: #0006;
+      cursor: pointer;
+    }
+    .workspace-content {
+      margin: 20px 16px;
+    }
+    :deep(.ant-layout-header) {
+      padding: 0 16px;
+    }
+  }
+  @media (max-width: 575px) {
+    .workspace-content {
+      margin: 16px 12px;
+    }
+    .header-actions,
+    .header-right {
+      gap: 4px;
+    }
+    :deep(.ant-layout-header) {
+      padding: 0 12px;
+    }
   }
 </style>

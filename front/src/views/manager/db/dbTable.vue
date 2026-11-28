@@ -1,10 +1,10 @@
 <template>
   <a-card>
     <DBTableSearch @search="search"></DBTableSearch>
-    <c-table ref="tbl" :tbl-ref="tblRef">
+    <c-table ref="tbl" :tbl-ref="tblRef" :scroll="{ x: 960 }">
       <template #bodyCell="{ column, text, record }">
         <template v-if="column.dataIndex === 'action'">
-          <a-space size="small">
+          <a-space size="small" wrap>
             <a-button
               type="primary"
               size="small"
@@ -24,21 +24,21 @@
           </a-space>
         </template>
         <template v-if="column.dataIndex === 'db_type'">
-          <span>{{ dbTypeLabel(text) }}</span>
+          <a-tag>{{ dbTypeLabel(text) }}</a-tag>
         </template>
         <template v-if="column.dataIndex === 'environment_tag'">
-          <a-tag v-if="record.environment_tag" color="#CF1322">
+          <a-tag v-if="record.environment_tag" color="red">
             {{ record.environment_tag }}
           </a-tag>
-          <a-tag v-else-if="record.is_production" color="#FA8C16">
+          <a-tag v-else-if="record.is_production" color="orange">
             production
           </a-tag>
           <span v-else>—</span>
         </template>
         <template v-if="column.dataIndex === 'is_query'">
-          <a-tag v-if="text === 2" color="#43A687">{{ $t('db.rw') }}</a-tag>
-          <a-tag v-if="text === 1" color="#EA495F">{{ $t('db.r') }}</a-tag>
-          <a-tag v-if="text === 0" color="#B38D57">{{ $t('db.w') }}</a-tag>
+          <a-tag v-if="text === 2" color="green">{{ $t('db.rw') }}</a-tag>
+          <a-tag v-if="text === 1" color="blue">{{ $t('db.r') }}</a-tag>
+          <a-tag v-if="text === 0" color="orange">{{ $t('db.w') }}</a-tag>
         </template>
       </template>
     </c-table>
@@ -70,16 +70,27 @@
   const tblRef = reactive<tableRef>({
     col: [
       { title: t('common.table.name'), dataIndex: 'source' },
-      { title: t('common.table.db_type'), dataIndex: 'db_type' },
-      { title: t('common.table.env'), dataIndex: 'idc' },
+      { title: t('common.table.db_type'), dataIndex: 'db_type', width: 120 },
+      { title: t('common.table.env'), dataIndex: 'idc', width: 112 },
       {
         title: t('db.environment.tag'),
         dataIndex: 'environment_tag',
         width: 130,
       },
       { title: 'IP', dataIndex: 'ip' },
-      { title: t('common.table.type'), dataIndex: 'is_query' },
-      { title: t('common.action'), dataIndex: 'action' },
+      {
+        title: t('common.table.type'),
+        dataIndex: 'is_query',
+        width: 112,
+        className: 'table-status-cell',
+      },
+      {
+        title: t('common.action'),
+        dataIndex: 'action',
+        width: 152,
+        className: 'table-action-cell',
+        fixed: 'right',
+      },
     ],
     data: [] as Source[],
     pageCount: 1,

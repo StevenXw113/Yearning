@@ -1,59 +1,79 @@
 <template>
-  <img src="../../assets/login/logo.png" width="350" />
-  <br />
-  <!-- 第二步：MFA 动态码（第一步密码通过且账号启用了 MFA 时显示） -->
-  <a-form v-if="mfaRequired" :model="mfaForm">
-    <a-form-item>
-      <a-typography-text style="color: rgba(255, 255, 255, 0.75)">
-        {{ $t('user.mfa.login.tips') }}（{{ mfaForm.user }}）
-      </a-typography-text>
-    </a-form-item>
-    <a-form-item>
+  <div class="login-form-heading">
+    <h2>{{ mfaRequired ? $t('user.mfa.code') : $t('common.signin') }}</h2>
+    <p>{{
+      mfaRequired ? $t('user.mfa.login.tips') : $t('common.login.welcome')
+    }}</p>
+  </div>
+  <a-form
+    v-if="mfaRequired"
+    :model="mfaForm"
+    layout="vertical"
+    @finish="mfaConfirm"
+  >
+    <p class="mfa-account">{{ mfaForm.user }}</p>
+    <a-form-item
+      :label="$t('user.mfa.code')"
+      name="code"
+      :rules="[{ required: true, message: $t('user.mfa.code') }]"
+    >
       <a-input
         v-model:value="mfaForm.code"
         :placeholder="$t('user.mfa.code')"
-        style="border-radius: 10px; letter-spacing: 4px"
+        class="mfa-code"
         :maxlength="6"
-        @press-enter="() => mfaConfirm()"
+        autocomplete="one-time-code"
+        inputmode="numeric"
       />
     </a-form-item>
-    <a-button type="dashed" block ghost @click="mfaConfirm">{{
+    <a-button type="primary" block html-type="submit" :loading="submitting">{{
       $t('common.signin')
     }}</a-button>
-    <a-button type="text" block style="margin-top: 10px" @click="backToLogin">
-      {{ $t('user.mfa.back') }}
-    </a-button>
+    <a-button
+      type="text"
+      block
+      class="secondary-login"
+      :disabled="submitting"
+      @click="backToLogin"
+      >{{ $t('user.mfa.back') }}</a-button
+    >
   </a-form>
-  <!-- 第一步：账号密码 -->
-  <a-form v-else :model="loginForm">
-    <a-form-item>
+  <a-form v-else :model="loginForm" layout="vertical" @finish="userSignIn">
+    <a-form-item
+      :label="$t('user.username')"
+      name="username"
+      :rules="[
+        { required: true, whitespace: true, message: $t('user.username') },
+      ]"
+    >
       <a-input
         v-model:value="loginForm.username"
         :placeholder="$t('user.username')"
-        style="border-radius: 10px"
+        autocomplete="username"
       />
     </a-form-item>
-    <a-form-item>
-      <a-input
+    <a-form-item
+      :label="$t('user.password')"
+      name="password"
+      :rules="[{ required: true, message: $t('user.password') }]"
+    >
+      <a-input-password
         v-model:value="loginForm.password"
         :placeholder="$t('user.password')"
-        style="border-radius: 10px"
-        type="password"
-        @press-enter="() => userSignIn()"
+        autocomplete="current-password"
       />
     </a-form-item>
-    <a-button type="dashed" block ghost @click="userSignIn">{{
+    <a-button type="primary" block html-type="submit" :loading="submitting">{{
       $t('common.signin')
     }}</a-button>
     <a-button
       v-if="oidcEnabled"
-      type="dashed"
       block
-      ghost
-      style="margin-top: 10px"
+      class="secondary-login"
+      :disabled="submitting"
       @click="oidcSignIn"
-      >OIDC {{ $t('common.signin') }}
-    </a-button>
+      >OIDC {{ $t('common.signin') }}</a-button
+    >
   </a-form>
 </template>
 
@@ -75,6 +95,7 @@
 
   // MFA 第二步状态：第一步成功但 payload.mfa_required 时切换视图
   const mfaRequired = ref(false);
+  const submitting = ref(false);
   const mfaForm = reactive({ ticket: '', code: '', user: '' });
 
   const userStore = useUserStore();
@@ -117,34 +138,41 @@
   };
 
   const userSignIn = useDebounceFn(async () => {
-    const { data } = await signIn(loginForm);
-    if (data.code === 1301) {
-      return;
+    if (submitting.value) return;
+    submitting.value = true;
+    try {
+      const { data } = await signIn(loginForm);
+      if (data.code !== 1200) return;
+      if (data.payload?.mfa_required) {
+        mfaForm.ticket = data.payload.ticket;
+        mfaForm.user = data.payload.user || loginForm.username;
+        mfaForm.code = '';
+        mfaRequired.value = true;
+        return;
+      }
+      userStore.USER_STORE(data.payload);
+      menuStore.CHANGE_SELECTED(['/home']);
+      router.replace('/home');
+    } finally {
+      submitting.value = false;
     }
-    // 密码正确但启用了 MFA：不发正式 token，进入第二步
-    if (data.payload?.mfa_required) {
-      mfaForm.ticket = data.payload.ticket;
-      mfaForm.user = data.payload.user || loginForm.username;
-      mfaForm.code = '';
-      mfaRequired.value = true;
-      return;
-    }
-    userStore.USER_STORE(data.payload);
-    menuStore.CHANGE_SELECTED(['/home']);
-    router.replace('/home');
   }, 200);
 
   const mfaConfirm = useDebounceFn(async () => {
-    if (!mfaForm.code.trim()) return;
-    const { data } = await mfaSignIn(mfaForm.ticket, mfaForm.code.trim());
-    if (data.code !== 1200) {
-      // 动态码错误/票据过期：保留输入视图让用户重试（错误次数由后端限流锁定）
-      message.error(data.text);
-      return;
+    if (submitting.value || !mfaForm.code.trim()) return;
+    submitting.value = true;
+    try {
+      const { data } = await mfaSignIn(mfaForm.ticket, mfaForm.code.trim());
+      if (data.code !== 1200) {
+        message.error(data.text);
+        return;
+      }
+      userStore.USER_STORE(data.payload);
+      menuStore.CHANGE_SELECTED(['/home']);
+      router.replace('/home');
+    } finally {
+      submitting.value = false;
     }
-    userStore.USER_STORE(data.payload);
-    menuStore.CHANGE_SELECTED(['/home']);
-    router.replace('/home');
   }, 200);
 
   const backToLogin = () => {
@@ -155,30 +183,70 @@
 </script>
 
 <style lang="less" scoped>
-  .ant-input {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    font-variant: tabular-nums;
-    list-style: none;
-    font-feature-settings: 'tnum';
-    position: relative;
-    display: inline-block;
-    width: 100%;
-    min-width: 0;
-    padding: 4px 11px;
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 14px;
-    line-height: 1.5715;
-    background-color: rgba(255, 255, 255, 0);
-    background-image: none;
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 2px;
-    transition: all 0.3s;
+  .login-form-heading {
+    margin-bottom: 28px;
   }
-
-  .ant-btn.ant-btn-background-ghost {
-    color: rgba(255, 255, 255, 0.85);
-    border-color: rgba(255, 255, 255, 0.25);
+  .login-form-heading h2 {
+    margin: 0 0 8px;
+    color: #f4f7fc;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  .login-form-heading p,
+  .mfa-account {
+    color: #a5b4c8;
+    margin: 0;
+    font-size: 14px;
+  }
+  :deep(.ant-form-item-label > label) {
+    color: #c7d5e8;
+  }
+  :deep(.ant-input),
+  :deep(.ant-input-affix-wrapper) {
+    min-height: 44px;
+    color: #e6edf7;
+    background: #101722;
+    border-color: #62758e;
+    border-radius: 8px;
+  }
+  :deep(.ant-input-affix-wrapper .ant-input) {
+    min-height: 0;
+  }
+  :deep(.ant-input::placeholder) {
+    color: #a5b4c8;
+  }
+  :deep(.ant-input-password-icon) {
+    color: #a5b4c8;
+  }
+  :deep(.ant-input:focus),
+  :deep(.ant-input-affix-wrapper-focused) {
+    border-color: #8eb6ff;
+    box-shadow: 0 0 0 3px #6b9eff26;
+  }
+  :deep(.ant-btn) {
+    min-height: 44px;
+    font-weight: 500;
+  }
+  :deep(.ant-btn-primary) {
+    background: #245dd8;
+    border-color: #245dd8;
+    color: #fff;
+  }
+  :deep(.ant-btn-primary:not(:disabled):hover) {
+    background: #1e50bd;
+    border-color: #1e50bd;
+  }
+  .secondary-login {
+    margin-top: 12px;
+    color: #c7d5e8;
+    background: #202d3e;
+    border-color: #62758e;
+  }
+  .mfa-account {
+    margin-bottom: 16px;
+  }
+  .mfa-code {
+    letter-spacing: 4px;
+    font-variant-numeric: tabular-nums;
   }
 </style>

@@ -79,6 +79,8 @@ docker run -d -it -p8000:8000 -e SECRET_KEY=$SECRET_KEY -e MYSQL_USER=$MYSQL_USE
 
 自动SQL检查器根据预定义的规则和语法评估SQL语句。确保语句符合特定的编码标准、最佳实践和安全要求，提供了强大的验证层。
 
+审核规则的配置、数据源绑定和历史回滚，见[审核规则使用说明](docs/RULES_USAGE.md)。
+
 ![SQL 审计](img/audit.png)
 
 ## 💡 SQL 语法高亮和自动补全

@@ -159,19 +159,6 @@ UPDATE_RULES_MANIFEST=1 go test ./internal/archguard -run TestRulesManifest >/de
 go test ./...
 DONE=1 # 到这里才认为同步成功，失败时 cleanup 会还原旧目录
 
-# 主程序「检测上游更新」把内化版本写死在 src/handler/manage/roles/upstream.go。
-# 同步成功后一并更新，省掉一个必须手工同步的地方（TestBytebaseRefMatchesUpstream 会兜底）。
-# 放在 DONE=1 之后：同步失败时不动主程序的文件，避免两边版本号各说各话。
-APP_UPSTREAM="$ROOT/../src/handler/manage/roles/upstream.go"
-if [ -f "$APP_UPSTREAM" ]; then
-	if [[ "$REF" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-		perl -pi -e "s/^const bytebaseRef = .*/const bytebaseRef = \"$REF\"/" "$APP_UPSTREAM"
-		echo "==> 已同步主程序内化版本号: $APP_UPSTREAM -> $REF"
-	else
-		echo "==> 提示: $REF 不是 x.y.z 版本号，跳过更新主程序内化版本号"
-	fi
-fi
-
 echo
 echo "同步完成: $REPO@$REF ($COMMIT)"
 git -C "$ROOT/.." --no-pager diff --stat -- engine/internal/bytebase engine/go.mod engine/go.sum || true

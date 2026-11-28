@@ -1,33 +1,56 @@
 <template>
   <div class="table-page-search-wrapper">
-    <a-form>
+    <a-form @finish="search">
       <a-row :gutter="12">
         <a-col :sm="8" :xs="24">
-          <a-form-item :label="$t('common.table.name')">
-            <a-input v-model:value="expr.source"></a-input>
+          <a-form-item
+            :label="$t('common.table.name')"
+            html-for="datasource-filter-source"
+          >
+            <a-input
+              id="datasource-filter-source"
+              v-model:value="expr.source"
+              allow-clear
+            ></a-input>
           </a-form-item>
         </a-col>
         <a-col :sm="8" :xs="24">
-          <a-form-item label="ip">
-            <a-input v-model:value="expr.ip"></a-input>
+          <a-form-item label="IP" html-for="datasource-filter-ip">
+            <a-input
+              id="datasource-filter-ip"
+              v-model:value="expr.ip"
+              allow-clear
+            ></a-input>
           </a-form-item>
         </a-col>
         <template v-if="advanced">
           <a-col :sm="8" :xs="24">
-            <a-form-item :label="$t('common.table.type')">
-              <a-select v-model:value="expr.is_query">
+            <a-form-item
+              :label="$t('common.table.type')"
+              html-for="datasource-filter-access"
+            >
+              <a-select
+                id="datasource-filter-access"
+                v-model:value="expr.is_query"
+              >
                 <a-select-option :value="-1">{{
                   $t('common.all')
                 }}</a-select-option>
-                <a-radio :value="2">{{ $t('db.rw') }}</a-radio>
-                <a-radio :value="0">{{ $t('db.w') }}</a-radio>
-                <a-radio :value="1">{{ $t('db.r') }}</a-radio>
+                <a-select-option :value="2">{{ $t('db.rw') }}</a-select-option>
+                <a-select-option :value="0">{{ $t('db.w') }}</a-select-option>
+                <a-select-option :value="1">{{ $t('db.r') }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
           <a-col :xs="24" :sm="8">
-            <a-form-item :label="$t('common.table.env')">
-              <a-select v-model:value="expr.idc">
+            <a-form-item
+              :label="$t('common.table.env')"
+              html-for="datasource-filter-environment"
+            >
+              <a-select
+                id="datasource-filter-environment"
+                v-model:value="expr.idc"
+              >
                 <a-select-option v-for="i in idc" :key="i" :value="i"
                   >{{ i }}
                 </a-select-option>
@@ -40,15 +63,20 @@
             class="table-page-search-submitButtons"
             :style="(advanced && { overflow: 'hidden' }) || {}"
           >
-            <a-button type="primary" @click="search">{{
+            <a-button type="primary" html-type="submit">{{
               $t('common.query')
             }}</a-button>
             <a-button style="margin-left: 8px" @click="cancel"
-              >{{ $t('common.cancel') }}
+              >{{ $t('db.form.reset') }}
             </a-button>
-            <a style="margin-left: 8px" @click="toggleAdvanced">{{
-              advanced ? $t('common.pick') : $t('common.unfold')
-            }}</a>
+            <a-button
+              type="link"
+              :aria-expanded="advanced"
+              @click="toggleAdvanced"
+              >{{
+                advanced ? $t('common.pick') : $t('common.unfold')
+              }}</a-button
+            >
           </span>
         </a-col>
       </a-row>
@@ -98,7 +126,7 @@
     .ant-form-inline {
       .ant-form-item {
         display: flex;
-        margin-bottom: 24px;
+        margin-bottom: 16px;
         margin-right: 0;
 
         .ant-form-item-control-wrapper {

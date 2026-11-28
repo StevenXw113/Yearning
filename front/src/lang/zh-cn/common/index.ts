@@ -1,4 +1,14 @@
 export default {
+  'common.navigation.toggle': '展开或收起导航',
+  'common.navigation.label': '主导航',
+  'common.fullscreen.toggle': '切换全屏',
+  'common.login.headline': '让每一次数据库变更，更从容。',
+  'common.login.description':
+    '在同一个工作台完成 SQL 审核、数据查询与权限管理，让团队协作清晰有序。',
+  'common.login.audit': '变更审核',
+  'common.login.query': '数据查询',
+  'common.login.access': '权限管理',
+  'common.login.welcome': '登录你的数据库工作台',
   'common.create': '创建',
   'common.qq': 'Q群:363323798',
   'common.add': '添加',

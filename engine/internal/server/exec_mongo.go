@@ -3,61 +3,28 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
-	"strconv"
 	"strings"
-	"time"
 
 	"engine/api"
 	mongoe "engine/mongo"
+	"engine/mongoconn"
 	"engine/ruleset"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// mongoTimeout 建立连接与探活的超时。
-const mongoTimeout = 15 * time.Second
-
-// mongoURI 拼 MongoDB 连接串。用户名与口令走 url.UserPassword 转义，
-// 否则口令里的 @ : / % 会把连接串拆坏；认证库（authSource）来自数据源配置，
-// 未配置时用 MongoDB 默认的 admin——账号建在业务库上的部署必须显式指定，
-// 否则认证必失败（此前硬编码 admin，这类部署连不上）。
-func mongoURI(username, password, ip string, port int32, authDB string) string {
-	if authDB == "" {
-		authDB = "admin"
-	}
-	u := &url.URL{
-		Scheme:   "mongodb",
-		User:     url.UserPassword(username, password),
-		Host:     net.JoinHostPort(ip, strconv.Itoa(int(port))),
-		Path:     "/",
-		RawQuery: "authSource=" + url.QueryEscape(authDB),
-	}
-	return u.String()
-}
-
-// connectMongo 按 DataSource 建立 MongoDB 客户端并 Ping 探活。调用方负责 Disconnect。
-// 口令是明文：主程序在发起 RPC 前已经把口令列解密好了，引擎侧不再持有主程序密钥。
+// connectMongo receives plaintext credentials over the authenticated engine RPC.
 func connectMongo(ds *api.DataSource) (*mongo.Client, error) {
-	if ds == nil || ds.Ip == "" {
-		return nil, fmt.Errorf("数据源 IP 为空")
+	if ds == nil {
+		return nil, fmt.Errorf("MongoDB 数据源 IP / 节点地址为空")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), mongoTimeout)
-	defer cancel()
-	client, err := mongo.Connect(options.Client().
-		ApplyURI(mongoURI(ds.Username, ds.Password, ds.Ip, ds.Port, ds.AuthDb)).
-		SetConnectTimeout(mongoTimeout).
-		SetServerSelectionTimeout(mongoTimeout))
-	if err != nil {
-		return nil, err
-	}
-	if err := client.Ping(ctx, nil); err != nil {
-		_ = client.Disconnect(context.Background())
-		return nil, err
-	}
-	return client, nil
+	return mongoconn.Connect(mongoconn.Config{
+		Hosts: ds.Ip, Port: int(ds.Port),
+		Username: ds.Username, Password: ds.Password,
+		AuthDatabase: ds.AuthDb, ReplicaSet: ds.MongoReplicaSet,
+		TLS: ds.MongoTLS, AuthMechanism: ds.MongoAuthMechanism,
+		CA: ds.Ca, Certificate: ds.Cert, Key: ds.Key,
+	})
 }
 
 // mongoExecDefinition resolves the effective v2 rule set. RuleSet wins; Rules is
@@ -136,7 +103,8 @@ func recheckMongoRules(req *api.ExecRequest, def ruleset.Definition) ([]string, 
 		return nil, fmt.Errorf("执行前复核失败: %w", decision.Error)
 	}
 	blocked := mongoe.Blocked(decision.Findings)
-	if blocked != nil {
+	// Findings retain the approval audit trail; Allowed accounts for completed DBA approval.
+	if blocked != nil && !decision.Allowed {
 		if blocked.RequiresDBAApproval {
 			return nil, fmt.Errorf("执行前复核发现 DBA 特批未完成: %s", decision.DBAApprovalMessage)
 		}
@@ -144,7 +112,7 @@ func recheckMongoRules(req *api.ExecRequest, def ruleset.Definition) ([]string, 
 	}
 	var warns []string
 	for _, finding := range decision.Findings {
-		if finding.Message != "" {
+		if !finding.RequiresDBAApproval && finding.Message != "" {
 			warns = append(warns, finding.Message)
 		}
 	}

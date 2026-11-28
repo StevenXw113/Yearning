@@ -40,10 +40,29 @@ func Execute(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 	if err != nil {
 		return out, err
 	}
-	// 规则集里的命中上限：抓前镜像时已经拿到真实数量，这里能准确判断
-	if maxAffectRows > 0 && len(pre.docs) > maxAffectRows {
+	// 插入按提交文档数计数；更新和删除按去重后的前镜像数量计数。
+	matched := len(pre.docs)
+	if name == "insert" {
+		if documents, ok := lookup(cmd, "documents"); ok {
+			if arr, ok := toArray(documents); ok {
+				matched = len(arr)
+			}
+		}
+	}
+	if maxAffectRows > 0 && matched > maxAffectRows {
 		return out, fmt.Errorf("命中 %d 条文档，超过规则集上限 %d，请收窄 filter 或分批提交",
-			len(pre.docs), maxAffectRows)
+			matched, maxAffectRows)
+	}
+
+	// findAndModify returns the selected document atomically; request its pre-image for rollback.
+	if name == "findandmodify" {
+		fullImage := make(bson.D, 0, len(cmd)+1)
+		for _, field := range cmd {
+			if field.Key != "new" && field.Key != "fields" {
+				fullImage = append(fullImage, field)
+			}
+		}
+		cmd = append(fullImage, bson.E{Key: "new", Value: false})
 	}
 
 	var raw bson.M
@@ -57,6 +76,22 @@ func Execute(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 		out.Rollback = updateRollback(pre.coll, pre.docs)
 	case "delete":
 		out.Rollback = deleteRollback(pre.coll, pre.docs)
+	case "findandmodify":
+		if before, ok := toDoc(raw["value"]); ok {
+			doc := bson.M{}
+			for _, field := range before {
+				doc[field.Key] = field.Value
+			}
+			if remove, _ := lookup(cmd, "remove"); remove == true {
+				out.Rollback = deleteRollback(pre.coll, []bson.M{doc})
+			} else {
+				out.Rollback = updateRollback(pre.coll, []bson.M{doc})
+			}
+		} else if info, ok := toDoc(raw["lastErrorObject"]); ok {
+			if id, ok := lookup(info, "upserted"); ok {
+				out.Rollback = insertRollback(pre.coll, bson.D{{Key: "documents", Value: bson.A{bson.D{{Key: "_id", Value: id}}}}})
+			}
+		}
 	case "insert":
 		out.Rollback = insertRollback(pre.coll, cmd)
 	case "createindexes":
@@ -88,10 +123,9 @@ func capture(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 	if kind != KindDML && CommandName(cmd) != "dropindexes" {
 		return pre, nil
 	}
-	coll := client.Database(db).Collection(pre.coll)
-
 	switch CommandName(cmd) {
 	case "update", "delete":
+		coll := client.Database(db).Collection(pre.coll)
 		seen := map[string]struct{}{}
 		for _, f := range filtersOf(cmd) {
 			cur, err := coll.Find(ctx, f, options.Find().SetLimit(MaxSnapshot+1))
@@ -104,7 +138,8 @@ func capture(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 					_ = cur.Close(ctx)
 					return pre, err
 				}
-				key := fmt.Sprint(d["_id"])
+				id := cur.Current.Lookup("_id")
+				key := string([]byte{byte(id.Type)}) + string(id.Value)
 				if _, ok := seen[key]; ok {
 					continue
 				}
@@ -122,6 +157,7 @@ func capture(ctx context.Context, client *driver.Client, db string, cmd bson.D, 
 			_ = cur.Close(ctx)
 		}
 	case "dropindexes":
+		coll := client.Database(db).Collection(pre.coll)
 		// 删掉的索引定义要留下来，否则回滚时无法重建
 		cur, err := coll.Indexes().List(ctx)
 		if err != nil {
@@ -256,7 +292,14 @@ func affected(name string, raw bson.M) int64 {
 		}
 	}
 	if name == "findandmodify" {
-		if _, ok := raw["value"]; ok {
+		if info, ok := toDoc(raw["lastErrorObject"]); ok {
+			if n, ok := lookup(info, "n"); ok {
+				if count, ok := toInt64(n); ok {
+					return count
+				}
+			}
+		}
+		if raw["value"] != nil {
 			return 1
 		}
 	}

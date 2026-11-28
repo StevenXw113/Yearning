@@ -8,7 +8,8 @@ export default function () {
     {
       title: t('common.table.stage'),
       dataIndex: 'status',
-      width: 90,
+      width: 112,
+      className: 'table-status-cell',
     },
     {
       title: t('common.table.level'),

@@ -76,6 +76,8 @@ Our AI Assistant leverages a large language model to provide SQL optimization su
 
 The automatic SQL checker evaluates SQL statements against predefined rules and syntax. It ensures that statements adhere to specific coding standards, best practices, and security requirements, providing a robust layer of validation.
 
+See the [audit rule usage guide (Chinese)](docs/RULES_USAGE.md) for rule configuration, data source binding and configuration rollback.
+
 ![SQL Audit](img/audit.png)
 
 ## 💡 SQL Syntax Highlighting and Auto-completion

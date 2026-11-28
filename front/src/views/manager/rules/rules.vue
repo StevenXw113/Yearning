@@ -1,6 +1,6 @@
 <template>
-  <a-row>
-    <a-col :span="14">
+  <a-row :gutter="[16, 12]">
+    <a-col :xs="24" :lg="12">
       <a-input-search
         :placeholder="$t('ruleSearchTips')"
         enter-button
@@ -8,22 +8,16 @@
         @search="onSearch"
       />
     </a-col>
-    <a-col :span="9" offset="1" style="text-align: right">
-      <a-button style="margin-right: 8px" @click="helpOpen = true">{{
-        $t('ruleHelp')
-      }}</a-button>
-      <a-button v-if="!isAdd" style="margin-right: 8px" @click="onHistory">{{
-        $t('ruleHistory')
-      }}</a-button>
-      <a-button
-        v-if="global"
-        style="margin-right: 8px"
-        @click="onCheckUpstream"
-        >{{ $t('upstreamCheck') }}</a-button
-      >
-      <a-button type="primary" @click="onSave">{{
-        $t('common.save')
-      }}</a-button>
+    <a-col :xs="24" :lg="12" style="text-align: right">
+      <a-space wrap>
+        <a-button @click="helpOpen = true">{{ $t('ruleHelp') }}</a-button>
+        <a-button v-if="!isAdd" @click="onHistory">{{
+          $t('ruleHistory')
+        }}</a-button>
+        <a-button type="primary" @click="onSave">{{
+          $t('common.save')
+        }}</a-button>
+      </a-space>
     </a-col>
   </a-row>
   <br />
@@ -32,6 +26,7 @@
   <a-table
     bordered
     :columns="col"
+    :scroll="{ x: 1100 }"
     :data-source="rules"
     :pagination="{
       pageSize: 20,
@@ -97,11 +92,17 @@
   >
     <p>{{ $t('ruleHelpIntro') }}</p>
     <ul style="padding-left: 18px">
+      <li>{{ $t('ruleHelpScope') }}</li>
       <li>{{ $t('ruleHelpAdd') }}</li>
       <li>{{ $t('ruleHelpEnable') }}</li>
+      <li>{{ $t('ruleHelpLevel') }}</li>
+      <li>{{ $t('ruleHelpBind') }}</li>
+      <li>{{ $t('ruleHelpMongo') }}</li>
+      <li>{{ $t('ruleHelpHistory') }}</li>
       <li>{{ $t('ruleHelpDelete') }}</li>
+      <li>{{ $t('ruleHelpCustom') }}</li>
     </ul>
-    <p style="margin-bottom: 0">{{ $t('ruleHelpDoc') }}</p>
+    <p style="margin-bottom: 0">{{ $t('ruleHelpSave') }}</p>
   </a-modal>
 
   <a-drawer
@@ -114,6 +115,7 @@
       bordered
       size="small"
       :columns="historyCol"
+      :scroll="{ x: 600 }"
       :data-source="history"
       :pagination="{ pageSize: 10 }"
     >
@@ -152,7 +154,6 @@
     updateRules,
     updateGlobalRules,
     addRules,
-    checkUpstreamRules,
     getRuleHistory,
     rollbackRule,
     buildMongoRuleSetDefinition,
@@ -160,7 +161,7 @@
     type RuleSetDefinition,
   } from '@/apis/rules';
   import { App } from 'ant-design-vue';
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   import { useI18n } from 'vue-i18n';
 
   const props = defineProps<{
@@ -179,12 +180,12 @@
     {
       title: t('common.table.name'),
       dataIndex: 'name',
-      width: 50,
+      width: 200,
     },
     {
       title: t('common.table.type'),
       dataIndex: 'type',
-      width: 80,
+      width: 112,
       filters: [
         { text: 'DDL', value: 'DDL' },
         { text: 'DML', value: 'DML' },
@@ -207,7 +208,7 @@
     {
       title: t('common.action'),
       dataIndex: 'action',
-      width: 300,
+      width: 240,
     },
   ];
 
@@ -338,7 +339,10 @@
       await updateRules({
         desc: props.desc,
         audit_role: audit,
-        definition: updateMongoRuleSetDefinition(currentDefinition.value, audit),
+        definition: updateMongoRuleSetDefinition(
+          currentDefinition.value,
+          audit,
+        ),
         dialect: 'mongodb',
         scope: 'data_source',
         id: id.value,
@@ -351,25 +355,6 @@
       });
     }
     emit('ok');
-  };
-
-  // 只检测：上游规则随引擎编译，页面不会自动更新任何文件。
-  const onCheckUpstream = async () => {
-    const { data } = await checkUpstreamRules();
-    if (data.code !== 1200) return; // 非 1200 已由请求拦截器统一提示
-    const { current, latest, hasUpdate, note } = data.payload;
-    if (note) {
-      message.warning(note);
-      return;
-    }
-    if (hasUpdate) {
-      modal.warning({
-        title: t('upstreamNew'),
-        content: t('upstreamNewDesc', { current, latest }),
-      });
-    } else {
-      message.success(t('upstreamLatest', { version: current }));
-    }
   };
 
   // 全局规则的历史挂在 rule_id=0 上，规则集历史挂在各自的 id 上（与后端一致）。
@@ -385,7 +370,12 @@
     { title: t('ruleCreatedAt'), dataIndex: 'created_at', width: 150 },
     { title: t('ruleOperator'), dataIndex: 'operator', width: 110 },
     { title: t('common.desc'), dataIndex: 'note' },
-    { title: t('common.action'), dataIndex: 'action', width: 90 },
+    {
+      title: t('common.action'),
+      dataIndex: 'action',
+      width: 112,
+      className: 'table-action-cell',
+    },
   ];
 
   const onHistory = async () => {

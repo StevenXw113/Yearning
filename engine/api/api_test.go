@@ -87,11 +87,11 @@ func TestCheckRequestWireShape(t *testing.T) {
 	in := &CheckRequest{
 		Sql: "select 1", Schema: "db", Lang: "zh_CN", Mode: "query",
 		Source: &DataSource{Ip: "10.0.0.1", Port: 3306, Username: "u", Password: "p",
-			Kind: "mongodb", AuthDb: "business"},
+			Kind: "mongodb", AuthDb: "business", MongoReplicaSet: "rs-test", MongoTLS: true, MongoAuthMechanism: "SCRAM-SHA-256"},
 		Rule: &AuditRole{DmlWhere: true},
 	}
 	b, _ := json.Marshal(in)
-	for _, key := range []string{`"auth_db"`, `"mode"`, `"max_affect_rows"`} {
+	for _, key := range []string{`"auth_db"`, `"mongo_replica_set"`, `"mongo_tls"`, `"mongo_auth_mechanism"`, `"mode"`, `"max_affect_rows"`} {
 		// max_affect_rows 属 ExecRequest,这里只验 auth_db/mode
 		if key == `"max_affect_rows"` {
 			continue
@@ -99,6 +99,10 @@ func TestCheckRequestWireShape(t *testing.T) {
 		if !strings.Contains(string(b), key) {
 			t.Fatalf("wire field %s missing: %s", key, b)
 		}
+	}
+	var decoded CheckRequest
+	if err := json.Unmarshal(b, &decoded); err != nil || decoded.Source.MongoReplicaSet != "rs-test" || !decoded.Source.MongoTLS || decoded.Source.MongoAuthMechanism != "SCRAM-SHA-256" {
+		t.Fatal("replica set lost in engine RPC round trip")
 	}
 	q := &QueryRequest{Sql: "find {}", Limit: 1 << 40, Kind: "mongodb"}
 	bq, _ := json.Marshal(q)

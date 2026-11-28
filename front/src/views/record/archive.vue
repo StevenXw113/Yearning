@@ -20,6 +20,7 @@
     <a-table
       size="small"
       :columns="columns"
+      :scroll="{ x: 1200 }"
       :data-source="rows"
       :loading="loading"
       :pagination="pagination"
@@ -141,7 +142,8 @@
       title: t('common.table.state'),
       dataIndex: 'status',
       key: 'status',
-      width: 90,
+      width: 112,
+      className: 'table-status-cell',
     },
     { title: 'DML/DDL', dataIndex: 'type', key: 'type', width: 80 },
     { title: t('common.table.source'), dataIndex: 'source', width: 120 },

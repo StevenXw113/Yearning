@@ -29,10 +29,10 @@
   </a-row>
 
   <br />
-  <c-table ref="tbl" :tbl-ref="tblRef">
+  <c-table ref="tbl" :tbl-ref="tblRef" :scroll="{ x: 480 }">
     <template #bodyCell="{ column, record }">
       <template v-if="column.dataIndex === 'action'">
-        <a-space size="small">
+        <a-space size="small" wrap>
           <a-button
             type="primary"
             size="small"
@@ -82,7 +82,12 @@
         title: t('common.policy.group') + t('common.table.name'),
         dataIndex: 'name',
       },
-      { title: t('common.action'), dataIndex: 'action' },
+      {
+        title: t('common.action'),
+        dataIndex: 'action',
+        width: 152,
+        className: 'table-action-cell',
+      },
     ],
     data: [] as Policy[],
     pageCount: 0,

@@ -14,7 +14,10 @@ type DataSource struct {
 	Kind     string `json:"kind"` // "mysql" / "mongodb" / "redis" / "postgres" / "doris"
 	// AuthDb MongoDB 认证库(连接串 authSource)。空 = 默认 admin;
 	// 账号建在业务库上的部署(authSource=业务库名)必须显式指定,否则连不上。
-	AuthDb string `json:"auth_db"`
+	AuthDb             string `json:"auth_db"`
+	MongoReplicaSet    string `json:"mongo_replica_set,omitempty"`
+	MongoTLS           bool   `json:"mongo_tls,omitempty"`
+	MongoAuthMechanism string `json:"mongo_auth_mechanism,omitempty"`
 	// RedisMode Redis 部署形态:standalone / cluster / proxy。
 	// 空 = 未知(探测失败或尚未探测):Cluster/Proxy 相关规则此时不生效,避免误拦。
 	RedisMode string `json:"redis_mode"`

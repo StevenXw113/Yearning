@@ -5,7 +5,11 @@
 
 /* ── 主题 CSS 变量：框架配色（侧栏/顶栏/菜单）与业务文字色 ── */
 :root[data-theme='dark'] {
-  --frame-bg: #1a1f26;
+  --frame-bg: #151e2b;
+  --surface-muted: #202d3e;
+  --text-muted: #a5b4c8;
+  --focus-ring: #8eb6ff;
+  --surface-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   --frame-line: rgba(255, 255, 255, 0.06);
   --frame-hover: rgba(255, 255, 255, 0.06);
   --frame-hover-strong: rgba(255, 255, 255, 0.08);
@@ -22,6 +26,10 @@
 
 :root[data-theme='light'] {
   --frame-bg: #ffffff;
+  --surface-muted: #f7f9fc;
+  --text-muted: #526174;
+  --focus-ring: #245dd8;
+  --surface-shadow: 0 4px 20px rgba(29, 41, 57, 0.04);
   --frame-line: rgba(0, 0, 0, 0.06);
   --frame-hover: rgba(0, 0, 0, 0.04);
   --frame-hover-strong: rgba(0, 0, 0, 0.06);
@@ -88,7 +96,7 @@
   padding-top: 9px;
   margin-top: 8px;
 
-  >* {
+  > * {
     position: relative;
   }
 
@@ -150,5 +158,100 @@
   }
   .ant-input-number {
     width: 120px;
+  }
+}
+
+/* Shared interaction and responsive rules for the operations console. */
+body {
+  margin: 0;
+  line-height: 1.6;
+}
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.ant-card {
+  box-shadow: var(--surface-shadow);
+}
+.table-page-search-wrapper {
+  padding-bottom: 4px;
+  .ant-form-item-label {
+    font-size: 14px;
+  }
+  .ant-input-affix-wrapper .ant-input {
+    width: 100%;
+  }
+}
+@media (max-width: 767px) {
+  .table-page-search-wrapper {
+    .ant-col {
+      flex: 1 1 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .ant-form-item {
+      margin-right: 0;
+    }
+    .ant-picker,
+    .ant-select,
+    .ant-input,
+    .ant-input-affix-wrapper,
+    .ant-input-number {
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+  .ant-modal {
+    max-width: calc(100vw - 24px);
+    margin: 12px auto;
+    top: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 业务列表及窗口内表格共用的紧凑状态、动作列。 */
+.ant-table-cell.table-status-cell {
+  white-space: nowrap;
+  .ant-tag {
+    margin-inline-end: 0;
+  }
+}
+.ant-table-cell.table-action-cell {
+  padding-inline: 12px;
+  .ant-space {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ant-btn {
+    min-height: 32px;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+}
+.ant-modal-body,
+.ant-drawer-body {
+  .ant-table-wrapper,
+  .ant-form-item-control,
+  .ant-form-item-control-input-content {
+    min-width: 0;
+  }
+}
+.ant-drawer-content-wrapper {
+  max-width: 100vw;
+}
+@media (max-width: 767px) {
+  .ant-table-cell.table-action-cell .ant-btn {
+    min-height: 44px;
+    min-width: 44px;
   }
 }

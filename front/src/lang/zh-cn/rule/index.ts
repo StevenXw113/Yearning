@@ -75,25 +75,32 @@ export default {
   customRuleDeleted: '自定义规则已删除',
 
   ruleSearchTips: '请输入规则描述进行搜索',
-  upstreamCheck: '检测上游更新',
-  upstreamLatest: '已是最新版本（{version}）',
-  upstreamNew: '上游规则有新版本',
-  upstreamNewDesc:
-    '当前 {current}，上游最新 {latest}。更新在源码侧完成：在 engine 目录执行 ./scripts/upgrade-engine.sh（自动同步上游并生成新规则，加 --preview 可先预演影响面），随后重新部署引擎即可（步骤见 engine/README.md）。本页只做检测，不会自动改动代码。',
   ruleHistory: '变更历史',
   ruleHelp: '使用说明',
   ruleDeleteConfirm: '删除该规则集？（若正被数据源使用会被拒绝）',
   ruleDeleteDone: '规则集已删除，可在「变更历史」里回滚恢复',
   ruleHelpIntro:
-    '本页每一条规则（含默认关闭的自研规则）都由引擎代码定义，页面只负责开关与级别；数据源在「数据源管理」里绑定规则集、配置脱敏字段。',
+    '本页用于配置审核规则的开关、参数和级别。可按数据库类型、规则分类或描述搜索，找到需要调整的规则。',
+  ruleHelpScope:
+    '生效范围：「全局规则」及各数据库页签编辑的是同一份全局配置。数据源未绑定独立规则集时使用全局规则；绑定后使用该规则集，不与全局规则合并。',
   ruleHelpAdd:
-    '新增：在 engine/internal/customrules/ 下照抄 forbid_truncate.go（实现 Name/Check + init 里 Register），要开关键则按该目录 README 的「四处接线」补齐——漏掉 convert.go 的映射会出现"勾了没反应"。',
+    '新增规则集：在「自定义规则列表」中新建并填写名称、选择规则集类型。MongoDB 数据源建议选择 MongoDB v2；配置规则后点击「保存」。',
   ruleHelpEnable:
-    '启用：勾上开关保存即可；建议先把级别设成「观察」或「提示」跑一段时间，确认误报可控再改为「拦截」。',
+    '配置规则：通过开关启用或停用规则，数值和文本参数按该行说明填写；0 或空值的含义以规则说明为准。',
+  ruleHelpLevel:
+    '规则级别：「默认」使用该规则自带的级别；「拦截」阻止命中规则的操作，「提示」和「观察」均不因该规则拦截。观察仍会检查规则，停用请关闭开关。',
+  ruleHelpBind:
+    '绑定数据源：在「数据源管理」中选择与数据源类型匹配的规则集并保存。修改规则集前，可在「引用数据源」列确认影响范围。',
+  ruleHelpMongo:
+    'MongoDB 特批：带 DBA 标记的删除集合、重命名集合及账号/权限管理规则强制启用，关闭或降低级别也不能绕过 DBA 特批。',
+  ruleHelpHistory:
+    '历史与回滚：在「变更历史」中选择记录并回滚，会将当前规则配置恢复为该次变更之前的状态；没有变更前快照的新增记录不能回滚。回滚同样记入历史，仅恢复规则配置。',
   ruleHelpDelete:
-    '删除：只想停用就取消勾选（或设为「观察」）；要彻底移除需删掉规则文件并清掉对应开关的前端/proto/主程序接线。规则集本身可在「自定义规则」标签页删除，被数据源引用时会被拒绝。',
-  ruleHelpDoc:
-    '完整说明见仓库 engine/internal/customrules/README.md 与 engine/README.md「把上游规则接到开关上」。',
+    '删除规则集：在「自定义规则列表」中删除；被数据源引用时会拒绝删除，请先调整相关数据源的绑定。',
+  ruleHelpCustom:
+    '补充文本检查：在「自定义审核规则」中新增正则表达式、选择级别并启用，对提交的 SQL 文本进行匹配。',
+  ruleHelpSave:
+    '修改开关、参数或级别后，请先点击「保存」再切换页签或离开页面。',
   ruleOperator: '操作人',
   ruleCreatedAt: '时间',
   ruleLevelTitle: '级别',

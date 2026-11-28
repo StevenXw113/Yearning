@@ -1,4 +1,15 @@
 export default {
+  'db.section.basic': 'General',
+  'db.section.connection': 'Connection & authentication',
+  'db.section.access': 'Access & review',
+  'db.section.approval': 'Approval preview',
+  'db.flow.empty':
+    'Select an approval workflow to preview its steps and reviewers.',
+  'db.mongo.hostsPlaceholder': 'host1:27017,host2:27017',
+  'db.form.reset': 'Reset',
+  'db.edit.passwordTips': 'Leave blank to keep the saved password',
+  'db.mongo.clearPassword':
+    'Clear saved password (for connections without authentication)',
   'db.port': 'Port',
   'db.is.production': 'Production data source',
   'db.allow.diag': 'Allow diagnostic commands',
@@ -10,6 +21,15 @@ export default {
   'db.kind': 'Mode',
   'db.addr': 'Addr',
   'db.principal': 'Principal',
+  'db.mongo.hostsTips':
+    'Comma-separated seeds, e.g. host1:27017,host2:27017; seeds without a port use the port below',
+  'db.mongo.authMechanism': 'Authentication mechanism',
+  'db.mongo.authAuto': 'Automatic',
+  'db.mongo.tlsTips':
+    'TLS verifies the certificate chain and hostname. For private CAs, paste the CA PEM from your cloud console. Client Cert and Key are optional unless required by the server.',
+  'db.mongo.replicaSet': 'Replica set',
+  'db.mongo.replicaSetTips':
+    'Optional, e.g. cmgo-xxxxxxxx_0; validates replica-set identity',
   'db.authDatabase': 'Auth database',
   'db.authDatabaseTips': 'MongoDB authSource, empty = admin',
   'db.rw': 'read/write',

@@ -31,15 +31,18 @@ func recheckRedisOrder(order *model.CoreSqlOrder, source *model.CoreDataSource, 
 	defer cancel()
 
 	src := &api.DataSource{
-		Ip:       source.IP,
-		Port:     int32(source.Port),
-		Username: source.Username,
-		Password: password,
-		Ca:       source.CAFile,
-		Cert:     source.Cert,
-		Key:      source.KeyFile,
-		Kind:     calls.DataSourceKind(source.DBType),
-		AuthDb:   source.AuthDatabase,
+		Ip:                 source.IP,
+		Port:               int32(source.Port),
+		Username:           source.Username,
+		Password:           password,
+		Ca:                 source.CAFile,
+		Cert:               source.Cert,
+		Key:                source.KeyFile,
+		Kind:               calls.DataSourceKind(source.DBType),
+		AuthDb:             source.AuthDatabase,
+		MongoReplicaSet:    source.MongoReplicaSet,
+		MongoTLS:           source.MongoTLS,
+		MongoAuthMechanism: source.MongoAuthMechanism,
 	}
 	keySnapshot := calls.RedisAudit(src, source, order.SQL, order.DataBase)
 	rep, err := client.Check(ctx, &api.CheckRequest{

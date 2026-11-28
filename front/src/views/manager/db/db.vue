@@ -2,21 +2,29 @@
   <PageHeader
     :title="$t('menu.manage.source')"
     :sub-title="$t('common.db.sub')"
-  ></PageHeader>
-  <a-row :gutter="[16, 16]">
-    <a-col :xs="24" :sm="6">
-      <a-card :title="$t('common.new') + ' ' + $t('menu.manage.source')">
-        <!-- 新建成功后由本组件中继给右栏列表刷新（替代原全局 EventBus） -->
-        <DBForm @created="dbTable?.refresh()"></DBForm>
-      </a-card>
-    </a-col>
-    <a-col :xs="24" :sm="18">
-      <DBTable ref="dbTable"></DBTable>
-    </a-col>
-  </a-row>
+  />
+  <div class="datasource-toolbar">
+    <a-button type="primary" @click="createOpen = true">
+      <template #icon><PlusOutlined /></template>
+      {{ $t('common.new') }} {{ $t('menu.manage.source') }}
+    </a-button>
+  </div>
+  <section class="datasource-list" :aria-label="$t('menu.manage.source')">
+    <DBTable ref="dbTable" />
+  </section>
+  <a-drawer
+    v-model:open="createOpen"
+    :title="$t('common.new') + ' ' + $t('menu.manage.source')"
+    width="min(480px, 100vw)"
+    :mask-closable="false"
+    destroy-on-close
+  >
+    <DBForm @created="sourceCreated" />
+  </a-drawer>
 </template>
 
 <script lang="ts" setup>
+  import { PlusOutlined } from '@ant-design/icons-vue';
   import PageHeader from '@/components/pageHeader/pageHeader.vue';
   import { updateUserPrincipal } from '@/apis/user';
   import { onMounted, ref } from 'vue';
@@ -26,6 +34,12 @@
   import { queryIDCList } from '@/apis/source';
 
   const dbTable = ref<InstanceType<typeof DBTable>>();
+
+  const createOpen = ref(false);
+  const sourceCreated = () => {
+    createOpen.value = false;
+    dbTable.value?.refresh();
+  };
 
   const commonStore = useCommonStore();
 
@@ -42,4 +56,13 @@
   });
 </script>
 
-<style scoped></style>
+<style scoped>
+  .datasource-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+  }
+  .datasource-list {
+    min-width: 0;
+  }
+</style>

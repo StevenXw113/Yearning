@@ -1,7 +1,7 @@
 <template>
   <a-card ref="card">
-    <a-row>
-      <a-col :span="15">
+    <a-row :gutter="[16, 12]">
+      <a-col :xs="24" :lg="12">
         <a-input-search
           :placeholder="$t('ruleSearchTips')"
           enter-button
@@ -9,8 +9,8 @@
           @search="onSearch"
         />
       </a-col>
-      <a-col :span="9" style="text-align: right">
-        <a-space>
+      <a-col :xs="24" :lg="12" style="text-align: right">
+        <a-space wrap>
           <a-button @click="openManifest">
             {{ $t('ruleManifest') }}
           </a-button>
@@ -22,7 +22,7 @@
       </a-col>
     </a-row>
     <br />
-    <a-table bordered :columns="col" :data-source="list">
+    <a-table bordered :columns="col" :data-source="list" :scroll="{ x: 1080 }">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'ref_sources'">
           <a-tag v-for="s in record.ref_sources || []" :key="s">{{ s }}</a-tag>
@@ -46,7 +46,7 @@
           </a-space>
         </template>
         <template v-if="column.dataIndex === 'action'">
-          <a-space size="small">
+          <a-space size="small" wrap>
             <a-button size="small" @click="openProfile(record)">
               {{ $t('common.profile') }}
             </a-button>
@@ -87,6 +87,7 @@
       bordered
       size="small"
       :columns="ruleCol"
+      :scroll="{ x: 800 }"
       :data-source="ruleList"
       :pagination="{ pageSize: 10 }"
     >
@@ -108,23 +109,19 @@
           />
         </template>
         <template v-if="column.dataIndex === 'action'">
-          <a-button size="small" @click="openRule(record)">
-            {{ $t('common.edit') }}
-          </a-button>
-          <a-popconfirm
-            :title="$t('customRuleDeleteConfirm')"
-            @confirm="removeRule(record.id)"
-          >
-            <a-button
-              type="primary"
-              size="small"
-              danger
-              ghost
-              style="margin-left: 8px"
-            >
-              {{ $t('common.delete') }}
+          <a-space size="small" wrap>
+            <a-button size="small" @click="openRule(record)">
+              {{ $t('common.edit') }}
             </a-button>
-          </a-popconfirm>
+            <a-popconfirm
+              :title="$t('customRuleDeleteConfirm')"
+              @confirm="removeRule(record.id)"
+            >
+              <a-button type="primary" size="small" danger ghost>
+                {{ $t('common.delete') }}
+              </a-button>
+            </a-popconfirm>
+          </a-space>
         </template>
       </template>
     </a-table>
@@ -241,6 +238,7 @@
       bordered
       size="small"
       :columns="manifestCol"
+      :scroll="{ x: 1280 }"
       :data-source="manifest"
       :pagination="{ pageSize: 10 }"
     >
@@ -326,7 +324,8 @@
     {
       title: t('common.action'),
       dataIndex: 'action',
-      width: 210,
+      width: 208,
+      className: 'table-action-cell',
     },
   ];
 
@@ -401,9 +400,9 @@
     const payload = importPayload.value;
     return Boolean(
       payload &&
-        'export_version' in payload &&
-        payload.export_version === 1 &&
-        payload.dialect === 'sql',
+      'export_version' in payload &&
+      payload.export_version === 1 &&
+      payload.dialect === 'sql',
     );
   });
 
@@ -494,8 +493,18 @@
     { title: t('customRuleName'), dataIndex: 'name', width: 180 },
     { title: t('customRulePattern'), dataIndex: 'pattern' },
     { title: t('customRuleLevel'), dataIndex: 'level', width: 100 },
-    { title: t('customRuleEnabled'), dataIndex: 'enabled', width: 90 },
-    { title: t('common.action'), dataIndex: 'action', width: 190 },
+    {
+      title: t('customRuleEnabled'),
+      dataIndex: 'enabled',
+      width: 96,
+      className: 'table-status-cell',
+    },
+    {
+      title: t('common.action'),
+      dataIndex: 'action',
+      width: 152,
+      className: 'table-action-cell',
+    },
   ];
 
   const getRuleList = async () => {

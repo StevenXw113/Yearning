@@ -169,8 +169,11 @@ type CoreDataSource struct {
 	DBType           int    `gorm:"type:int(5);not null;default 0" json:"db_type"` // 0 mysql 1 PostgreSQL 2 mongodb 3 redis
 	// AuthDatabase 认证库：MongoDB 的 authSource（空 = 默认 admin）。
 	// 账号建在业务库上的部署必须显式配置，否则认证失败。列由 AutoMigrate 自动添加。
-	AuthDatabase string `gorm:"type:varchar(64);not null;default ''" json:"auth_database"`
-	RuleId       int    `gorm:"type:int(100);not null;default 0" json:"rule_id"`
+	AuthDatabase       string `gorm:"type:varchar(64);not null;default ''" json:"auth_database"`
+	MongoReplicaSet    string `gorm:"type:varchar(128);not null;default ''" json:"mongo_replica_set"`
+	MongoTLS           bool   `gorm:"not null;default:false" json:"mongo_tls"`
+	MongoAuthMechanism string `gorm:"type:varchar(32);not null;default ''" json:"mongo_auth_mechanism"`
+	RuleId             int    `gorm:"type:int(100);not null;default 0" json:"rule_id"`
 	// AllowDiagCommands Redis 数据源：查询页是否允许诊断命令
 	// （SLOWLOG / LATENCY / DUMP / COMMAND / INFO 全量）。默认关闭——
 	// 这些命令能看到实例配置或其它业务的执行信息。列由 AutoMigrate 自动添加。

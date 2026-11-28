@@ -3,18 +3,15 @@ package model
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"Yearning-go/src/lib/enc"
+	"engine/mongoconn"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // DBTypeMongoDB 数据源类型：0 mysql（默认）、1 PostgreSQL、2 mongodb（另见 postgresql.go / redis.go）
@@ -26,53 +23,29 @@ const MongoTimeout = 15 * time.Second
 // MongoSystemDB 系统库，不对用户暴露
 var MongoSystemDB = map[string]struct{}{"admin": {}, "config": {}, "local": {}}
 
-// MongoURI 拼 MongoDB 连接串。用户名与口令走 url.UserPassword 做转义，
-// 否则口令里的 @ : / % 会把连接串拆坏；认证库（authSource）取数据源的
-// AuthDatabase，未配置时用 MongoDB 默认的 admin（账号通常建在 admin 库）。
-func MongoURI(s *CoreDataSource, password string) string {
-	authDB := strings.TrimSpace(s.AuthDatabase)
-	if authDB == "" {
-		authDB = "admin"
+// MongoConfig is shared by connection tests, metadata queries, and engine execution.
+func (s *CoreDataSource) MongoConfig(password string) mongoconn.Config {
+	return mongoconn.Config{
+		Hosts: s.IP, Port: s.Port,
+		Username: s.Username, Password: password,
+		AuthDatabase: s.AuthDatabase, ReplicaSet: s.MongoReplicaSet,
+		TLS: s.MongoTLS, AuthMechanism: s.MongoAuthMechanism,
+		CA: s.CAFile, Certificate: s.Cert, Key: s.KeyFile,
 	}
-	u := &url.URL{
-		Scheme:   "mongodb",
-		Host:     net.JoinHostPort(s.IP, strconv.Itoa(s.Port)),
-		Path:     "/",
-		RawQuery: "authSource=" + url.QueryEscape(authDB),
-	}
-	// 无认证数据源(空用户名)不能拼 user:pass@——mongo 驱动对空用户信息
-	// 直接报 "username required if URI contains user info",连接测试永远失败。
-	if s.Username != "" {
-		u.User = url.UserPassword(s.Username, password)
-	}
-	return u.String()
 }
 
-// ConnectMongo 按数据源配置建立 MongoDB 客户端（口令列先解密再拼连接串）。
-// 与 MySQL 不同，Mongo 连接不经过 gorm，调用方负责 Disconnect。
+func MongoURI(s *CoreDataSource, password string) (string, error) {
+	return s.MongoConfig(password).URI()
+}
+
+// ConnectMongo decrypts the stored password before connecting.
 func (s *CoreDataSource) ConnectMongo() (*mongo.Client, error) {
 	return s.ConnectMongoWith(enc.Decrypt(C.General.SecretKey, s.Password))
 }
 
-// ConnectMongoWith 用明文口令建连。数据源管理页的「检测」已经把口令解好
-// （明文与密文都从界面来，见 ManageDBCreateOrEdit），这里再解一次会变成空口令。
+// ConnectMongoWith accepts the plaintext password from the connection-test form.
 func (s *CoreDataSource) ConnectMongoWith(password string) (*mongo.Client, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), MongoTimeout)
-	defer cancel()
-	// v2 起 Connect 不再收 ctx:连接建立的时限由客户端选项控制(下方已设)
-	client, err := mongo.Connect(options.Client().
-		ApplyURI(MongoURI(s, password)).
-		SetConnectTimeout(MongoTimeout).
-		SetServerSelectionTimeout(MongoTimeout))
-	if err != nil {
-		return nil, err
-	}
-	// 连接是懒建立的，Ping 一次才能把"地址/口令不对"在入口处暴露出来
-	if err := client.Ping(ctx, nil); err != nil {
-		_ = client.Disconnect(context.Background())
-		return nil, err
-	}
-	return client, nil
+	return mongoconn.Connect(s.MongoConfig(password))
 }
 
 // MongoDatabases 列出业务库：过滤系统库与数据源上配置的 ExcludeDbList。
